@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { allowedPath, homeForRole } from "../lib/navigation";
 import { API_URL, authenticatedFetch } from "../lib/api";
 
 type AuthIdentity = { role: string; username: string | null; student_id: string | null; account_id?: string | null };
@@ -9,12 +10,12 @@ type AuthContextValue = {
   enabled: boolean;
   loading: boolean;
   user: AuthIdentity | null;
-  login: (role: string, username: string, password: string) => Promise<void>;
+  login: (role: string, username: string, password: string) => Promise<string>;
   logout: () => void;
 };
 
 function publicPath(pathname: string) {
-  return ["/login", "/register", "/forgot-password", "/reset-password", "/verify-email"].includes(pathname);
+  return ["/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/teacher-invitation"].includes(pathname);
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -73,9 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       router.replace(`/login?next=${encodeURIComponent(next)}`);
       return;
     }
-    const isStudentPath = pathname.startsWith("/student");
-    if (user.role === "student" && !isStudentPath) router.replace("/student");
-    if (user.role === "teacher" && isStudentPath) router.replace("/");
+    if (!allowedPath(user.role, pathname)) router.replace(homeForRole(user.role));
   }, [enabled, loading, pathname, router, user]);
 
   const login = useCallback(async (role: string, username: string, password: string) => {
@@ -90,7 +89,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     window.sessionStorage.removeItem("forma_access_token");
     try {
-      setUser(await loadIdentity());
+      const identity = await loadIdentity();
+      setUser(identity);
+      return identity.role;
     } catch (error) {
       window.sessionStorage.removeItem("forma_access_token");
       throw error;
@@ -110,14 +111,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     enabled, loading, user, login, logout,
   ]);
   const isLogin = publicPath(pathname);
-  const wrongRolePath = enabled && user && (
-    (user.role === "student" && !pathname.startsWith("/student") && !isLogin)
-    || (user.role === "teacher" && pathname.startsWith("/student"))
-  );
+  const wrongRolePath = enabled && user && !isLogin && !allowedPath(user.role, pathname);
   return (
     <AuthContext.Provider value={value}>
       {loading && !isLogin ? <div className="auth-loading" aria-live="polite">Forma загружается…</div> : null}
-      {!loading && enabled && !user && !isLogin
+      {loading && !isLogin ? null : enabled && !user && !isLogin
         ? <div className="auth-loading" aria-live="polite">Требуется вход…</div>
         : wrongRolePath
           ? <div className="auth-loading" aria-live="polite">Переходим в вашу рабочую область…</div>

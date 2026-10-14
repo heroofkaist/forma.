@@ -33,7 +33,7 @@ test('mutations require exact same-origin Origin before contacting backend', asy
   assert.equal(calls, 0);
 });
 test('login strips bearer token from response and uses HttpOnly cookie', async () => {
-  global.fetch = async (url, init) => { assert.equal(url.origin, 'https://backend.example'); assert.equal(init.redirect, 'error'); return Response.json({ access_token: 'acct_secret', expires_in: 28800 }); };
+  global.fetch = async (url, init) => { assert.equal(url.origin, 'https://backend.example'); assert.equal(init.redirect, 'manual'); return Response.json({ access_token: 'acct_secret', expires_in: 28800 }); };
   const response = await route.POST(request(['api','auth','login'], { method: 'POST', origin: 'https://forma.example', body: '{}' }), context(['api','auth','login']));
   assert.deepEqual(await response.json(), { authenticated: true });
   const cookie = response.headers.get('set-cookie');

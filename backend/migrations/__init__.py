@@ -5,6 +5,8 @@ def apply_migrations(bind):
     from contextlib import nullcontext
     from account_models import SchemaMigration
     import document_models
+    import institution_models
+    import processing_models
     from persistence import Base
     names = ("accounts", "account_sessions", "account_actions", "account_rate_buckets",
              "course_owners", "offering_policies", "enrollment_states", "assignment_owners")
@@ -13,7 +15,7 @@ def apply_migrations(bind):
             connection.exec_driver_sql("SELECT pg_advisory_xact_lock(62401701)")
         SchemaMigration.__table__.create(connection, checkfirst=True)
         version = "001_public_accounts_course_ownership"
-        for version, tables in ((version, names), ("002_structured_documents_materials", ("submission_documents", "course_materials")), ("003_document_review_history", ("document_reviews", "published_document_reviews")), ("004_durable_email_outbox", ("email_outbox",))):
+        for version, tables in ((version, names), ("002_structured_documents_materials", ("submission_documents", "course_materials")), ("003_document_review_history", ("document_reviews", "published_document_reviews")), ("004_durable_email_outbox", ("email_outbox",)), ("005_institution_roles", ("account_roles", "institutions", "institution_memberships", "course_institutions", "teacher_invitations", "audit_events")), ("006_document_understanding_jobs", ("document_processing_jobs", "document_interpretations", "interpretation_corrections", "document_interpretation_cache", "assignment_briefs"))):
             if connection.scalar(select(SchemaMigration.version).where(SchemaMigration.version == version)):
                 continue
             for name in tables:

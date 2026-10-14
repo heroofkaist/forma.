@@ -60,6 +60,6 @@ export default function AssignmentsPage() {
         <span className="assignment-end"><StatusLabel status={assignment.status} />{confirmDelete === assignment.id ? <span className="inline-confirm"><button disabled={deleteBusy} onClick={() => void removeAssignment(assignment.id)}>Да</button><button onClick={() => setConfirmDelete("")}>Нет</button></span> : <><button className="delete-assignment" title="Удалить задание и связанные файлы" aria-label={`Удалить ${assignment.title}`} onClick={() => setConfirmDelete(assignment.id)}><Trash2 size={13} /></button><Link className="row-open" href={`/assignments/${assignment.id}/review`} title="Открыть задание"><ArrowUpRight size={15} /></Link></>}</span>
       </div>)}
     </div> : <div className="empty-state"><div className="empty-icon"><ArrowUpRight size={18} /></div><h2>{query ? "Ничего не найдено" : "Создайте первое задание"}</h2><p>{query ? "Попробуйте изменить поисковый запрос." : "Добавьте вопросы и критерии оценивания, затем загрузите работы класса."}</p>{!query && <Link className="button primary" href="/assignments/new"><Plus size={16} />Создать задание</Link>}</div>}
-    <div className="privacy-note">Forma — локальный прототип. Используйте вымышленные данные; для реальных работ учащихся потребуется защита данных и контроль доступа.</div>
+    <div className="privacy-note">Доступ к работам определяется правами преподавателя. Оценки становятся доступны студенту после публикации.</div>
   </AppShell>;
 }

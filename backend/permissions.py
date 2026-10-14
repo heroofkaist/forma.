@@ -8,7 +8,19 @@ from persistence import (SessionLocal, CourseOffering, CourseEnrollment, Academi
 
 
 def can_teach(db, user, course_id):
+    from institution_models import CourseInstitution
+    from institutions import membership, TEACHING_ROLES
+    if user.role not in TEACHING_ROLES:
+        return False
     owner = db.get(CourseOwner, course_id)
+    tenant = db.get(CourseInstitution, course_id)
+    if user.role == "platform_admin":
+        return True
+    if tenant:
+        member = membership(db, user.account_id, tenant.institution_id, {"teacher", "school_admin"})
+        if not member:
+            return False
+        return member.role == "school_admin" or bool(owner and owner.account_id == user.account_id)
     return owner.account_id == user.account_id if owner else user.role == "teacher" and not user.account_id
 
 
@@ -27,12 +39,17 @@ def enrollment_active(db, enrollment):
 
 
 def require_student(db, user, offering_id):
+    if user.role != "student":
+        raise HTTPException(403, "Student account required.")
     enrollment = db.scalar(select(CourseEnrollment).where(CourseEnrollment.offering_id == offering_id, CourseEnrollment.student_id == user.student_id))
     if not enrollment_active(db, enrollment):
         raise HTTPException(403, "Active course enrollment is required.")
 
 
 def legacy_access(db, user, assignment_id):
+    from institutions import TEACHING_ROLES
+    if user.role not in TEACHING_ROLES:
+        return False
     direct = db.get(AssignmentOwner, assignment_id)
     if direct:
         return direct.account_id == user.account_id
@@ -46,6 +63,20 @@ def legacy_access(db, user, assignment_id):
 async def authorize_request(request, user):
     path = request.url.path
     method = request.method
+    if path.startswith("/api/assignment-briefs/"):
+        if user.role == "student":
+            raise HTTPException(403,"Teacher permission required.")
+        return
+    if path.startswith(("/api/institutions", "/api/document-analysis/")):
+        return
+    common = path.startswith("/api/accounts/") or path in {"/api/auth/me", "/api/auth/logout"}
+    student = path.startswith(("/academic/student/", "/api/enrollment/")) or path == "/academic/enroll" or (method == "POST" and re.fullmatch(r"/academic/assignments/[^/]+/submissions", path))
+    shared = (method == "GET" and path.startswith(("/api/course-materials/", "/api/materials/", "/api/submission-documents/", "/api/submission-files/"))) or (method == "GET" and (path == "/academic/courses" or re.fullmatch(r"/academic/offerings/[^/]+(?:/assignments)?", path)))
+    if not common and not shared:
+        if student and user.role != "student":
+            raise HTTPException(403, "Student account required.")
+        if not student and user.role == "student":
+            raise HTTPException(403, "Teacher permission required.")
     if path.startswith(("/api/course-materials/", "/api/materials/", "/api/submission-documents/", "/api/submission-files/", "/api/assignment-submissions/", "/api/document-review/", "/api/teacher-overview")):
         return  # Dedicated document handlers validate memberships and visibility.
     if path.startswith("/api/accounts/") or path.startswith("/api/courses") or path.startswith("/api/enrollment"):

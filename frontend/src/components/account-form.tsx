@@ -40,9 +40,9 @@ export function AccountForm({ mode }: { mode: Mode }) {
   return <main className="auth-page"><section className="auth-card">
     <Link href={settings ? "/teacher" : "/login"} className="forma-brand auth-brand">forma<span className="brand-period">.</span></Link>
     <div className="eyebrow">{settings ? "НАСТРОЙКИ" : "УЧЁТНАЯ ЗАПИСЬ"}</div><h1>{titles[mode]}</h1>
-    {mode === "register" && <p>Одна учётная запись для обучения и преподавания. Доступ к курсам определяется участием и владением.</p>}
+    {mode === "register" && <p>Публичная регистрация создаёт учётную запись студента. Преподавателям требуется приглашение и одобрение учреждения.</p>}
     {mode === "register" && registration === false && <div className="notice" role="status">Регистрация пока недоступна. Администратор должен включить регистрацию и настроить отправку email.</div>}
-    {settings && user?.role !== "account" ? <p>Настройки доступны для подтверждённых учётных записей. Вход с прежними реквизитами сохраняется на время перехода.</p> : <form className="auth-form" onSubmit={(event) => void submit(event)}>
+    {settings && !user?.account_id ? <p>Настройки доступны для подтверждённых учётных записей. Вход с прежними реквизитами сохраняется на время перехода.</p> : <form className="auth-form" onSubmit={(event) => void submit(event)}>
       {["register", "forgot-password", "profile"].includes(mode) && <label>Email<input type="email" autoComplete="email" required maxLength={254} readOnly={mode === "profile"} value={email} onChange={(event) => setEmail(event.target.value)} /></label>}
       {["register", "profile"].includes(mode) && <label>Имя<input autoComplete="name" required maxLength={200} value={name} onChange={(event) => setName(event.target.value)} /></label>}
       {mode === "security" && <label>Текущий пароль<input type="password" autoComplete="current-password" required value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></label>}

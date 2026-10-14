@@ -180,3 +180,16 @@ cd frontend
 npm test
 npx tsc --noEmit
 ```
+
+
+## Phase 3: institutional roles and document understanding
+
+Public registration creates students only. Approved teachers, school administrators
+and platform administrators use explicit institution membership and operator
+bootstrap. See [Phase 3 implementation and operator steps](docs/PHASE3_IMPLEMENTATION_REPORT.md).
+
+Submitted documents can be interpreted without answer-crop templates. PostgreSQL
+jobs persist across restart, resume while Render is awake, and use bounded Gemini
+visual pages plus deterministic extraction. Teacher task-sheet questions require
+approval; interpretation corrections preserve the original and do not publish
+grades. The same-origin Cloudflare proxy retains `redirect: "manual"`.

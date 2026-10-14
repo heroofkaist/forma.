@@ -82,11 +82,11 @@ def send_action(email: str, purpose: str, token: str):
     origin = os.environ["FRONTEND_ORIGIN"].rstrip("/")
     if not origin.startswith("https://") and not origin.startswith("http://localhost:"):
         raise HTTPException(503, "FRONTEND_ORIGIN must be an HTTPS frontend URL.")
-    route = "verify-email" if purpose == "verify" else "reset-password"
+    route = "teacher-invitation" if purpose == "teacher_invite" else "verify-email" if purpose == "verify" else "reset-password"
     message = EmailMessage()
     message["From"] = os.environ["FORMA_EMAIL_FROM"]
     message["To"] = email
-    message["Subject"] = "Forma — verify your email" if purpose == "verify" else "Forma — reset your password"
+    message["Subject"] = "Forma — teacher invitation" if purpose == "teacher_invite" else "Forma — verify your email" if purpose == "verify" else "Forma — reset your password"
     message.set_content(f"Open this single-use link within one hour:\n{origin}/{route}?{urlencode({'token': token})}\n\nIf you did not request this, ignore this email.")
     try:
         with smtplib.SMTP(os.environ["FORMA_SMTP_HOST"], int(os.getenv("FORMA_SMTP_PORT", "587")), timeout=15) as smtp:
@@ -173,7 +173,9 @@ def account_login(email: str, password: str) -> AuthUser | None:
             account.password_hash = hasher.hash(password)
         account.last_login_at = now_utc()
         db.commit()
-        return AuthUser(role="account", username=account.email, student_id=account.id, account_id=account.id)
+        from institutions import effective_role
+        role = effective_role(db, account.id)
+        return AuthUser(role=role, username=account.email, student_id=account.id if role == "student" else None, account_id=account.id)
 
 
 def create_session(user: AuthUser) -> str:
@@ -191,7 +193,9 @@ def verify_session(token: str) -> AuthUser:
         account = db.get(Account, session.account_id) if session else None
         if not session or utc(session.expires_at) <= now_utc() or not account or not account.verified or account.status != "active":
             raise HTTPException(401, "Invalid or expired session.")
-        return AuthUser(role="account", username=account.email, student_id=account.id, account_id=account.id)
+        from institutions import effective_role
+        role = effective_role(db, account.id)
+        return AuthUser(role=role, username=account.email, student_id=account.id if role == "student" else None, account_id=account.id)
 
 
 @router.get("/status")
@@ -218,6 +222,8 @@ def register(payload: RegisterPayload, request: Request):
                     raise
                 db.rollback()
                 return {"message": "If this address is eligible, a verification email has been queued for delivery."}
+            from institution_models import AccountRole
+            db.add(AccountRole(account_id=account.id, role="student"))
             issue_action(db, account, "verify")
             db.commit()
     return {"message": "If this address is eligible, a verification email has been queued for delivery."}
@@ -254,6 +260,8 @@ def resend_verification(payload: EmailPayload, request: Request):
     with SessionLocal() as db:
         account = db.scalar(select(Account).where(Account.email == payload.email, Account.verified.is_(False), Account.status == "active"))
         if account:
+            from institution_models import AccountRole
+            db.add(AccountRole(account_id=account.id, role="student"))
             issue_action(db, account, "verify")
             db.commit()
     return {"message": "If the account is eligible, a verification email has been queued for delivery."}

@@ -1,3 +1,5 @@
+> Phase 3 update: the product now requires mutually exclusive student/teacher identities, approved institutional teaching memberships, and explicit administrator bootstrap. Earlier descriptions of unrestricted educator signup or role switching are historical and superseded. Current implementation/status: PHASE3_IMPLEMENTATION_REPORT.md.
+
 # Forma product evolution
 
 ## Repository audit and baseline

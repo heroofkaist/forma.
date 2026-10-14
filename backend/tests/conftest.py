@@ -17,6 +17,7 @@ os.environ["FRONTEND_ORIGIN"] = "http://localhost:3000"
 os.environ["FORMA_DEMO_MODE"] = "true"
 os.environ["FORMA_PUBLIC_REGISTRATION"] = "false"
 os.environ["FORMA_EMAIL_WORKER_ENABLED"] = "false"
+os.environ["FORMA_DOCUMENT_WORKER_ENABLED"] = "false"
 os.environ["GEMINI_API_KEY"] = ""
 os.environ["FORMA_SMTP_HOST"] = ""
 

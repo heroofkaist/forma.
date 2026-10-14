@@ -594,7 +594,7 @@ def ensure_academic_seed() -> None:
 def _student_identity(request: Request) -> tuple[str, str]:
     if auth_required():
         user = request_user(request)
-        if user.role not in {"student", "account"} or user.student_id is None:
+        if user.role != "student" or user.student_id is None:
             raise HTTPException(status_code=403, detail="Student role required.")
         return user.student_id, user.student_id
     return DEMO_STUDENT_ID, DEMO_STUDENT_NAME
@@ -966,7 +966,7 @@ def list_courses(
     ensure_academic_seed()
     if auth_required():
         user = request_user(request)
-        if user.role != "account" and role != user.role:
+        if (user.role == "student") != (role == "student"):
             raise HTTPException(status_code=403, detail="Requested role does not match credentials.")
         student_id = user.student_id or ""
     else:
@@ -990,7 +990,7 @@ def get_offering(
     ensure_academic_seed()
     if auth_required():
         authenticated_role = request_user(request).role
-        if authenticated_role != "account" and role != authenticated_role:
+        if (authenticated_role == "student") != (role == "student"):
             raise HTTPException(status_code=403, detail="Requested role does not match credentials.")
         student_id = request_user(request).student_id if role == "student" else None
     else:
@@ -1133,7 +1133,7 @@ def list_offering_assignments(
     ensure_academic_seed()
     if auth_required():
         authenticated_role = request_user(request).role
-        if authenticated_role != "account" and role != authenticated_role:
+        if (authenticated_role == "student") != (role == "student"):
             raise HTTPException(status_code=403, detail="Requested role does not match credentials.")
         student_id = request_user(request).student_id if role == "student" else None
     else:
@@ -1463,6 +1463,14 @@ async def create_submission(
         db.flush()
         db.add(SubmissionDocument(submission_id=submission.id, content_hash=hashlib.sha256(content).hexdigest(), structure=file._forma_structure))
         reports = _compare_submission(db, submission)
+        if auth_required():
+            from document_processing import enqueue
+            try:
+                enqueue(db, submission, assignment, request_user(request).account_id or student_id)
+            except ValueError:
+                # Receipt is preserved even when today's processing quota is full.
+                # No processing success is reported; teacher can request analysis later.
+                submission.status = "analysis_not_scheduled"
         db.commit()
         db.refresh(submission)
         return {

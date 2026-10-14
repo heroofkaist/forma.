@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { GraduationCap } from "lucide-react";
+import { homeForRole, allowedPath } from "../../lib/navigation";
 import { useAuth } from "../../components/auth-provider";
 
 export default function LoginPage() {
@@ -20,9 +21,9 @@ export default function LoginPage() {
     setSubmitting(true);
     setError("");
     try {
-      await login(role, username.trim(), password);
+      const identityRole = await login(role, username.trim(), password);
       const next = new URLSearchParams(window.location.search).get("next");
-      router.replace(next?.startsWith("/") && !next.startsWith("//") ? next : role === "teacher" ? "/" : "/student");
+      router.replace(next?.startsWith("/") && !next.startsWith("//") && allowedPath(identityRole, next) ? next : homeForRole(identityRole));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Не удалось войти.");
     } finally {
@@ -46,12 +47,12 @@ export default function LoginPage() {
           </div>
         ) : (
           <form onSubmit={submit} className="auth-form">
-            <label>Рабочее пространство
+            <details><summary>Вход по прежним реквизитам</summary><label>Тип прежней учётной записи
               <select value={role} onChange={(event) => setRole(event.target.value)}>
                 <option value="student">Ученик</option>
                 <option value="teacher">Учитель</option>
               </select>
-            </label>
+            </label></details>
             <label>{role === "student" ? "Email или ID ученика" : "Email или имя пользователя"}
               <input autoComplete="username" required value={username} onChange={(event) => setUsername(event.target.value)} />
             </label>

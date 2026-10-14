@@ -273,7 +273,7 @@ def init_db(
             if database_bind is engine
             else sessionmaker(bind=database_bind, expire_on_commit=False)
         )
-    identity_tables = {"accounts", "account_sessions", "account_actions", "account_rate_buckets", "course_owners", "offering_policies", "enrollment_states", "assignment_owners", "schema_migrations", "submission_documents", "course_materials", "document_reviews", "published_document_reviews", "email_outbox"}
+    identity_tables = {"accounts", "account_sessions", "account_actions", "account_rate_buckets", "course_owners", "offering_policies", "enrollment_states", "assignment_owners", "schema_migrations", "submission_documents", "course_materials", "document_reviews", "published_document_reviews", "email_outbox", "account_roles", "institutions", "institution_memberships", "course_institutions", "teacher_invitations", "audit_events", "document_processing_jobs", "document_interpretations", "interpretation_corrections", "document_interpretation_cache", "assignment_briefs"}
     Base.metadata.create_all(database_bind, tables=[table for name, table in Base.metadata.tables.items() if name not in identity_tables])
     migrations = {
         "assignments": {

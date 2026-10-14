@@ -13,6 +13,8 @@ import permissions
 import academic_api
 import assignment_api
 import email_delivery
+import institutions
+import document_processing
 from main import app
 from migrations import apply_migrations
 from persistence import Base, now_utc
@@ -25,7 +27,7 @@ def platform(tmp_path, monkeypatch):
         connection.execute("PRAGMA foreign_keys=ON")
     Base.metadata.create_all(engine)
     factory = sessionmaker(engine, expire_on_commit=False)
-    for module in (persistence, accounts, courses, permissions, academic_api, assignment_api, email_delivery):
+    for module in (persistence, accounts, courses, permissions, academic_api, assignment_api, email_delivery, institutions, document_processing):
         monkeypatch.setattr(module, "SessionLocal", factory)
     monkeypatch.setattr(persistence, "engine", engine)
     monkeypatch.setenv("FORMA_AUTH_REQUIRED", "true")
@@ -46,6 +48,7 @@ def platform(tmp_path, monkeypatch):
         sent.append((account.email, purpose, token))
         original_enqueue(db, account, purpose, token)
     monkeypatch.setattr(accounts, "enqueue_action", record_queue)
+    monkeypatch.setattr(institutions, "enqueue_action", record_queue)
     with TestClient(app) as client:
         yield client, factory, sent
     engine.dispose()
@@ -66,7 +69,15 @@ def identity(client, sent, email):
 
 
 def create_course(client, headers, **extras):
-    payload = {"title": "General Science", "code": "SCI101", "subject": "Science", "academic_year": "2026", "term": "Fall", **extras}
+    from institution_models import AccountRole, Institution, InstitutionMembership
+    identity_id = client.get('/api/auth/me', headers=headers).json()['account_id']
+    with accounts.SessionLocal() as db:
+        institution = Institution(name='Synthetic approved institution'); db.add(institution); db.flush()
+        access = db.get(AccountRole, identity_id)
+        access.role = 'teacher'
+        db.add(InstitutionMembership(institution_id=institution.id, account_id=identity_id, role='teacher'))
+        db.commit(); institution_id = institution.id
+    payload = {"institution_id": institution_id, "title": "General Science", "code": "SCI101", "subject": "Science", "academic_year": "2026", "term": "Fall", **extras}
     response = client.post("/api/courses", headers=headers, json=payload)
     assert response.status_code == 201, response.text
     return response.json()
@@ -90,7 +101,7 @@ def test_registration_verification_password_reset_session_revocation(platform):
     before = len(sent)
     assert client.post("/api/accounts/register", json={"email": email, "display_name": "Attacker", "password": "different-password"}).status_code == 202
     assert len(sent) == before  # Duplicate cannot replace the password or enumerate accounts.
-    assert client.get("/api/auth/me", headers=headers).json()["role"] == "account"
+    assert client.get("/api/auth/me", headers=headers).json()["role"] == "student"
     assert client.post("/api/accounts/forgot-password", json={"email": email}).status_code == 202
     reset = sent[-1][2]
     assert client.post("/api/accounts/reset-password", json={"token": reset, "password": "new-secure-password"}).status_code == 200
@@ -192,7 +203,7 @@ def test_linked_legacy_assignment_and_answer_permissions(platform):
     legacy = assignment["legacy_assignment_id"]
     assert client.get(f'/assignments/{legacy}', headers=other).status_code == 403
     assert client.get(f'/assignments/{legacy}', headers=student).status_code == 403
-    assert client.get('/assignments', headers=other).json()["items"] == []
+    assert client.get('/assignments', headers=other).status_code == 403
     assert client.get(f'/assignments/{legacy}', headers=teacher).status_code == 200
     assert client.post(f'/academic/assignments/{assignment["id"]}/publish', headers=other).status_code == 403
     assert client.get(f'/academic/teacher/assignments/{assignment["id"]}/archive', headers=other).status_code == 403
@@ -208,7 +219,7 @@ def test_additive_migration_repeated_and_profile_security(platform):
     engine = factory.kw["bind"]
     apply_migrations(engine); apply_migrations(engine)
     with factory() as db:
-        assert len(db.scalars(select(account_models.SchemaMigration)).all()) == 4
+        assert len(db.scalars(select(account_models.SchemaMigration)).all()) == 6
         assert db.scalar(select(account_models.Account)).display_name == "New Name"
     assert client.post('/api/accounts/password', headers=headers, json={"current_password": "bad", "password": "new-password-123"}).status_code == 400
     assert client.post('/api/accounts/password', headers=headers, json={"current_password": "correct-password-123", "password": "new-password-123"}).status_code == 200
@@ -277,7 +288,7 @@ def test_manual_review_hidden_until_publish_preserves_history(platform, monkeypa
         row = AcademicSubmission(assignment_id=assignment['id'], student_id=student_id, student_name="Synthetic Student", file_name="essay.pdf", file_path="synthetic.pdf", file_type="pdf")
         db.add(row); db.commit(); submission_id = row.id
     path = '/api/document-review/' + submission_id
-    assert client.get('/api/teacher-overview', headers=other).json()['review_queue'] == []
+    assert client.get('/api/teacher-overview', headers=other).status_code == 403
     assert len(client.get('/api/teacher-overview', headers=teacher).json()['review_queue']) == 1
     assert client.get(path, headers=other).status_code == 403
     assert client.get(path, headers=student).status_code == 403
@@ -342,6 +353,7 @@ def test_email_delivery_failure_is_durable_bounded_and_not_reported_as_sent(plat
 def test_malformed_mutation_body_is_rejected_without_permission_bypass(platform):
     client, factory, sent = platform
     headers = identity(client, sent, "teacher@example.com")
+    create_course(client, headers)
     assert client.post('/academic/assignments', headers=headers, content="not-json").status_code == 400
     assert client.post('/academic/offerings', headers=headers, json=[]).status_code == 422
 
@@ -385,6 +397,7 @@ def test_expired_email_outbox_discards_token_without_sending(platform, monkeypat
 def test_public_account_image_grading_requests_are_rate_limited(platform):
     client, factory, sent = platform
     headers = identity(client, sent, "processing@example.com")
+    create_course(client, headers)
     body = {"problem_statement": "Synthetic", "reference_solution": "Synthetic", "rubric_text": "Synthetic"}
     for _ in range(10):
         response = client.post('/api/grade', headers=headers, data=body, files={"image": ("bad.txt", b"not an image", "text/plain")})

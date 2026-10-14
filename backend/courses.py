@@ -31,6 +31,7 @@ class CourseCreate(BaseModel):
     academic_year: str = Field(min_length=1, max_length=12)
     term: str = Field(min_length=1, max_length=32)
     institution: str = Field(default="", max_length=200)
+    institution_id: str = Field(min_length=1, max_length=36)
     approval_required: bool = False
     capacity: int | None = Field(default=None, ge=1, le=100000)
     opens_at: datetime | None = None
@@ -119,13 +120,18 @@ def create_course(payload: CourseCreate, request: Request):
     identity = account_identity(request)
     rate_limit(request, "create-course", identity, 20)
     with SessionLocal() as db:
+        from institutions import require_institution, audit
+        from institution_models import CourseInstitution, Institution
+        require_institution(db, request_user(request), payload.institution_id)
         account = db.get(Account, identity)
         # Historic course.code is globally unique; retain it as an internal key
         # and store the educator's reusable display code in ownership metadata.
         course = AcademicCourse(code="C-" + secrets.token_hex(10), name=payload.title.strip(), instructor=account.display_name, department=payload.subject.strip())
         db.add(course)
         db.flush()
-        db.add(CourseOwner(course_id=course.id, account_id=identity, public_code=payload.code.strip(), description=payload.description, institution=payload.institution))
+        db.add(CourseInstitution(course_id=course.id, institution_id=payload.institution_id))
+        audit(db, request_user(request), "course.create", course.id, {"institution_id": payload.institution_id})
+        db.add(CourseOwner(course_id=course.id, account_id=identity, public_code=payload.code.strip(), description=payload.description, institution=db.get(Institution, payload.institution_id).name))
         offering = CourseOffering(course_id=course.id, academic_year=payload.academic_year, term=payload.term, section="01", class_code=new_code())
         db.add(offering)
         db.flush()
@@ -150,6 +156,8 @@ def preview(payload: JoinPayload, request: Request):
 
 def join_code(payload, request):
     user = request_user(request)
+    if user.role != "student":
+        raise HTTPException(403, "Student account required for enrollment.")
     rate_limit(request, "enrollment-code", user.student_id or user.username, 20)
     with SessionLocal() as db:
         offering = db.scalar(select(CourseOffering).where(CourseOffering.class_code == payload.class_code.strip().upper()))

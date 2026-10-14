@@ -11,6 +11,10 @@ from PIL import Image
 from schemas import GradingResult
 
 
+def configured_model() -> str:
+    return os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")
+
+
 class GradingConfigurationError(RuntimeError):
     pass
 
@@ -79,7 +83,7 @@ transcription_notes, если работа неразборчива или со�
 """
     client = genai.Client(api_key=api_key)
     response = client.models.generate_content(
-        model=os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest"),
+        model=configured_model(),
         contents=[image, prompt],
         config=types.GenerateContentConfig(
             response_mime_type="application/json",

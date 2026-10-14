@@ -15,7 +15,7 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
         <Link className={pathname === "/student" || pathname.startsWith("/student/courses") ? "active" : ""} href="/student"><BookOpen size={15} />Мои курсы</Link>
         <Link className={pathname === "/student/grades" ? "active" : ""} href="/student/grades"><CalendarDays size={15} />Оценки</Link>
       </nav>
-      <div className="student-user"><span className="student-demo-pill">{enabled ? "УЧЕНИК" : "ДЕМО · студент"}</span><span className="student-avatar">S</span><span>{user?.username ?? "Студент"}</span>{enabled ? <><Link href="/student/join" className="student-role-link">Вступить в курс</Link>{user?.role === "account" && <Link href="/teacher" className="student-role-link">Преподавание</Link>}<button className="student-role-link" onClick={logout}>Выйти</button></> : <Link href="/" className="student-role-link">Вид преподавателя</Link>}</div>
+      <div className="student-user"><span className="student-demo-pill">{enabled ? "УЧЕНИК" : "ДЕМО · студент"}</span><span className="student-avatar">S</span><span>{user?.username ?? "Студент"}</span>{enabled ? <><Link href="/student/join" className="student-role-link">Вступить в курс</Link><button className="student-role-link" onClick={logout}>Выйти</button></> : null}</div>
     </header>
     <main className="student-content">{children}<p className="privacy-note">{enabled ? "Ваши задания и оценки доступны только вашей учётной записи." : "Демонстрационный режим с вымышленными данными. Переключение student/teacher не является входом в систему или проверкой прав."}</p></main>
   </div>;

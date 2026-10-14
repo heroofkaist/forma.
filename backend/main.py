@@ -74,6 +74,8 @@ async def enforce_api_authentication(request: Request, call_next):
 
     student_routes = (
         path in {"/api/auth/me", "/api/auth/logout"}
+        or path.startswith(("/api/accounts/", "/api/institutions", "/api/enrollment/"))
+        or (path.startswith("/api/document-analysis/") and path.endswith("/status") and request.method == "GET")
         or (path.startswith(("/api/course-materials/", "/api/materials/", "/api/submission-documents/", "/api/submission-files/")) and request.method == "GET")
         or (path == "/academic/courses" and request.method == "GET")
         or (path == "/academic/enroll" and request.method == "POST")
@@ -268,3 +270,24 @@ def stop_account_email_delivery():
         stop, thread = worker
         stop.set()
         thread.join(timeout=1)
+
+from institutions import router as institutions_router
+app.include_router(institutions_router)
+
+from analysis_api import router as analysis_router
+app.include_router(analysis_router)
+
+@app.on_event("startup")
+def start_document_processing():
+    from document_processing import start_worker
+    app.state.document_worker = start_worker()
+
+@app.on_event("shutdown")
+def stop_document_processing():
+    worker = getattr(app.state, "document_worker", None)
+    if worker:
+        stop, thread = worker
+        stop.set(); thread.join(timeout=1)
+
+from assignment_briefs import router as assignment_briefs_router
+app.include_router(assignment_briefs_router)

@@ -17,7 +17,7 @@ export default function TeacherArchivePage() {
   }
   return <AppShell>
     <div className="academic-crumb">FORMA <span>/</span> АРХИВ</div>
-    <section className="academic-heading"><div><div className="eyebrow">ИСТОРИЧЕСКИЙ АРХИВ</div><h1>Работы прошлых потоков</h1><p>Поиск по разрешённым материалам. Доступ к архивным файлам в этом демо намеренно закрыт.</p></div></section>
+    <section className="academic-heading"><div><div className="eyebrow">ИСТОРИЧЕСКИЙ АРХИВ</div><h1>Работы прошлых потоков</h1><p>Поиск по историческим работам курсов, к которым у вас есть преподавательский доступ.</p></div></section>
     <div className="academic-info">Архивные документы содержат учебные записи и авторские работы. Реальные сроки хранения, основания доступа и удаление должны определяться политикой учреждения.</div>
     <form className="archive-search" onSubmit={(event) => void search(event)}><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Курс, учебный год, задание или тип документа" /><button className="button secondary">Искать в архиве</button></form>
     {error && <div className="notice error-notice">{error}</div>}

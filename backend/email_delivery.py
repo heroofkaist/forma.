@@ -45,8 +45,12 @@ def deliver_one():
     try:
         token = cipher().decrypt(encrypted.encode()).decode()
         with SessionLocal() as db:
-            action = db.get(AccountAction, digest(token))
-            obsolete = not account_active or action is None or action.account_id != item.account_id or action.purpose != purpose
+            if purpose == "teacher_invite":
+                from institution_models import TeacherInvitation
+                action = db.get(TeacherInvitation, digest(token))
+            else:
+                action = db.get(AccountAction, digest(token))
+            obsolete = not account_active or action is None or action.account_id != item.account_id or getattr(action, "purpose", purpose) != purpose
             if action:
                 from accounts import utc
                 obsolete = obsolete or utc(action.expires_at) <= now_utc()

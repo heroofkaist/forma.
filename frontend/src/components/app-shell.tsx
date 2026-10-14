@@ -3,34 +3,37 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BookOpenCheck, ClipboardList, GraduationCap, Library, ScanSearch } from "lucide-react";
+import { teacherRole, locationForPath } from "../lib/navigation";
 import { useAuth } from "./auth-provider";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const location = locationForPath(pathname);
   const { enabled, user, logout } = useAuth();
   return (
     <div className="app-frame">
       <aside className="sidebar">
         <Link href="/" className="forma-brand"><span className="brand-mark"><GraduationCap size={17} /></span>forma<span className="brand-period">.</span></Link>
         <div className="workspace-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
-        {(!enabled || (user?.role === "teacher" || user?.role === "account")) && (
+        {(!enabled || teacherRole(user?.role)) && (
           <nav className="side-nav">
-            <Link className={pathname === "/" || pathname.startsWith("/assignments") ? "side-link active" : "side-link"} href="/"><ClipboardList size={16} />Задания</Link>
-            <Link className={pathname.startsWith("/teacher") ? "side-link active" : "side-link"} href="/teacher"><BookOpenCheck size={16} />Курсы</Link>
-            <Link className={pathname.startsWith("/teacher/archive") ? "side-link active" : "side-link"} href="/teacher/archive"><Library size={16} />Архив</Link>
-            <Link className={pathname.startsWith("/teacher/originality") || pathname.includes("/originality") ? "side-link active" : "side-link"} href="/teacher/originality"><ScanSearch size={16} />Оригинальность</Link>
-            {(!enabled || user?.role === "account") && <Link className="side-link" href="/student"><GraduationCap size={16} />Вид студента</Link>}
-            {user?.role === "account" && <Link className="side-link" href="/settings/profile">Настройки</Link>}
+            <Link className={location.key === "assignments" ? "side-link active" : "side-link"} href="/"><ClipboardList size={16} />Задания</Link>
+            <Link className={location.key === "courses" ? "side-link active" : "side-link"} href="/teacher"><BookOpenCheck size={16} />Курсы</Link>
+            <Link className={location.key === "review" ? "side-link active" : "side-link"} href="/teacher/review"><ClipboardList size={16}/>Очередь проверки</Link>
+            <Link className={location.key === "archive" ? "side-link active" : "side-link"} href="/teacher/archive"><Library size={16} />Архив</Link>
+            <Link className={location.key === "originality" ? "side-link active" : "side-link"} href="/teacher/originality"><ScanSearch size={16} />Оригинальность</Link>
+            {user?.account_id && <Link className={location.key === "settings" ? "side-link active" : "side-link"} href="/settings/profile">Настройки</Link>}
+            {['school_admin', 'platform_admin'].includes(user?.role ?? '') && <Link className={location.key === "admin" ? "side-link active" : "side-link"} href="/admin/institutions">Учреждения</Link>}
           </nav>
         )}
         <div className="sidebar-foot"><span className="ready-dot" />{enabled ? user?.username : "ДЕМО · без входа"}</div>
       </aside>
       <main className="main-column">
         <header className="global-header">
-          <div className="breadcrumbs"><span>Forma</span><span className="crumb-sep">/</span><span>{pathname.includes("/review") ? "Проверка" : pathname.includes("/template") ? "Шаблон" : pathname.includes("/results") ? "Результаты" : pathname.includes("/new") ? "Новое задание" : "Задания"}</span></div>
+          <div className="breadcrumbs"><span>Forma</span><span className="crumb-sep">/</span><span>{location.title}</span></div>
           {enabled && <button className="quiet-button" onClick={logout}>Выйти</button>}
         </header>
-        <div className="workspace">{children}</div>
+        <div className="workspace">{user?.role === "migration_pending" && <div className="notice">Существующие курсы сохранены. Для создания новых курсов требуется операторское одобрение роли и учреждения.</div>}{children}</div>
       </main>
     </div>
   );

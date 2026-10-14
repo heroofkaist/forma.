@@ -61,11 +61,19 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
       headers,
       body: body as BodyInit | undefined,
       cache: "no-store",
-      redirect: "error",
+      redirect: "manual",
       signal: AbortSignal.timeout(60_000),
     });
-  } catch {
-    return NextResponse.json({ detail: "Forma backend is unavailable. Please try again." }, { status: 502 });
+  } catch (error) {
+    console.error("Forma backend proxy error:", {
+      backendHost: base.hostname,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    return NextResponse.json(
+      { detail: "Forma backend is unavailable. Please try again." },
+      { status: 502 }
+    );
   }
   const outputHeaders = new Headers({ "Cache-Control": "no-store" });
   for (const key of ["content-type", "content-disposition", "retry-after"]) {
