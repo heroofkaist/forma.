@@ -1,0 +1,12 @@
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+backend/forma.sqlite3
+backend/storage/
+node_modules/
+.next/
+out/
+dist/
+.DS_Store
