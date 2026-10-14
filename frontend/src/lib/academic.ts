@@ -1,4 +1,4 @@
-import { API_URL } from "./api";
+import { API_URL, authenticatedFetch } from "./api";
 
 export type Offering = {
   id: string;
@@ -114,7 +114,7 @@ export type ArchiveSubmission = {
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, init);
+  const response = await authenticatedFetch(`${API_URL}${path}`, init);
   if (!response.ok) {
     const body = await response.json().catch(() => null) as { detail?: unknown } | null;
     const detail = typeof body?.detail === "string" ? body.detail : `Request failed (${response.status}).`;
@@ -241,8 +241,8 @@ export const academicApi = {
       return { ...offering, ...assignments, course_code: offering.course_code, course_name: offering.course_name, code: offering.code, name: offering.name, assignments: assignments.assignments };
     }));
   },
-  offering: async (id: string) => {
-    const raw = await request<Record<string, unknown>>(`/academic/offerings/${id}`);
+  offering: async (id: string, role: "student" | "teacher" = "teacher") => {
+    const raw = await request<Record<string, unknown>>(`/academic/offerings/${id}?role=${role}`);
     const normalized = normalizeOffering(raw);
     return { ...normalized, assignments: Array.isArray(raw.assignments) ? raw.assignments.map((item) => normalizeAssignment(item as Record<string, unknown>)) : [] };
   },

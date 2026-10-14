@@ -18,7 +18,7 @@ export default function StudentCoursePage() {
   const [sort, setSort] = useState("due");
   const [error, setError] = useState("");
   useEffect(() => {
-    Promise.all([academicApi.offering(offeringId), academicApi.studentAssignments()])
+    Promise.all([academicApi.offering(offeringId, "student"), academicApi.studentAssignments()])
       .then(([course, studentAssignments]) => {
         const mine = new Map(studentAssignments.filter((item) => item.offering_id === offeringId).map((item) => [item.id, item]));
         setOffering({ ...course, assignments: course.assignments?.map((item) => ({ ...item, ...mine.get(item.id) })) });

@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, Download, FileText } from "lucide-react";
 import { AppShell, StatusLabel } from "../../../../components/app-shell";
-import { api } from "../../../../lib/api";
+import { api, downloadAuthenticatedFile } from "../../../../lib/api";
 import type { Answer, Assignment, Grading } from "../../../../lib/types";
 
 export default function ResultsPage() {
@@ -36,7 +36,7 @@ export default function ResultsPage() {
 
   return <AppShell>
     <div className="review-topline"><div className="breadcrumbs-inline"><Link href="/">Задания</Link><span>/</span><Link href={`/assignments/${id}/review`}>{assignment?.title ?? "Задание"}</Link><span>/</span><span>Результаты</span></div><Link className="quiet-button" href={`/assignments/${id}/review`}>К проверке</Link></div>
-    <section className="page-heading compact-heading"><div><div className="eyebrow">РЕЗУЛЬТАТЫ · {assignment?.subject === "Physics" ? "ФИЗИКА" : "МАТЕМАТИКА"}</div><h1>{assignment?.title ?? "Результаты"}</h1><p className="heading-subtitle">{completed} из {students.length} работ полностью утверждены. Неутверждённые предложения ИИ не включаются в итоговый балл.</p></div><a className="button primary" href={api.exportUrl(id)}><Download size={15} />Экспорт CSV</a></section>
+    <section className="page-heading compact-heading"><div><div className="eyebrow">РЕЗУЛЬТАТЫ · {assignment?.subject === "Physics" ? "ФИЗИКА" : "МАТЕМАТИКА"}</div><h1>{assignment?.title ?? "Результаты"}</h1><p className="heading-subtitle">{completed} из {students.length} работ полностью утверждены. Неутверждённые предложения ИИ не включаются в итоговый балл.</p></div><button className="button primary" onClick={() => void downloadAuthenticatedFile(api.exportPath(id), `${id}-results.csv`).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Не удалось скачать экспорт."))}><Download size={15} />Экспорт CSV</button></section>
     {error && <div className="notice error-notice">{error}</div>}
     <div className="results-toolbar"><label className="filter-select">Показывать<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">Все работы</option><option value="approved">Утверждённые</option><option value="pending">Не завершённые</option></select></label><button className="quiet-button" onClick={() => setAscending(!ascending)}>{ascending ? <ArrowUp size={14} /> : <ArrowDown size={14} />}Итоговый балл</button></div>
     {students.length ? <div className="results-table">

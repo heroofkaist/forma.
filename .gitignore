@@ -7,6 +7,10 @@ backend/forma.sqlite3
 backend/storage/
 node_modules/
 .next/
+.open-next/
 out/
 dist/
 .DS_Store
+
+frontend/.wrangler/
+frontend/tsconfig.tsbuildinfo

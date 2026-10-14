@@ -3,7 +3,6 @@ import io
 import json
 import logging
 import os
-import shutil
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Literal
@@ -21,10 +20,10 @@ from persistence import (
     Assignment,
     SessionLocal,
     Submission,
+    delete_blobs,
     init_db,
     read_blob,
     save_blob,
-    storage_path,
 )
 from schemas import GradingResult
 from services.ai_grader import GradingConfigurationError, grade_image_with_retry
@@ -417,9 +416,7 @@ def _demo_seed(db: Session) -> None:
         db.execute(delete(Submission).where(Submission.assignment_id == DEMO_ASSIGNMENT_ID))
         db.delete(existing)
         db.flush()
-        demo_storage = storage_path(DEMO_ASSIGNMENT_ID)
-        if demo_storage.exists():
-            shutil.rmtree(demo_storage)
+        delete_blobs(DEMO_ASSIGNMENT_ID)
     regions = [
         {
             "id": "q-components",
@@ -744,9 +741,7 @@ def delete_assignment(assignment_id: str) -> Response:
         db.execute(delete(Submission).where(Submission.assignment_id == assignment_id))
         db.delete(assignment)
         db.commit()
-    folder = storage_path(assignment_id)
-    if folder.exists():
-        shutil.rmtree(folder)
+    delete_blobs(assignment_id)
     return Response(status_code=204)
 
 

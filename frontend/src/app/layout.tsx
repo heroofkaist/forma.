@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "katex/dist/katex.min.css";
 import "./globals.css";
+import { AuthProvider } from "../components/auth-provider";
 
 export const metadata: Metadata = {
   title: "Forma — проверка письменных работ",
@@ -8,5 +9,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="ru"><body>{children}</body></html>;
+  return <html lang="ru"><body>  <AuthProvider>{children}</AuthProvider></body></html>;
 }

@@ -2,8 +2,46 @@ import type { Answer, Assignment, CriterionResult, Grading, Question, Region } f
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+export async function authenticatedFetch(input: RequestInfo | URL, init: RequestInit = {}) {
+  const headers = new Headers(init.headers);
+  const token = typeof window !== "undefined"
+    ? window.sessionStorage.getItem("forma_access_token")
+    : null;
+  if (token && typeof window !== "undefined") {
+    const inputUrl = typeof input === "string"
+      ? input
+      : input instanceof URL
+        ? input.href
+        : input.url;
+    const requestUrl = new URL(inputUrl, window.location.href);
+    const apiOrigin = new URL(API_URL, window.location.href).origin;
+    if (requestUrl.origin === apiOrigin) headers.set("Authorization", `Bearer ${token}`);
+  }
+  return fetch(input, { ...init, headers });
+}
+
+export async function authenticatedResourceUrl(url: string): Promise<string> {
+  if (url.startsWith("data:")) return url;
+  const response = await authenticatedFetch(url.startsWith("http") ? url : `${API_URL}${url}`);
+  if (!response.ok) throw new Error(`Не удалось загрузить файл (${response.status}).`);
+  return URL.createObjectURL(await response.blob());
+}
+
+export async function downloadAuthenticatedFile(path: string, filename: string) {
+  const response = await authenticatedFetch(`${API_URL}${path}`);
+  if (!response.ok) throw new Error(`Не удалось скачать файл (${response.status}).`);
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, init);
+  const response = await authenticatedFetch(`${API_URL}${path}`, init);
   if (!response.ok) {
     const body = await response.json().catch(() => null) as { detail?: unknown } | null;
     const detail = typeof body?.detail === "string"
@@ -107,7 +145,7 @@ export const api = {
   },
   assignment: async (id: string) => normalizeAssignment(await request<unknown>(`/assignments/${id}`)),
   deleteAssignment: async (id: string) => {
-    const response = await fetch(`${API_URL}/assignments/${id}`, { method: "DELETE" });
+    const response = await authenticatedFetch(`${API_URL}/assignments/${id}`, { method: "DELETE" });
     if (!response.ok) throw new Error(`Не удалось удалить задание (${response.status}).`);
   },
   createAssignment: async (payload: Omit<Assignment, "id">) =>
@@ -151,5 +189,5 @@ export const api = {
     data.append("region_json", JSON.stringify(region));
     return normalizeAnswer(await request<unknown>(`/answers/${answerId}/retry-crop`, { method: "POST", body: data }));
   },
-  exportUrl: (id: string) => `${API_URL}/assignments/${id}/export`,
+  exportPath: (id: string) => `/assignments/${id}/export`,
 };

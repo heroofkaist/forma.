@@ -6,7 +6,8 @@ import katex from "katex";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowLeft, ArrowRight, Check, ChevronDown, ChevronUp, Download, ExternalLink, LoaderCircle, RotateCcw, Save, Sparkles } from "lucide-react";
 import { AppShell, StatusLabel } from "../../../../components/app-shell";
-import { API_URL, api } from "../../../../lib/api";
+import { ProtectedFileLink, ProtectedImage } from "../../../../components/protected-resource";
+import { api } from "../../../../lib/api";
 import type { Answer, Assignment, CriterionResult, Grading } from "../../../../lib/types";
 
 type Filter = "all" | "needs_attention";
@@ -57,7 +58,7 @@ export default function ReviewWorkspace() {
   activeAnswerRef.current = current?.id ?? "";
   const question = assignment?.questions.find((item) => item.id === current?.question_id);
   const currentRegion = assignment?.template_regions?.find((region) => region.question_id === current?.question_id);
-  const crop = current?.crop_data_url ?? (current?.crop_url ? `${API_URL}${current.crop_url}` : "");
+  const crop = current?.crop_data_url ?? current?.crop_url ?? "";
   const approved = current?.status === "approved";
 
   useEffect(() => {
@@ -201,9 +202,9 @@ export default function ReviewWorkspace() {
     {!current ? <div className="review-empty-state"><h2>{filter === "needs_attention" ? "Нет ответов, требующих внимания" : "Пока нет загруженных ответов"}</h2><p>Сначала добавьте PDF со сканами, чтобы Forma извлекла ответы по шаблону.</p><Link className="button primary" href={`/assignments/${id}/upload`}>Загрузить работы</Link></div> : <section className="review-workspace">
       <div className="evidence-column">
         <div className="evidence-header"><div><strong>Работа ученика</strong><span>{current.anonymous_student_id}</span></div><StatusLabel status={current.status} /></div>
-        <div className="scan-viewport">{crop ? <img src={crop} alt={`Рукописная работа ${current.anonymous_student_id}`} /> : current.status === "failed" ? <div className="scan-empty"><AlertTriangle size={21} /><span>{current.error || "Не удалось извлечь изображение."}</span><button className="button secondary" onClick={() => void retryCrop()} disabled={gradingBusy}>Повторить кроп и проверку</button><Link href={`/assignments/${id}/template`} className="text-button">Изменить шаблон</Link></div> : <span className="muted">Кроп ещё не готов</span>}</div>
+        <div className="scan-viewport">{crop ? <ProtectedImage url={crop} alt={`Рукописная работа ${current.anonymous_student_id}`} /> : current.status === "failed" ? <div className="scan-empty"><AlertTriangle size={21} /><span>{current.error || "Не удалось извлечь изображение."}</span><button className="button secondary" onClick={() => void retryCrop()} disabled={gradingBusy}>Повторить кроп и проверку</button><Link href={`/assignments/${id}/template`} className="text-button">Изменить шаблон</Link></div> : <span className="muted">Кроп ещё не готов</span>}</div>
         <div className="scan-tools"><span>ОРИГИНАЛ · ДОКАЗАТЕЛЬСТВО</span>{current.page_number && <span>Стр. {current.page_number}</span>}</div>
-        {(crop || current.source_page_url) && <a className="open-source" href={current.source_page_url ? `${API_URL}${current.source_page_url}` : crop} target="_blank" rel="noreferrer"><ExternalLink size={13} />Открыть всю страницу скана</a>}
+        {(crop || current.source_page_url) && <ProtectedFileLink className="open-source" url={current.source_page_url ?? crop}><ExternalLink size={13} />Открыть всю страницу скана</ProtectedFileLink>}
       </div>
       <div className="grading-column">
         <div className="grading-header"><div><strong>Оценка по рубрике</strong><span>{question?.maximum_points ?? 0} баллов максимум</span></div><div className="grading-badges">{grading?.is_demo_output && <span className="demo-tag">ДЕМО · СИМУЛЯЦИЯ</span>}<span className={approved ? "grade-state approved" : "grade-state suggestion"}>{approved ? <Check size={13} /> : <Sparkles size={13} />}{approved ? "Утверждено учителем" : "Предложение ИИ"}</span></div></div>

@@ -1,5 +1,6 @@
 import io
 import re
+import copy
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -8,7 +9,7 @@ from uuid import uuid4
 
 import pymupdf
 from docx import Document
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -26,15 +27,18 @@ from persistence import (
     OriginalityReport,
     SessionLocal,
     Submission,
+    blob_exists,
+    read_blob,
     now_utc,
     save_blob,
-    storage_path,
+    write_blob,
 )
+from auth import auth_required, request_user
 
 
 router = APIRouter(
     prefix="/academic",
-    tags=["Academic (demo/local only; no authentication)"],
+    tags=["Academic"],
 )
 
 DEMO_STUDENT_ID = "demo-student-001"
@@ -381,13 +385,13 @@ def ensure_academic_seed() -> None:
             old_docx_fixture = db.get(AcademicSubmission, SEED_SUBMISSION_IDS["2025"])
             if old_docx_fixture and old_docx_fixture.file_type != "docx":
                 relative = Path(ASSIGNMENT_IDS["2025"]) / "academic" / "seed-2025.docx"
-                path = storage_path(*relative.parts)
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes(_seed_docx(old_docx_fixture.extracted_text))
+                write_blob(relative.as_posix(), _seed_docx(old_docx_fixture.extracted_text))
                 old_docx_fixture.file_path = relative.as_posix()
                 old_docx_fixture.file_name = "seed-2025.docx"
                 old_docx_fixture.file_type = "docx"
-                old_docx_fixture.extracted_text = _extract_docx(path.read_bytes())
+                old_docx_fixture.extracted_text = _extract_docx(
+                    read_blob(relative.as_posix())
+                )
                 legacy = db.get(Submission, old_docx_fixture.legacy_submission_id)
                 if legacy:
                     legacy.source_path = ""
@@ -481,21 +485,22 @@ def ensure_academic_seed() -> None:
             legacy_submission_id = f"legacy-{submission_id}"
             file_type = "pdf" if year == "2024" else "docx"
             relative = Path(assignment_id) / "academic" / f"seed-{year}.{file_type}"
-            file_path = storage_path(*relative.parts)
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-            if not file_path.exists():
-                file_path.write_bytes(
+            if not blob_exists(relative.as_posix()):
+                write_blob(
+                    relative.as_posix(),
                     _seed_pdf(text) if file_type == "pdf" else _seed_docx(text)
                 )
             if file_type == "pdf":
-                document = pymupdf.open(stream=file_path.read_bytes(), filetype="pdf")
+                document = pymupdf.open(
+                    stream=read_blob(relative.as_posix()), filetype="pdf"
+                )
                 extracted_text = "\n".join(page.get_text() for page in document)
                 document.close()
             else:
-                extracted_text = _extract_docx(file_path.read_bytes())
-            text_path = storage_path(*Path(assignment_id, "academic", f"seed-{year}.txt").parts)
-            if not text_path.exists():
-                text_path.write_text(extracted_text, encoding="utf-8")
+                extracted_text = _extract_docx(read_blob(relative.as_posix()))
+            text_path = Path(assignment_id, "academic", f"seed-{year}.txt").as_posix()
+            if not blob_exists(text_path):
+                write_blob(text_path, extracted_text.encode("utf-8"))
             db.add(
                 Submission(
                     id=legacy_submission_id,
@@ -533,7 +538,24 @@ def ensure_academic_seed() -> None:
         db.commit()
 
 
-def _course_dict(db: Session, course: AcademicCourse, role: str) -> dict:
+def _student_identity(request: Request) -> tuple[str, str]:
+    if auth_required():
+        user = request_user(request)
+        if user.role != "student" or user.student_id is None:
+            raise HTTPException(status_code=403, detail="Student role required.")
+        return user.student_id, user.student_id
+    return DEMO_STUDENT_ID, DEMO_STUDENT_NAME
+
+
+def _student_view(assignment: dict) -> dict:
+    result = copy.deepcopy(assignment)
+    for question in result.get("questions", []):
+        if isinstance(question, dict):
+            question.pop("reference_solution", None)
+    return result
+
+
+def _course_dict(db: Session, course: AcademicCourse, role: str, student_id: str) -> dict:
     offerings = db.scalars(
         select(CourseOffering)
         .where(CourseOffering.course_id == course.id)
@@ -544,7 +566,7 @@ def _course_dict(db: Session, course: AcademicCourse, role: str) -> dict:
         if role == "student" and db.scalar(
             select(CourseEnrollment.id).where(
                 CourseEnrollment.offering_id == offering.id,
-                CourseEnrollment.student_id == DEMO_STUDENT_ID,
+                CourseEnrollment.student_id == student_id,
             )
         ) is None:
             continue
@@ -554,7 +576,7 @@ def _course_dict(db: Session, course: AcademicCourse, role: str) -> dict:
         submitted = {
             row.assignment_id
             for row in db.scalars(
-                select(AcademicSubmission).where(AcademicSubmission.student_id == DEMO_STUDENT_ID)
+                select(AcademicSubmission).where(AcademicSubmission.student_id == student_id)
             ).all()
         }
         pending = sum(assignment.id not in submitted for assignment in assignments)
@@ -879,12 +901,22 @@ def seed_academic_demo() -> None:
 
 @router.get("/courses", response_model=CoursesResponse, summary="[DEMO/LOCAL ONLY] List courses")
 def list_courses(
+    request: Request,
     role: Literal["student", "teacher"] = Query(...),
 ) -> dict:
     ensure_academic_seed()
+    if auth_required():
+        user = request_user(request)
+        if role != user.role:
+            raise HTTPException(status_code=403, detail="Requested role does not match credentials.")
+        student_id = user.student_id or ""
+    else:
+        student_id = DEMO_STUDENT_ID
     with SessionLocal() as db:
         courses = db.scalars(select(AcademicCourse).order_by(AcademicCourse.code)).all()
-        return {"items": [_course_dict(db, course, role) for course in courses]}
+        return {
+            "items": [_course_dict(db, course, role, student_id) for course in courses]
+        }
 
 
 @router.get(
@@ -892,12 +924,28 @@ def list_courses(
     response_model=OfferingDetailResponse,
     summary="[DEMO/LOCAL ONLY] Get course offering",
 )
-def get_offering(offering_id: str) -> dict:
+def get_offering(
+    offering_id: str, request: Request, role: Literal["student", "teacher"] = Query("teacher")
+) -> dict:
     ensure_academic_seed()
+    if auth_required():
+        authenticated_role = request_user(request).role
+        if role != authenticated_role:
+            raise HTTPException(status_code=403, detail="Requested role does not match credentials.")
+        student_id = request_user(request).student_id if authenticated_role == "student" else None
+    else:
+        student_id = DEMO_STUDENT_ID if role == "student" else None
     with SessionLocal() as db:
         offering = db.get(CourseOffering, offering_id)
         if offering is None:
             raise HTTPException(status_code=404, detail="Offering not found.")
+        if student_id and db.scalar(
+            select(CourseEnrollment.id).where(
+                CourseEnrollment.offering_id == offering.id,
+                CourseEnrollment.student_id == student_id,
+            )
+        ) is None:
+            raise HTTPException(status_code=403, detail="Not enrolled in this offering.")
         course = db.get(AcademicCourse, offering.course_id)
         assignments = db.scalars(
             select(AcademicAssignment)
@@ -910,7 +958,7 @@ def get_offering(offering_id: str) -> dict:
             "term": offering.term,
             "section": offering.section,
             "status": offering.status,
-            "class_code": offering.class_code,
+            "class_code": offering.class_code if student_id is None else "",
             "course": {
                 "id": course.id,
                 "code": course.code,
@@ -919,7 +967,12 @@ def get_offering(offering_id: str) -> dict:
                 "department": course.department,
             },
             "instructor": course.instructor,
-            "assignments": [_assignment_view(db, assignment) for assignment in assignments],
+            "assignments": [
+                _assignment_view(db, assignment)
+                if student_id is None
+                else _student_view(_assignment_view(db, assignment))
+                for assignment in assignments
+            ],
         }
 
 
@@ -966,8 +1019,9 @@ def create_offering(payload: OfferingCreate) -> dict:
     response_model=EnrollmentResponse,
     summary="[DEMO/LOCAL ONLY] Enroll demo student by class code",
 )
-def enroll(payload: EnrollmentRequest) -> dict:
+def enroll(payload: EnrollmentRequest, request: Request) -> dict:
     ensure_academic_seed()
+    student_id, student_name = _student_identity(request)
     with SessionLocal() as db:
         offering = db.scalar(
             select(CourseOffering).where(CourseOffering.class_code == payload.class_code.strip())
@@ -977,15 +1031,15 @@ def enroll(payload: EnrollmentRequest) -> dict:
         enrollment = db.scalar(
             select(CourseEnrollment).where(
                 CourseEnrollment.offering_id == offering.id,
-                CourseEnrollment.student_id == DEMO_STUDENT_ID,
+                CourseEnrollment.student_id == student_id,
             )
         )
         created = enrollment is None
         if created:
             enrollment = CourseEnrollment(
                 offering_id=offering.id,
-                student_id=DEMO_STUDENT_ID,
-                student_name=DEMO_STUDENT_NAME,
+                student_id=student_id,
+                student_name=student_name,
             )
             db.add(enrollment)
             db.commit()
@@ -1004,17 +1058,43 @@ def enroll(payload: EnrollmentRequest) -> dict:
     response_model=AssignmentItemsResponse,
     summary="[DEMO/LOCAL ONLY] List offering assignments",
 )
-def list_offering_assignments(offering_id: str) -> dict:
+def list_offering_assignments(
+    offering_id: str,
+    request: Request,
+    role: Literal["student", "teacher"] = Query("teacher"),
+) -> dict:
     ensure_academic_seed()
+    if auth_required():
+        authenticated_role = request_user(request).role
+        if role != authenticated_role:
+            raise HTTPException(status_code=403, detail="Requested role does not match credentials.")
+        student_id = request_user(request).student_id if authenticated_role == "student" else None
+    else:
+        student_id = DEMO_STUDENT_ID if role == "student" else None
     with SessionLocal() as db:
-        if db.get(CourseOffering, offering_id) is None:
+        offering = db.get(CourseOffering, offering_id)
+        if offering is None:
             raise HTTPException(status_code=404, detail="Offering not found.")
+        if student_id and db.scalar(
+            select(CourseEnrollment.id).where(
+                CourseEnrollment.offering_id == offering_id,
+                CourseEnrollment.student_id == student_id,
+            )
+        ) is None:
+            raise HTTPException(status_code=403, detail="Not enrolled in this offering.")
         assignments = db.scalars(
             select(AcademicAssignment)
             .where(AcademicAssignment.offering_id == offering_id)
             .order_by(AcademicAssignment.created_at)
         ).all()
-        return {"items": [_assignment_view(db, assignment) for assignment in assignments]}
+        return {
+            "items": [
+                _assignment_view(db, assignment)
+                if student_id is None
+                else _student_view(_assignment_view(db, assignment))
+                for assignment in assignments
+            ]
+        }
 
 
 @router.post(
@@ -1122,23 +1202,24 @@ def reuse_assignment(assignment_id: str, payload: AssignmentReuse) -> dict:
     response_model=StudentAssignmentItemsResponse,
     summary="[DEMO/LOCAL ONLY] List demo student assignments",
 )
-def student_assignments() -> dict:
+def student_assignments(request: Request) -> dict:
     ensure_academic_seed()
+    student_id, _ = _student_identity(request)
     with SessionLocal() as db:
         rows = db.scalars(
             select(AcademicAssignment)
             .join(CourseOffering, AcademicAssignment.offering_id == CourseOffering.id)
             .join(CourseEnrollment, CourseEnrollment.offering_id == CourseOffering.id)
-            .where(CourseEnrollment.student_id == DEMO_STUDENT_ID)
+            .where(CourseEnrollment.student_id == student_id)
             .order_by(CourseOffering.academic_year, AcademicAssignment.created_at)
         ).all()
         result = []
         for assignment in rows:
-            item = _assignment_view(db, assignment)
+            item = _student_view(_assignment_view(db, assignment))
             submission = db.scalar(
                 select(AcademicSubmission).where(
                     AcademicSubmission.assignment_id == assignment.id,
-                    AcademicSubmission.student_id == DEMO_STUDENT_ID,
+                    AcademicSubmission.student_id == student_id,
                 ).order_by(AcademicSubmission.created_at.desc())
             )
             item["submission"] = (
@@ -1171,14 +1252,15 @@ def student_assignments() -> dict:
     response_model=StudentGradeItemsResponse,
     summary="[DEMO/LOCAL ONLY] List published grades",
 )
-def student_grades() -> dict:
+def student_grades(request: Request) -> dict:
     ensure_academic_seed()
+    student_id, _ = _student_identity(request)
     with SessionLocal() as db:
         grades = db.scalars(
             select(AcademicGrade)
             .join(AcademicSubmission, AcademicGrade.submission_id == AcademicSubmission.id)
             .where(
-                AcademicSubmission.student_id == DEMO_STUDENT_ID,
+                AcademicSubmission.student_id == student_id,
                 AcademicGrade.published.is_(True),
             )
             .order_by(AcademicGrade.published_at.desc())
@@ -1243,8 +1325,11 @@ async def _read_submission_file(file: UploadFile) -> tuple[bytes, str, str]:
     response_model=SubmissionResponse,
     summary="[DEMO/LOCAL ONLY] Submit PDF or DOCX",
 )
-async def create_submission(assignment_id: str, file: UploadFile = File(...)) -> dict:
+async def create_submission(
+    assignment_id: str, request: Request, file: UploadFile = File(...)
+) -> dict:
     ensure_academic_seed()
+    student_id, student_name = _student_identity(request)
     content, extracted_text, file_type = await _read_submission_file(file)
     with SessionLocal() as db:
         assignment = db.get(AcademicAssignment, assignment_id)
@@ -1260,24 +1345,22 @@ async def create_submission(assignment_id: str, file: UploadFile = File(...)) ->
         enrolled = db.scalar(
             select(CourseEnrollment.id).where(
                 CourseEnrollment.offering_id == assignment.offering_id,
-                CourseEnrollment.student_id == DEMO_STUDENT_ID,
+                CourseEnrollment.student_id == student_id,
             )
         )
         if enrolled is None:
-            raise HTTPException(status_code=403, detail="Demo student is not enrolled in this offering.")
+            raise HTTPException(status_code=403, detail="Student is not enrolled in this offering.")
         prior = db.scalars(
             select(AcademicSubmission).where(
                 AcademicSubmission.assignment_id == assignment.id,
-                AcademicSubmission.student_id == DEMO_STUDENT_ID,
+                AcademicSubmission.student_id == student_id,
             )
         ).all()
         if prior and not assignment.allow_resubmission:
             raise HTTPException(status_code=409, detail="Resubmission is not allowed.")
         stored_name = f"{uuid4().hex}.{file_type}"
         relative_path = Path(assignment.id) / "academic" / stored_name
-        target = storage_path(*relative_path.parts)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(content)
+        write_blob(relative_path.as_posix(), content)
         legacy_submission_id = None
         if assignment.legacy_assignment_id:
             legacy_path = ""
@@ -1291,8 +1374,8 @@ async def create_submission(assignment_id: str, file: UploadFile = File(...)) ->
                 document.close()
             legacy_submission = Submission(
                 assignment_id=assignment.legacy_assignment_id,
-                student_name=DEMO_STUDENT_NAME,
-                anonymous_student_id=DEMO_STUDENT_NAME,
+                student_name=student_name,
+                anonymous_student_id=student_name,
                 source_path=legacy_path,
                 page_count=page_count,
                 status="ready",
@@ -1302,8 +1385,8 @@ async def create_submission(assignment_id: str, file: UploadFile = File(...)) ->
             legacy_submission_id = legacy_submission.id
         submission = AcademicSubmission(
             assignment_id=assignment.id,
-            student_id=DEMO_STUDENT_ID,
-            student_name=DEMO_STUDENT_NAME,
+            student_id=student_id,
+            student_name=student_name,
             legacy_submission_id=legacy_submission_id,
             file_path=relative_path.as_posix(),
             file_name=Path(file.filename or stored_name).name[:255],
@@ -1324,7 +1407,11 @@ async def create_submission(assignment_id: str, file: UploadFile = File(...)) ->
             "status": submission.status,
             "extracted_text": submission.extracted_text,
             "submitted_at": _timestamp(submission.created_at),
-            "originality_reports": [_report_json(db, report) for report in reports],
+            "originality_reports": (
+                []
+                if auth_required()
+                else [_report_json(db, report) for report in reports]
+            ),
         }
 
 

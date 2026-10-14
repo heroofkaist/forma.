@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { PointerEvent, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Check, Printer, RotateCw, Upload } from "lucide-react";
 import { AppShell } from "../../../../components/app-shell";
-import { API_URL, api } from "../../../../lib/api";
+import { API_URL, api, authenticatedFetch } from "../../../../lib/api";
 import type { Assignment, Question, Region } from "../../../../lib/types";
 
 type Preview = { preview_data_url: string; page_count: number; width: number; height: number };
@@ -42,7 +42,7 @@ export default function TemplateEditorPage() {
     const body = new FormData();
     body.append("file", file);
     try {
-      const response = await fetch(`${API_URL}/api/pdf/preview`, { method: "POST", body });
+      const response = await authenticatedFetch(`${API_URL}/api/pdf/preview`, { method: "POST", body });
       if (!response.ok) throw new Error(await errorText(response));
       setPreview(await response.json() as Preview);
     } catch (cause) {

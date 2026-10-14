@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "cf:upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
+    "cf:typegen": "wrangler types"
   },
   "dependencies": {
     "katex": "^0.19.0",
@@ -19,11 +23,17 @@
     "@types/node": "^22.7.4",
     "@types/react": "^18.3.9",
     "@types/react-dom": "^18.3.0",
-    "typescript": "^5.6.2"
+    "@opennextjs/cloudflare": "1.20.9",
+    "typescript": "^5.6.2",
+    "wrangler": "^4.151.0"
   },
   "overrides": {
     "next": {
       "postcss": "^8.5.30"
     }
+  },
+  "allowScripts": {
+    "workerd@1.20261012.1": true,
+    "esbuild@0.28.2": true
   }
 }

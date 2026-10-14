@@ -1,8 +1,12 @@
 import os
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
+from pathlib import PurePosixPath
 from uuid import uuid4
 
+import boto3
+from botocore.exceptions import ClientError
 from sqlalchemy import (
     Boolean,
     DateTime,
@@ -21,11 +25,54 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 BACKEND_DIR = Path(__file__).resolve().parent
 STORAGE_DIR = BACKEND_DIR / "storage"
+STORAGE_BACKEND = os.getenv("FORMA_STORAGE_BACKEND", "local").strip().lower()
+if STORAGE_BACKEND not in {"local", "r2"}:
+    raise ValueError("FORMA_STORAGE_BACKEND must be 'local' or 'r2'.")
+
+def _normalize_database_url(database_url: str | None) -> str:
+    value = database_url or f"sqlite:///{BACKEND_DIR / 'forma.sqlite3'}"
+    if value.startswith("postgres://"):
+        return value.replace("postgres://", "postgresql+psycopg://", 1)
+    if value.startswith("postgresql://"):
+        return value.replace("postgresql://", "postgresql+psycopg://", 1)
+    return value
+
+
+DATABASE_URL = _normalize_database_url(os.getenv("FORMA_DATABASE_URL"))
+
 STORAGE_DIR.mkdir(parents=True, exist_ok=True)
-DATABASE_URL = os.getenv("FORMA_DATABASE_URL", f"sqlite:///{BACKEND_DIR / 'forma.sqlite3'}")
+_r2_client = None
+_r2_bucket = os.getenv("R2_BUCKET_NAME", "").strip()
+if STORAGE_BACKEND == "r2":
+    _r2_account_id = os.getenv("R2_ACCOUNT_ID", "").strip()
+    _r2_access_key_id = os.getenv("R2_ACCESS_KEY_ID", "").strip()
+    _r2_secret_access_key = os.getenv("R2_SECRET_ACCESS_KEY", "").strip()
+    _missing_r2 = [
+        key
+        for key, value in (
+            ("R2_ACCOUNT_ID", _r2_account_id),
+            ("R2_ACCESS_KEY_ID", _r2_access_key_id),
+            ("R2_SECRET_ACCESS_KEY", _r2_secret_access_key),
+            ("R2_BUCKET_NAME", _r2_bucket),
+        )
+        if not value
+    ]
+    if _missing_r2:
+        raise RuntimeError(
+            "R2 storage is enabled but configuration is missing: " + ", ".join(_missing_r2)
+        )
+    _r2_client = boto3.client(
+        "s3",
+        endpoint_url=f"https://{_r2_account_id}.r2.cloudflarestorage.com",
+        region_name="auto",
+        aws_access_key_id=_r2_access_key_id,
+        aws_secret_access_key=_r2_secret_access_key,
+    )
+
 engine = create_engine(
     DATABASE_URL,
     connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {},
+    pool_pre_ping=True,
 )
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
@@ -220,8 +267,8 @@ def init_db() -> None:
             "template_rotation": "INTEGER NOT NULL DEFAULT 0",
         },
         "answers": {
-            "is_demo": "BOOLEAN NOT NULL DEFAULT 0",
-            "has_source_pdf": "BOOLEAN NOT NULL DEFAULT 0",
+            "is_demo": "BOOLEAN NOT NULL DEFAULT FALSE",
+            "has_source_pdf": "BOOLEAN NOT NULL DEFAULT FALSE",
             "grading_metadata": "JSON NOT NULL DEFAULT '{}'",
             "teacher_comment": "TEXT NOT NULL DEFAULT ''",
             "anonymous_student_id": "TEXT NOT NULL DEFAULT ''",
@@ -275,16 +322,87 @@ def storage_path(*parts: str) -> Path:
     return candidate
 
 
+def _storage_key(relative_path: str) -> str:
+    parts = PurePosixPath(relative_path).parts
+    if (
+        not parts
+        or PurePosixPath(relative_path).is_absolute()
+        or any(part in {".", ".."} for part in parts)
+    ):
+        raise ValueError("Invalid storage path.")
+    storage_path(*parts)
+    return PurePosixPath(*parts).as_posix()
+
+
+def write_blob(relative_path: str, content: bytes) -> None:
+    key = _storage_key(relative_path)
+    if STORAGE_BACKEND == "r2":
+        assert _r2_client is not None
+        _r2_client.put_object(Bucket=_r2_bucket, Key=key, Body=content)
+        return
+    path = storage_path(*PurePosixPath(key).parts)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
+
+
+def blob_exists(relative_path: str) -> bool:
+    key = _storage_key(relative_path)
+    if STORAGE_BACKEND == "r2":
+        assert _r2_client is not None
+        try:
+            _r2_client.head_object(Bucket=_r2_bucket, Key=key)
+        except ClientError as exc:
+            error = exc.response.get("Error", {})
+            status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+            if status == 404 or error.get("Code") in {"404", "NoSuchKey", "NotFound"}:
+                return False
+            raise
+        return True
+    return storage_path(*PurePosixPath(key).parts).is_file()
+
+
+def delete_blobs(prefix: str) -> None:
+    key = _storage_key(prefix)
+    if STORAGE_BACKEND == "r2":
+        assert _r2_client is not None
+        paginator = _r2_client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=_r2_bucket, Prefix=f"{key.rstrip('/')}/"):
+            objects = [{"Key": item["Key"]} for item in page.get("Contents", [])]
+            if objects:
+                _r2_client.delete_objects(
+                    Bucket=_r2_bucket,
+                    Delete={"Objects": objects, "Quiet": True},
+                )
+        return
+    path = storage_path(*PurePosixPath(key).parts)
+    if path.is_dir():
+        shutil.rmtree(path)
+
+
 def save_blob(assignment_id: str, kind: str, content: bytes, suffix: str) -> str:
     if kind not in {"sources", "crops"} or suffix not in {".pdf", ".png"}:
         raise ValueError("Invalid storage type.")
     relative = Path(assignment_id) / kind / f"{uuid4().hex}{suffix}"
-    path = storage_path(*relative.parts)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(content)
-    return relative.as_posix()
+    key = relative.as_posix()
+    write_blob(key, content)
+    return key
 
 
 def read_blob(relative_path: str) -> bytes:
-    path = storage_path(*Path(relative_path).parts)
-    return path.read_bytes()
+    key = _storage_key(relative_path)
+    if STORAGE_BACKEND == "r2":
+        assert _r2_client is not None
+        try:
+            response = _r2_client.get_object(Bucket=_r2_bucket, Key=key)
+        except ClientError as exc:
+            error = exc.response.get("Error", {})
+            status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+            if status == 404 or error.get("Code") in {"404", "NoSuchKey", "NotFound"}:
+                raise FileNotFoundError(relative_path) from exc
+            raise
+        body = response["Body"]
+        try:
+            return body.read()
+        finally:
+            body.close()
+    return storage_path(*PurePosixPath(key).parts).read_bytes()

@@ -5,7 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AlertTriangle, ArrowLeft, Check, FileUp, LoaderCircle, Upload } from "lucide-react";
 import { AppShell } from "../../../../components/app-shell";
-import { API_URL, api } from "../../../../lib/api";
+import { ProtectedImage } from "../../../../components/protected-resource";
+import { api } from "../../../../lib/api";
 import type { Assignment, Answer } from "../../../../lib/types";
 
 export default function UploadPage() {
@@ -52,7 +53,7 @@ export default function UploadPage() {
   }
 
   const firstCrop = answers.find((answer) => answer.crop_data_url || answer.crop_url);
-  const cropSource = firstCrop?.crop_data_url || (firstCrop?.crop_url ? `${API_URL}${firstCrop.crop_url}` : undefined);
+  const cropSource = firstCrop?.crop_data_url || firstCrop?.crop_url || undefined;
 
   return <AppShell>
     <div className="breadcrumbs-inline"><Link href="/">Задания</Link><span>/</span><Link href={`/assignments/${id}/template`}>{assignment?.title ?? "Задание"}</Link><span>/</span><span>Загрузить работы</span></div>
@@ -77,7 +78,7 @@ export default function UploadPage() {
       <div className="upload-actions"><Link href={`/assignments/${id}/template`} className="back-link"><ArrowLeft size={14} />Изменить шаблон</Link><button className="button primary" disabled={!file || working} onClick={() => void upload()}>{working ? <><LoaderCircle className="spin-icon" size={15} />Извлекаем ответы…</> : "Загрузить и проверить кропы"}</button></div>
     </section> : <section className="alignment-preview">
       <div className="alignment-header"><div className="alignment-success"><span><Check size={15} /></span><div><strong>Кропы извлечены</strong><small>{answers.length} ответов · {file?.name}</small></div></div><span className="warning-chip"><AlertTriangle size={14} />Проверьте совмещение</span></div>
-      {cropSource ? <div className="first-crop-preview"><div><img src={cropSource} alt="Предпросмотр извлечённого ответа" /></div><section><h2>Предпросмотр первого ответа</h2><p>До запуска Gemini проверьте, что выделенная область содержит полное решение и не захватывает соседнюю задачу.</p><p className="muted">Если рамка смещена, вернитесь к шаблону и измените координаты. Повторная загрузка создаст новый набор кропов.</p></section></div> : <div className="notice error-notice">Не удалось найти изображения кропов. Вернитесь к загрузке и повторите извлечение.</div>}
+      {cropSource ? <div className="first-crop-preview"><div><ProtectedImage url={cropSource} alt="Предпросмотр извлечённого ответа" /></div><section><h2>Предпросмотр первого ответа</h2><p>До запуска Gemini проверьте, что выделенная область содержит полное решение и не захватывает соседнюю задачу.</p><p className="muted">Если рамка смещена, вернитесь к шаблону и измените координаты. Повторная загрузка создаст новый набор кропов.</p></section></div> : <div className="notice error-notice">Не удалось найти изображения кропов. Вернитесь к загрузке и повторите извлечение.</div>}
       <div className="upload-actions"><button className="button secondary" onClick={() => { setUploaded(false); setAnswers([]); }}>Загрузить другой PDF</button><button className="button primary" disabled={working || !cropSource} onClick={() => void startGrading()}>{working ? "Запускаем проверку…" : "Подтвердить кропы и начать проверку"}</button></div>
     </section>}
   </AppShell>;

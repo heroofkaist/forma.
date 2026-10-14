@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: forma-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: FORMA_DATABASE_URL
+        sync: false
+      - key: FORMA_STORAGE_BACKEND
+        value: r2
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        sync: false
+      - key: FORMA_AUTH_REQUIRED
+        value: "true"
+      - key: FORMA_AUTH_SECRET
+        sync: false
+      - key: FORMA_TEACHER_USERNAME
+        sync: false
+      - key: FORMA_TEACHER_PASSWORD
+        sync: false
+      - key: FORMA_STUDENT_CREDENTIALS_JSON
+        sync: false
+      - key: FORMA_DEMO_MODE
+        value: "false"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-flash-lite-latest
+      - key: FRONTEND_ORIGIN
+        sync: false
