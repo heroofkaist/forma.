@@ -1,4 +1,4 @@
-export type Subject = "Mathematics" | "Physics";
+export type Subject = string;
 export type ReviewStatus = "pending" | "processing" | "ready_for_review" | "needs_attention" | "failed" | "approved";
 export type CriterionStatus = "awarded" | "not_awarded" | "uncertain";
 

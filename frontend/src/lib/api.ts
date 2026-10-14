@@ -1,6 +1,6 @@
 import type { Answer, Assignment, CriterionResult, Grading, Question, Region } from "./types";
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+export const API_URL = "/api/backend";
 
 export async function authenticatedFetch(input: RequestInfo | URL, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
@@ -17,7 +17,7 @@ export async function authenticatedFetch(input: RequestInfo | URL, init: Request
     const apiOrigin = new URL(API_URL, window.location.href).origin;
     if (requestUrl.origin === apiOrigin) headers.set("Authorization", `Bearer ${token}`);
   }
-  return fetch(input, { ...init, headers });
+  return fetch(input, { ...init, headers, credentials: "same-origin" });
 }
 
 export async function authenticatedResourceUrl(url: string): Promise<string> {
@@ -61,8 +61,7 @@ function normalizeAssignment(value: unknown): Assignment {
     title: question.title || question.label || "Задача",
     criteria: question.criteria ?? [],
   })) as Question[];
-  const subject = String(raw.subject ?? "").toLocaleLowerCase();
-  return { ...raw, subject: subject === "physics" || subject === "физика" ? "Physics" : "Mathematics", questions };
+  return { ...raw, subject: (raw.subject || "General") as Assignment["subject"], questions };
 }
 
 function normalizeGrading(answer: Record<string, unknown>): Grading | undefined {

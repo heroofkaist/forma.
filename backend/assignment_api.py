@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import Request, APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from PIL import Image, ImageDraw
 from pydantic import BaseModel, Field, ValidationError
@@ -677,14 +677,18 @@ def startup() -> None:
 
 
 @router.get("/assignments")
-def list_assignments() -> dict[str, Any]:
+def list_assignments(request: Request) -> dict[str, Any]:
     with SessionLocal() as db:
         items = db.scalars(select(Assignment).order_by(Assignment.created_at.desc())).all()
+        from auth import auth_required, request_user
+        from permissions import legacy_access
+        if auth_required():
+            items = [item for item in items if legacy_access(db, request_user(request), item.id)]
         return {"items": [_assignment_json(db, item) for item in items], "demo_mode": DEMO_MODE}
 
 
 @router.post("/assignments", status_code=201)
-def create_assignment(payload: AssignmentCreate) -> dict[str, Any]:
+def create_assignment(payload: AssignmentCreate, request: Request) -> dict[str, Any]:
     with SessionLocal() as db:
         assignment = Assignment(
             title=payload.title, subject=payload.subject, description=payload.description,
@@ -692,6 +696,11 @@ def create_assignment(payload: AssignmentCreate) -> dict[str, Any]:
             template_rotation=payload.template_rotation,
         )
         db.add(assignment)
+        db.flush()
+        from auth import auth_required, request_user
+        from account_models import AssignmentOwner
+        if auth_required() and request_user(request).account_id:
+            db.add(AssignmentOwner(assignment_id=assignment.id, account_id=request_user(request).account_id))
         db.commit()
         db.refresh(assignment)
         return _assignment_json(db, assignment)

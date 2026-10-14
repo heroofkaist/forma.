@@ -53,7 +53,7 @@ export default function AssignmentsPage() {
       <div className="assignment-row table-head"><span>НАЗВАНИЕ</span><span>ПРЕДМЕТ</span><span>ВОПРОСЫ</span><span>РАБОТЫ</span><span>ПРОВЕРКА</span><span>СТАТУС</span></div>
       {filtered.map((assignment) => <div className="assignment-row" key={assignment.id}>
         <span className="assignment-title"><Link href={`/assignments/${assignment.id}/review`}><strong>{assignment.title}</strong></Link>{assignment.demo_mode && <span className="demo-tag">ДЕМО</span>}<small>{assignment.created_at ? new Date(assignment.created_at).toLocaleDateString("ru-RU") : "Локальное задание"}</small></span>
-        <span>{assignment.subject === "Physics" ? "Физика" : "Математика"}</span>
+        <span>{assignment.subject === "Physics" ? "Физика" : assignment.subject === "Mathematics" ? "Математика" : assignment.subject}</span>
         <span>{assignment.questions?.length ?? 0}</span>
         <span>{assignment.submission_count ?? 0}</span>
         <span className="review-cell">{assignment.reviewed_count ?? 0}<span className="muted"> / {assignment.submission_count ?? 0}</span></span>

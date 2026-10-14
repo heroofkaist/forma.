@@ -11,7 +11,7 @@ import pymupdf
 from docx import Document
 from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from persistence import (
@@ -35,6 +35,14 @@ from persistence import (
 )
 from assignment_api import DEMO_MODE
 from auth import auth_required, request_user
+from account_models import CourseOwner, OfferingPolicy, EnrollmentState
+from permissions import can_teach, enrollment_active
+from courses import new_code, join_code
+from services.document_ingestion import ingest, CODE_SUFFIXES
+from document_models import SubmissionDocument, PublishedDocumentReview
+from document_review import published_feedback
+from starlette.concurrency import run_in_threadpool
+import hashlib
 
 
 router = APIRouter(
@@ -83,7 +91,9 @@ class CriterionPayload(BaseModel):
     id: str | None = Field(default=None, max_length=80)
     criterion_id: str | None = Field(default=None, max_length=80)
     description: str = Field(min_length=1, max_length=1000)
-    maximum_points: float = Field(gt=0, le=1000)
+    maximum_points: float = Field(gt=0, le=10000, allow_inf_nan=False)
+    evidence_expected: str = Field(default="", max_length=2000)
+    partial_credit: str = Field(default="", max_length=2000)
 
 
 class QuestionPayload(BaseModel):
@@ -92,7 +102,7 @@ class QuestionPayload(BaseModel):
     label: str | None = Field(default=None, max_length=200)
     statement: str = Field(default="", max_length=10000)
     reference_solution: str = Field(default="", max_length=20000)
-    maximum_points: float = Field(gt=0, le=1000)
+    maximum_points: float = Field(gt=0, le=10000, allow_inf_nan=False)
     criteria: list[CriterionPayload] = Field(default_factory=list, max_length=50)
     region: dict | None = None
 
@@ -100,11 +110,11 @@ class QuestionPayload(BaseModel):
 class AcademicAssignmentCreate(BaseModel):
     offering_id: str = Field(min_length=1, max_length=36)
     title: str = Field(min_length=1, max_length=200)
-    assignment_type: str = Field(default="homework", min_length=1, max_length=48)
+    assignment_type: Literal["homework", "problem_set", "essay", "lab_report", "presentation", "research_report", "programming", "general"] = "homework"
     description: str = Field(default="", max_length=5000)
     available_at: datetime | None = None
     due_at: datetime | None = None
-    maximum_score: float = Field(default=100, gt=0, le=10000)
+    maximum_score: float = Field(default=100, gt=0, le=10000, allow_inf_nan=False)
     allow_resubmission: bool = False
     originality_enabled: bool = True
     originality_scope: Literal["family_then_course", "family", "course"] = "family_then_course"
@@ -259,6 +269,9 @@ class AcademicStudentGradeResponse(BaseModel):
     points: float
     maximum_score: float
     published_at: str | None
+    criteria: list = Field(default_factory=list)
+    feedback: str = ""
+    rubric: list = Field(default_factory=list)
 
 
 class StudentGradeItemsResponse(BaseModel):
@@ -292,6 +305,7 @@ class EnrollmentResponse(BaseModel):
     student_id: str
     student_name: str
     created: bool
+    status: str = "active"
 
 
 class OfferingCreateResponse(BaseModel):
@@ -580,7 +594,7 @@ def ensure_academic_seed() -> None:
 def _student_identity(request: Request) -> tuple[str, str]:
     if auth_required():
         user = request_user(request)
-        if user.role != "student" or user.student_id is None:
+        if user.role not in {"student", "account"} or user.student_id is None:
             raise HTTPException(status_code=403, detail="Student role required.")
         return user.student_id, user.student_id
     return DEMO_STUDENT_ID, DEMO_STUDENT_NAME
@@ -602,12 +616,12 @@ def _course_dict(db: Session, course: AcademicCourse, role: str, student_id: str
     ).all()
     items = []
     for offering in offerings:
-        if role == "student" and db.scalar(
-            select(CourseEnrollment.id).where(
+        if role == "student" and not enrollment_active(db, db.scalar(
+            select(CourseEnrollment).where(
                 CourseEnrollment.offering_id == offering.id,
                 CourseEnrollment.student_id == student_id,
             )
-        ) is None:
+        )):
             continue
         assignments = db.scalars(
             select(AcademicAssignment).where(AcademicAssignment.offering_id == offering.id)
@@ -631,7 +645,7 @@ def _course_dict(db: Session, course: AcademicCourse, role: str, student_id: str
         )
     return {
         "id": course.id,
-        "code": course.code,
+        "code": (db.get(CourseOwner, course.id).public_code if db.get(CourseOwner, course.id) else course.code),
         "name": course.name,
         "instructor": course.instructor,
         "department": course.department,
@@ -687,18 +701,24 @@ def _normalize_questions(
         ids.add(item["id"])
         item["label"] = item["label"] or item["title"]
         criteria = []
+        criterion_ids = set()
         for criterion_index, criterion in enumerate(item["criteria"]):
             criterion_id = (
                 criterion["criterion_id"]
                 or criterion["id"]
                 or f"{item['id']}-c{criterion_index + 1}"
             )
+            if criterion_id in criterion_ids:
+                raise HTTPException(422, "Criterion IDs must be unique within a question.")
+            criterion_ids.add(criterion_id)
             criteria.append(
                 {
                     "id": criterion_id,
                     "criterion_id": criterion_id,
                     "description": criterion["description"],
                     "maximum_points": criterion["maximum_points"],
+                    "evidence_expected": criterion.get("evidence_expected", ""),
+                    "partial_credit": criterion.get("partial_credit", ""),
                 }
             )
         if criteria and sum(row["maximum_points"] for row in criteria) > item["maximum_points"]:
@@ -751,7 +771,7 @@ def _new_academic_assignment(
     db.flush()
     legacy = Assignment(
         title=title,
-        subject="Physics",
+        subject=(db.get(AcademicCourse, offering.course_id).department or "General"),
         description=description,
         status="active",
         questions=questions,
@@ -946,16 +966,17 @@ def list_courses(
     ensure_academic_seed()
     if auth_required():
         user = request_user(request)
-        if role != user.role:
+        if user.role != "account" and role != user.role:
             raise HTTPException(status_code=403, detail="Requested role does not match credentials.")
         student_id = user.student_id or ""
     else:
         student_id = DEMO_STUDENT_ID
     with SessionLocal() as db:
         courses = db.scalars(select(AcademicCourse).order_by(AcademicCourse.code)).all()
-        return {
-            "items": [_course_dict(db, course, role, student_id) for course in courses]
-        }
+        if auth_required() and role == "teacher":
+            courses = [course for course in courses if can_teach(db, user, course.id)]
+        items = [_course_dict(db, course, role, student_id) for course in courses]
+        return {"items": [item for item in items if role != "student" or item["offerings"]]}
 
 
 @router.get(
@@ -969,9 +990,9 @@ def get_offering(
     ensure_academic_seed()
     if auth_required():
         authenticated_role = request_user(request).role
-        if role != authenticated_role:
+        if authenticated_role != "account" and role != authenticated_role:
             raise HTTPException(status_code=403, detail="Requested role does not match credentials.")
-        student_id = request_user(request).student_id if authenticated_role == "student" else None
+        student_id = request_user(request).student_id if role == "student" else None
     else:
         student_id = DEMO_STUDENT_ID if role == "student" else None
     with SessionLocal() as db:
@@ -1000,7 +1021,7 @@ def get_offering(
             "class_code": offering.class_code if student_id is None else "",
             "course": {
                 "id": course.id,
-                "code": course.code,
+                "code": (db.get(CourseOwner, course.id).public_code if db.get(CourseOwner, course.id) else course.code),
                 "name": course.name,
                 "instructor": course.instructor,
                 "department": course.department,
@@ -1021,13 +1042,13 @@ def get_offering(
     response_model=OfferingCreateResponse,
     summary="[DEMO/LOCAL ONLY] Create course offering",
 )
-def create_offering(payload: OfferingCreate) -> dict:
+def create_offering(payload: OfferingCreate, request: Request) -> dict:
     ensure_academic_seed()
     with SessionLocal() as db:
         course = db.get(AcademicCourse, payload.course_id)
         if course is None:
             raise HTTPException(status_code=404, detail="Course not found.")
-        class_code = payload.class_code or f"{course.code}-{uuid4().hex[:6].upper()}"
+        class_code = new_code() if auth_required() and request_user(request).account_id else payload.class_code or new_code()
         if db.scalar(select(CourseOffering.id).where(CourseOffering.class_code == class_code)):
             raise HTTPException(status_code=409, detail="Class code is already in use.")
         offering = CourseOffering(
@@ -1039,6 +1060,9 @@ def create_offering(payload: OfferingCreate) -> dict:
             class_code=class_code,
         )
         db.add(offering)
+        db.flush()
+        if auth_required() and request_user(request).account_id:
+            db.add(OfferingPolicy(offering_id=offering.id))
         db.commit()
         db.refresh(offering)
         return {
@@ -1059,6 +1083,10 @@ def create_offering(payload: OfferingCreate) -> dict:
     summary="[DEMO/LOCAL ONLY] Enroll demo student by class code",
 )
 def enroll(payload: EnrollmentRequest, request: Request) -> dict:
+    ensure_academic_seed()
+    if auth_required():
+        _student_identity(request)
+        return join_code(payload, request)
     ensure_academic_seed()
     student_id, student_name = _student_identity(request)
     with SessionLocal() as db:
@@ -1105,9 +1133,9 @@ def list_offering_assignments(
     ensure_academic_seed()
     if auth_required():
         authenticated_role = request_user(request).role
-        if role != authenticated_role:
+        if authenticated_role != "account" and role != authenticated_role:
             raise HTTPException(status_code=403, detail="Requested role does not match credentials.")
-        student_id = request_user(request).student_id if authenticated_role == "student" else None
+        student_id = request_user(request).student_id if role == "student" else None
     else:
         student_id = DEMO_STUDENT_ID if role == "student" else None
     with SessionLocal() as db:
@@ -1254,6 +1282,9 @@ def student_assignments(request: Request) -> dict:
         ).all()
         result = []
         for assignment in rows:
+            enrollment = db.scalar(select(CourseEnrollment).where(CourseEnrollment.offering_id == assignment.offering_id, CourseEnrollment.student_id == student_id))
+            if not enrollment_active(db, enrollment):
+                continue
             item = _student_view(_assignment_view(db, assignment))
             submission = db.scalar(
                 select(AcademicSubmission).where(
@@ -1266,6 +1297,7 @@ def student_assignments(request: Request) -> dict:
                     "id": submission.id,
                     "status": submission.status,
                     "submitted_at": _timestamp(submission.created_at),
+                    "file_name": submission.file_name,
                 }
                 if submission
                 else None
@@ -1278,7 +1310,7 @@ def student_assignments(request: Request) -> dict:
                 )
             )
             item["published_grade"] = (
-                {"points": grade.points, "maximum_score": grade.maximum_score}
+                {"points": grade.points, "maximum_score": grade.maximum_score, "published_at": _timestamp(grade.published_at)}
                 if grade
                 else None
             )
@@ -1308,6 +1340,9 @@ def student_grades(request: Request) -> dict:
         for grade in grades:
             assignment = db.get(AcademicAssignment, grade.assignment_id)
             submission = db.get(AcademicSubmission, grade.submission_id)
+            enrollment = db.scalar(select(CourseEnrollment).where(CourseEnrollment.offering_id == assignment.offering_id, CourseEnrollment.student_id == student_id))
+            if not enrollment_active(db, enrollment):
+                continue
             items.append(
                 {
                     "id": grade.id,
@@ -1317,45 +1352,26 @@ def student_grades(request: Request) -> dict:
                     "points": grade.points,
                     "maximum_score": grade.maximum_score,
                     "published_at": _timestamp(grade.published_at),
+                    **published_feedback(db, grade),
                 }
             )
         return {"items": items}
 
 
-async def _read_submission_file(file: UploadFile) -> tuple[bytes, str, str]:
+async def _read_submission_file(file: UploadFile, allow_code: bool = False) -> tuple[bytes, str, str]:
     name = Path(file.filename or "").name
-    suffix = Path(name).suffix.lower()
-    allowed = {
-        ".pdf": {"application/pdf", "application/octet-stream"},
-        ".docx": {
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "application/octet-stream",
-        },
-    }
-    if suffix not in allowed or file.content_type not in allowed[suffix]:
-        raise HTTPException(status_code=415, detail="Upload a PDF or DOCX document.")
+    allowed = {"pdf", "docx", "pptx"} | (CODE_SUFFIXES | {"zip"} if allow_code else set())
+    if Path(name).suffix.lower().lstrip(".") not in allowed:
+        raise HTTPException(415, "Upload a PDF, DOCX or PPTX document.")
     content = await file.read(MAX_UPLOAD_BYTES + 1)
-    if not content:
-        raise HTTPException(status_code=400, detail="The uploaded document is empty.")
     if len(content) > MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="Submission size must not exceed 30 MB.")
+        raise HTTPException(413, "Submission size must not exceed 30 MB.")
     try:
-        if suffix == ".pdf":
-            document = pymupdf.open(stream=content, filetype="pdf")
-            try:
-                text = "\n".join(page.get_text() for page in document)
-                page_count = document.page_count
-            finally:
-                document.close()
-            if page_count < 1:
-                raise ValueError("PDF has no pages.")
-            file_type = "pdf"
-        else:
-            text = _extract_docx(content)
-            file_type = "docx"
+        structure = await run_in_threadpool(ingest, content, name, allow_code)
     except Exception as exc:
-        raise HTTPException(status_code=422, detail="Could not read the uploaded PDF/DOCX.") from exc
-    return content, text, file_type
+        raise HTTPException(422, str(exc) if isinstance(exc, ValueError) else "Could not read the uploaded document.") from exc
+    file._forma_structure = structure
+    return content, structure["extracted_text"], structure["file_type"]
 
 
 @router.post(
@@ -1369,11 +1385,22 @@ async def create_submission(
 ) -> dict:
     ensure_academic_seed()
     student_id, student_name = _student_identity(request)
-    content, extracted_text, file_type = await _read_submission_file(file)
+    if auth_required():
+        from accounts import rate_limit
+        rate_limit(request, "submission-upload", student_id, 20)
+    with SessionLocal() as preflight:
+        assignment = preflight.get(AcademicAssignment, assignment_id)
+        if assignment is None:
+            raise HTTPException(404, "Assignment not found.")
+        allow_code = assignment.assignment_type == "programming"
+    content, extracted_text, file_type = await _read_submission_file(file, allow_code)
     with SessionLocal() as db:
         assignment = db.get(AcademicAssignment, assignment_id)
         if assignment is None:
             raise HTTPException(status_code=404, detail="Assignment not found.")
+        if db.bind.dialect.name == "sqlite":
+            db.execute(update(AcademicAssignment).where(AcademicAssignment.id == assignment_id).values(maximum_score=AcademicAssignment.maximum_score))
+        db.scalar(select(AcademicAssignment).where(AcademicAssignment.id == assignment_id).with_for_update())
         now = now_utc()
         available_at = _as_utc(assignment.available_at)
         due_at = _as_utc(assignment.due_at)
@@ -1382,13 +1409,13 @@ async def create_submission(
         if due_at and now > due_at:
             raise HTTPException(status_code=409, detail="The submission deadline has passed.")
         enrolled = db.scalar(
-            select(CourseEnrollment.id).where(
+            select(CourseEnrollment).where(
                 CourseEnrollment.offering_id == assignment.offering_id,
                 CourseEnrollment.student_id == student_id,
             )
         )
-        if enrolled is None:
-            raise HTTPException(status_code=403, detail="Student is not enrolled in this offering.")
+        if not enrollment_active(db, enrolled):
+            raise HTTPException(status_code=403, detail="Student is not actively enrolled in this offering.")
         prior = db.scalars(
             select(AcademicSubmission).where(
                 AcademicSubmission.assignment_id == assignment.id,
@@ -1434,6 +1461,7 @@ async def create_submission(
         )
         db.add(submission)
         db.flush()
+        db.add(SubmissionDocument(submission_id=submission.id, content_hash=hashlib.sha256(content).hexdigest(), structure=file._forma_structure))
         reports = _compare_submission(db, submission)
         db.commit()
         db.refresh(submission)
@@ -1460,6 +1488,7 @@ async def create_submission(
     summary="[DEMO/LOCAL ONLY] List originality reports for teacher review",
 )
 def teacher_originality(
+    request: Request,
     offering_id: str | None = None,
     review_status: Literal["unreviewed", "reviewed", "follow_up"] | None = None,
 ) -> dict:
@@ -1481,6 +1510,9 @@ def teacher_originality(
         if review_status:
             query = query.where(OriginalityReport.review_status == review_status)
         reports = db.scalars(query).all()
+        if auth_required():
+            user = request_user(request)
+            reports = [report for report in reports if can_teach(db, user, db.get(CourseOffering, db.get(AcademicAssignment, db.get(AcademicSubmission, report.submission_id).assignment_id).offering_id).course_id)]
         return {"items": [_report_json(db, report) for report in reports]}
 
 
@@ -1604,6 +1636,10 @@ def publish_grades(assignment_id: str) -> dict:
                     AcademicGrade.submission_id == academic_submission.id,
                 )
             )
+            if grade is not None and db.get(PublishedDocumentReview, grade.id):
+                continue  # Universal review remains authoritative until explicitly republished.
+            if points > assignment.maximum_score:
+                raise HTTPException(409, "Approved answer points exceed the assignment maximum.")
             if grade is None:
                 grade = AcademicGrade(
                     assignment_id=assignment.id,

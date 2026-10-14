@@ -38,7 +38,7 @@ export type AcademicAssignment = {
   family_id?: string;
   assignment_family_id?: string | null;
   title: string;
-  assignment_type: "problem_set" | "essay" | "lab_report" | "general";
+  assignment_type: "problem_set" | "essay" | "lab_report" | "presentation" | "research_report" | "programming" | "general";
   description: string;
   available_at?: string | null;
   due_at?: string | null;

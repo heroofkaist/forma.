@@ -25,7 +25,9 @@ export default function StudentAssignmentPage() {
     setPreviewUrl(url);
     return () => URL.revokeObjectURL(url);
   }, [file]);
-  const accepted = isHandwritten ? ".pdf,application/pdf" : ".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  const programming = assignment?.assignment_type === "programming";
+  const formats = programming ? "PDF, DOCX, PPTX, исходный код, ZIP" : "PDF, DOCX, PPTX";
+  const accepted = programming ? ".pdf,.docx,.pptx,.py,.js,.ts,.tsx,.jsx,.java,.c,.cpp,.h,.rs,.go,.sql,.txt,.zip" : ".pdf,.docx,.pptx";
   const latest = assignment?.latest_submission;
   const due = assignment?.due_at ? new Date(assignment.due_at) : null;
   const available = assignment?.available_at ? new Date(assignment.available_at) : null;
@@ -47,16 +49,16 @@ export default function StudentAssignmentPage() {
       <main className="student-assignment-main">
         <div className="eyebrow">{assignment?.assignment_type?.replace("_", " ").toUpperCase() ?? "ЗАДАНИЕ"}</div><h1>{assignment?.title ?? "Задание"}</h1>
         <p className="student-assignment-course">{assignment?.description}</p>
-        <div className="student-detail-table"><div><span>Открывается</span><strong>{assignment?.available_at ? new Date(assignment.available_at).toLocaleString("ru-RU") : "Сейчас"}</strong></div><div><span>Срок сдачи</span><strong>{due ? due.toLocaleString("ru-RU") : "Без срока"}</strong></div><div><span>Максимальный балл</span><strong>{assignment?.maximum_score ?? "—"}</strong></div><div><span>Форматы</span><strong>{isHandwritten ? "Скан PDF" : "PDF, DOCX"}</strong></div></div>
-        {isHandwritten && <div className="student-instructions"><strong>Работа от руки</strong><p>Скачайте или распечатайте шаблон преподавателя, решите задачи на бланке и загрузите скан PDF. Используйте тот же масштаб и ориентацию страниц.</p>{assignment?.legacy_assignment_id && <Link href={`/assignments/${assignment.legacy_assignment_id}/template`} className="student-open-link">Открыть шаблон Forma →</Link>}</div>}
-        {assignment?.questions?.map((question, index) => <article className="student-problem" key={String(question.id ?? index)}><strong>{String(question.title ?? `Задача ${index + 1}`)}</strong><p>{String(question.statement ?? "")}</p></article>)}
+        <div className="student-detail-table"><div><span>Открывается</span><strong>{assignment?.available_at ? new Date(assignment.available_at).toLocaleString("ru-RU") : "Сейчас"}</strong></div><div><span>Срок сдачи</span><strong>{due ? due.toLocaleString("ru-RU") : "Без срока"}</strong></div><div><span>Максимальный балл</span><strong>{assignment?.maximum_score ?? "—"}</strong></div><div><span>Форматы</span><strong>{formats}</strong></div></div>
+        {isHandwritten && <div className="student-instructions"><strong>Работа от руки</strong><p>Загрузите многостраничный PDF со своим решением. Фиксированный бланк не требуется для отправки. Преподаватель проверит читаемость и содержание.</p></div>}
+        {programming && <p>Код рассматривается статически. Запуск и автоматическая проверка выполнения недоступны.</p>}{assignment?.questions?.map((question, index) => <article className="student-problem" key={String(question.id ?? index)}><strong>{String(question.title ?? `Задача ${index + 1}`)}</strong><p>{String(question.statement ?? "")}</p></article>)}
       </main>
       <aside className="student-submit-panel"><h2>Ваша работа</h2>
-        {latest && <div className="submission-receipt"><span className="student-status status-submitted">{String(latest.status ?? "Отправлено")}</span><p>{String(latest.original_filename ?? latest.filename ?? "Файл отправлен")}</p><small>Отправлено {latest.submitted_at ? new Date(String(latest.submitted_at)).toLocaleString("ru-RU") : "успешно"}</small></div>}
+        {latest && <div className="submission-receipt"><span className="student-status status-submitted">{String(latest.status ?? "Отправлено")}</span><p>{String(latest.file_name ?? latest.original_filename ?? latest.filename ?? "Файл отправлен")}</p><small>Отправлено {latest.submitted_at ? new Date(String(latest.submitted_at)).toLocaleString("ru-RU") : "успешно"}</small></div>}
         {submitted && <div className="success-notice"><Check size={15} />Работа успешно отправлена. Сохраните подтверждение.</div>}
         {error && <div className="notice error-notice"><AlertTriangle size={14} />{error}</div>}
         {notOpen ? <div className="closed-notice">Задание станет доступно {available?.toLocaleString("ru-RU")}.</div> : closed && !assignment?.allow_resubmission ? <div className="closed-notice">Срок сдачи завершён. Отправка закрыта преподавателем.</div> : <>
-          <label className="student-file-picker"><input type="file" accept={accepted} onChange={(event) => { setError(""); setFile(event.target.files?.[0] ?? null); }} /><FileUp size={20} /><strong>{file?.name ?? "Выберите файл"}</strong><span>{file ? `${(file.size / 1024 / 1024).toFixed(2)} МБ` : isHandwritten ? "PDF · до 30 МБ" : "PDF или DOCX · до 30 МБ"}</span></label>
+          <label className="student-file-picker"><input type="file" accept={accepted} onChange={(event) => { setError(""); setFile(event.target.files?.[0] ?? null); }} /><FileUp size={20} /><strong>{file?.name ?? "Выберите файл"}</strong><span>{file ? `${(file.size / 1024 / 1024).toFixed(2)} МБ` : `${formats} · до 30 МБ`}</span></label>
           {previewUrl && <object className="student-pdf-preview" data={previewUrl} type="application/pdf" aria-label="Предпросмотр PDF">Предпросмотр недоступен</object>}
           <button className="button primary full-button" disabled={!file || busy || (Boolean(latest) && !assignment?.allow_resubmission)} onClick={() => void submit()}>{busy ? "Отправляем…" : <><Upload size={14} />{latest ? "Отправить повторно" : "Подтвердить отправку"}</>}</button>
           {latest && !assignment?.allow_resubmission && <small className="muted">Повторная отправка не разрешена в настройках задания.</small>}

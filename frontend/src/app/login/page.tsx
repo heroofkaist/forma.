@@ -46,13 +46,13 @@ export default function LoginPage() {
           </div>
         ) : (
           <form onSubmit={submit} className="auth-form">
-            <label>Тип учетной записи
+            <label>Рабочее пространство
               <select value={role} onChange={(event) => setRole(event.target.value)}>
                 <option value="student">Ученик</option>
                 <option value="teacher">Учитель</option>
               </select>
             </label>
-            <label>{role === "student" ? "ID ученика" : "Имя пользователя"}
+            <label>{role === "student" ? "Email или ID ученика" : "Email или имя пользователя"}
               <input autoComplete="username" required value={username} onChange={(event) => setUsername(event.target.value)} />
             </label>
             <label>Пароль
@@ -62,6 +62,8 @@ export default function LoginPage() {
             <button className="button primary" type="submit" disabled={loading || submitting}>
               {submitting ? "Входим…" : "Войти"}
             </button>
+            <Link href="/register">Создать учётную запись</Link>
+            <Link href="/forgot-password">Забыли пароль?</Link>
           </form>
         )}
       </section>

@@ -273,7 +273,8 @@ def init_db(
             if database_bind is engine
             else sessionmaker(bind=database_bind, expire_on_commit=False)
         )
-    Base.metadata.create_all(database_bind)
+    identity_tables = {"accounts", "account_sessions", "account_actions", "account_rate_buckets", "course_owners", "offering_policies", "enrollment_states", "assignment_owners", "schema_migrations", "submission_documents", "course_materials", "document_reviews", "published_document_reviews", "email_outbox"}
+    Base.metadata.create_all(database_bind, tables=[table for name, table in Base.metadata.tables.items() if name not in identity_tables])
     migrations = {
         "assignments": {
             "template_rotation": "INTEGER NOT NULL DEFAULT 0",

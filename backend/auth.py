@@ -19,6 +19,7 @@ class AuthUser:
     role: str
     username: str
     student_id: str | None = None
+    account_id: str | None = None
 
 
 def auth_required() -> bool:
@@ -57,6 +58,8 @@ def validate_auth_configuration() -> None:
     secret = os.getenv("FORMA_AUTH_SECRET", "")
     if len(secret.encode("utf-8")) < 32:
         raise RuntimeError("FORMA_AUTH_SECRET must contain at least 32 bytes when auth is enabled.")
+    if os.getenv("FORMA_LEGACY_LOGIN_ENABLED", "true").lower() != "true":
+        return
     if not os.getenv("FORMA_TEACHER_USERNAME", "").strip():
         raise RuntimeError("FORMA_TEACHER_USERNAME is required when auth is enabled.")
     teacher_password = os.getenv("FORMA_TEACHER_PASSWORD", "")
@@ -97,6 +100,9 @@ def _decode(value: str) -> bytes:
 
 
 def create_token(user: AuthUser) -> str:
+    if user.account_id:
+        from accounts import create_session
+        return create_session(user)
     payload = {
         "role": user.role,
         "username": user.username,
@@ -109,6 +115,9 @@ def create_token(user: AuthUser) -> str:
 
 
 def verify_token(token: str) -> AuthUser:
+    if token.startswith("acct_"):
+        from accounts import verify_session
+        return verify_session(token)
     try:
         if len(token) > 4096:
             raise ValueError("Token is too long.")
@@ -145,6 +154,13 @@ def verify_token(token: str) -> AuthUser:
 
 
 def authenticate(role: str, username: str, password: str) -> AuthUser | None:
+    if "@" in username:
+        from accounts import account_login
+        account = account_login(username, password)
+        if account:
+            return account
+    if os.getenv("FORMA_LEGACY_LOGIN_ENABLED", "true").lower() != "true":
+        return None
     if role == "teacher":
         valid_username = _constant_time_equal(
             username, os.getenv("FORMA_TEACHER_USERNAME", "")

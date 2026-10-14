@@ -23,6 +23,10 @@ services:
         sync: false
       - key: FORMA_AUTH_REQUIRED
         value: "true"
+      - key: FORMA_PUBLIC_REGISTRATION
+        value: "false"
+      - key: FORMA_LEGACY_LOGIN_ENABLED
+        value: "true"
       - key: FORMA_AUTH_SECRET
         sync: false
       - key: FORMA_TEACHER_USERNAME

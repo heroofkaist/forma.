@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { usePathname, useRouter } from "next/navigation";
 import { API_URL, authenticatedFetch } from "../lib/api";
 
-type AuthIdentity = { role: string; username: string | null; student_id: string | null };
+type AuthIdentity = { role: string; username: string | null; student_id: string | null; account_id?: string | null };
 type AuthContextValue = {
   enabled: boolean;
   loading: boolean;
@@ -12,6 +12,10 @@ type AuthContextValue = {
   login: (role: string, username: string, password: string) => Promise<void>;
   logout: () => void;
 };
+
+function publicPath(pathname: string) {
+  return ["/login", "/register", "/forgot-password", "/reset-password", "/verify-email"].includes(pathname);
+}
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -44,7 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .then(async ({ required }) => {
         if (!active) return;
         setEnabled(required);
-        if (required && window.sessionStorage.getItem("forma_access_token")) {
+        if (required) {
           try {
             const identity = await loadIdentity();
             if (active) setUser(identity);
@@ -63,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [loadIdentity]);
 
   useEffect(() => {
-    if (loading || !enabled || pathname === "/login") return;
+    if (loading || !enabled || publicPath(pathname)) return;
     if (!user) {
       const next = pathname || "/";
       router.replace(`/login?next=${encodeURIComponent(next)}`);
@@ -81,10 +85,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify({ role, username, password }),
     });
     const body = await response.json().catch(() => null) as { access_token?: string; detail?: string } | null;
-    if (!response.ok || !body?.access_token) {
+    if (!response.ok) {
       throw new Error(body?.detail ?? "Не удалось войти.");
     }
-    window.sessionStorage.setItem("forma_access_token", body.access_token);
+    window.sessionStorage.removeItem("forma_access_token");
     try {
       setUser(await loadIdentity());
     } catch (error) {
@@ -94,15 +98,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [loadIdentity]);
 
   const logout = useCallback(() => {
-    window.sessionStorage.removeItem("forma_access_token");
-    setUser(null);
-    router.replace("/login");
+    void authenticatedFetch(`${API_URL}/api/auth/logout`, { method: "POST" }).then((response) => {
+      if (!response.ok) throw new Error("Unable to sign out. Please try again.");
+      window.sessionStorage.removeItem("forma_access_token");
+      setUser(null);
+      router.replace("/login");
+    }).catch((error: unknown) => window.alert(error instanceof Error ? error.message : "Unable to sign out."));
   }, [router]);
 
   const value = useMemo(() => ({ enabled, loading, user, login, logout }), [
     enabled, loading, user, login, logout,
   ]);
-  const isLogin = pathname === "/login";
+  const isLogin = publicPath(pathname);
   const wrongRolePath = enabled && user && (
     (user.role === "student" && !pathname.startsWith("/student") && !isLogin)
     || (user.role === "teacher" && pathname.startsWith("/student"))

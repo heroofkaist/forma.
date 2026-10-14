@@ -14,3 +14,5 @@ dist/
 
 frontend/.wrangler/
 frontend/tsconfig.tsbuildinfo
+
+/frontend/.env.production.local

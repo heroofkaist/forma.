@@ -151,3 +151,32 @@ npm run cf:preview
 - Очередь фоновой оценки работает внутри процесса backend; незавершённая обработка может прекратиться при его перезапуске.
 - Локальный режим по умолчанию открыт и предназначен только для демонстрации. Для сетевого развертывания включите `FORMA_AUTH_REQUIRED=true` и задайте серверные credentials; политика хранения данных и резервного копирования всё равно должна быть настроена отдельно.
 - Функциональность не заменяет профессиональное педагогическое решение и проверку применимых правил обработки данных.
+
+## Persistent accounts and universal course documents
+
+The new verified-account workflow uses private course ownership, enrollment codes,
+HttpOnly browser sessions through a same-origin Next.js proxy, private course
+materials and teacher-reviewed universal document grades. Existing demo and legacy
+administrator routes are retained during migration.
+
+See [the audited product plan](docs/PRODUCT_EVOLUTION_PLAN.md) and
+[account migration/deployment instructions](docs/ACCOUNT_MIGRATION_AND_DEPLOYMENT.md).
+Public registration defaults **off** until TLS SMTP is configured; no verification
+bypass is provided. New account passwords are Argon2id hashes. Configure
+`FORMA_BACKEND_URL` on the frontend Worker and the SMTP variables on Render.
+
+Academic assignments accept PDF, DOCX and PPTX without a mandatory crop template.
+Programming assignments additionally accept restricted UTF-8 sources/ZIPs for
+static review. PPTX extraction has no visual rendering, and DOCX extraction has no
+reliable page boundaries. Course assignment rows link to submitted documents and
+a rubric review workspace. Review versions are retained; grades are visible to
+students only after explicit teacher publication. Full-document AI interpretation
+and evidence-based automatic grading remain planned phases.
+
+Additional checks:
+
+```bash
+cd frontend
+npm test
+npx tsc --noEmit
+```

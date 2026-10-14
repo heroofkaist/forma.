@@ -206,3 +206,23 @@ def test_production_does_not_seed_academic_demo(
 
         with factory() as db:
             assert db.get(AcademicCourse, academic_api.COURSE_ID) is None
+
+
+@pytest.mark.parametrize("postgresql", [False, True])
+def test_account_migrations_preserve_existing_records_and_repeat(monkeypatch, postgresql):
+    from account_models import SchemaMigration
+    from migrations import apply_migrations
+    if postgresql and not os.getenv("FORMA_TEST_POSTGRESQL_URL"):
+        pytest.skip("Set FORMA_TEST_POSTGRESQL_URL for additive PostgreSQL migration validation.")
+    with _isolated_connection(os.getenv("FORMA_TEST_POSTGRESQL_URL") if postgresql else None) as connection:
+        factory = sessionmaker(bind=connection, expire_on_commit=False)
+        init_db(connection, factory)
+        with factory() as db:
+            db.add(AcademicCourse(id="preserved-chemistry", code="CHEM101", name="Chemistry", instructor="Existing Teacher", department="Science"))
+            db.commit()
+        apply_migrations(connection)
+        apply_migrations(connection)
+        init_db(connection, factory)
+        with factory() as db:
+            assert db.get(AcademicCourse, "preserved-chemistry").name == "Chemistry"
+            assert len(db.scalars(select(SchemaMigration)).all()) == 4

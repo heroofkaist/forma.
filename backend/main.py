@@ -35,7 +35,7 @@ class LoginRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     role: str = Field(pattern="^(teacher|student)$")
-    username: str = Field(min_length=1, max_length=80)
+    username: str = Field(min_length=1, max_length=254)
     password: str = Field(min_length=1, max_length=1024)
 
 
@@ -47,7 +47,10 @@ def validate_auth_settings() -> None:
 @app.middleware("http")
 async def enforce_api_authentication(request: Request, call_next):
     path = request.url.path
-    if path in {"/health", "/api/health", "/api/auth/status", "/api/auth/login"}:
+    if path in {"/health", "/api/health", "/api/auth/status", "/api/auth/login",
+                "/api/accounts/status", "/api/accounts/register", "/api/accounts/verify-email",
+                "/api/accounts/forgot-password", "/api/accounts/reset-password",
+                "/api/accounts/resend-verification"}:
         return await call_next(request)
 
     is_api = path.startswith(("/api/", "/academic/", "/assignments", "/answers"))
@@ -63,9 +66,15 @@ async def enforce_api_authentication(request: Request, call_next):
     except HTTPException as exc:
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
     request.state.auth_user = user
+    from permissions import authorize_request
+    try:
+        await authorize_request(request, user)
+    except HTTPException as exc:
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
     student_routes = (
-        path == "/api/auth/me"
+        path in {"/api/auth/me", "/api/auth/logout"}
+        or (path.startswith(("/api/course-materials/", "/api/materials/", "/api/submission-documents/", "/api/submission-files/")) and request.method == "GET")
         or (path == "/academic/courses" and request.method == "GET")
         or (path == "/academic/enroll" and request.method == "POST")
         or (path.startswith("/academic/student/") and request.method == "GET")
@@ -89,9 +98,11 @@ def auth_status() -> dict[str, bool]:
 
 
 @app.post("/api/auth/login")
-def auth_login(payload: LoginRequest) -> dict[str, str | int]:
+def auth_login(payload: LoginRequest, request: Request) -> dict[str, str | int]:
     if not auth_required():
         raise HTTPException(status_code=409, detail="Authentication is disabled.")
+    from accounts import rate_limit
+    rate_limit(request, "login", payload.username, 10)
     user = authenticate(payload.role, payload.username, payload.password)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid username or password.")
@@ -107,7 +118,7 @@ def auth_me(request: Request) -> dict[str, str | None]:
     if not auth_required():
         return {"role": "demo", "username": None, "student_id": None}
     user = request_user(request)
-    return {"role": user.role, "username": user.username, "student_id": user.student_id}
+    return {"role": user.role, "username": user.username, "student_id": user.student_id, "account_id": user.account_id}
 
 
 app.add_middleware(
@@ -117,6 +128,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def limit_document_request(request: Request, action: str, maximum: int):
+    if auth_required():
+        from accounts import rate_limit
+        user = request_user(request)
+        rate_limit(request, action, user.account_id or user.username, maximum)
 
 
 async def read_pdf(file: UploadFile) -> bytes:
@@ -141,7 +159,8 @@ def health_alias() -> dict[str, str]:
 
 
 @app.post("/api/pdf/preview")
-async def pdf_preview(file: Annotated[UploadFile, File()]) -> dict:
+async def pdf_preview(request: Request, file: Annotated[UploadFile, File()]) -> dict:
+    limit_document_request(request, "pdf-preview", 30)
     content = await read_pdf(file)
     try:
         preview = render_preview(content)
@@ -157,10 +176,12 @@ async def pdf_preview(file: Annotated[UploadFile, File()]) -> dict:
 
 @app.post("/api/pdf/crop")
 async def pdf_crop(
+    request: Request,
     file: Annotated[UploadFile, File()],
     page_index: Annotated[int, Form(ge=0)],
     box_json: Annotated[str, Form()],
 ) -> dict[str, str]:
+    limit_document_request(request, "pdf-crop", 60)
     content = await read_pdf(file)
     try:
         box = NormalizedBox.model_validate_json(box_json)
@@ -173,11 +194,13 @@ async def pdf_crop(
 
 @app.post("/api/grade", response_model=GradingResult)
 async def grade(
+    request: Request,
     image: Annotated[UploadFile, File()],
     problem_statement: Annotated[str, Form()],
     reference_solution: Annotated[str, Form()],
     rubric_text: Annotated[str, Form()],
 ) -> GradingResult:
+    limit_document_request(request, "image-grade", 10)
     if image.content_type not in {"image/png", "image/jpeg", "image/webp"}:
         raise HTTPException(status_code=415, detail="Upload a PNG, JPEG, or WebP crop.")
     image_bytes = await image.read(10 * 1024 * 1024 + 1)
@@ -206,3 +229,42 @@ app.include_router(assignment_router)
 from academic_api import router as academic_router
 
 app.include_router(academic_router)
+
+from accounts import router as accounts_router
+from courses import router as courses_router
+app.include_router(accounts_router)
+app.include_router(courses_router)
+
+@app.on_event("startup")
+def migrate_accounts():
+    from persistence import engine
+    from migrations import apply_migrations
+    apply_migrations(engine)
+
+@app.post("/api/auth/logout")
+def legacy_logout(request: Request):
+    if auth_required() and request_user(request).account_id:
+        from accounts import logout
+        return logout(request)
+    return {"message": "Signed out. Legacy bearer tokens expire at their original deadline."}
+
+from materials import router as materials_router
+app.include_router(materials_router)
+
+from document_review import router as document_review_router
+app.include_router(document_review_router)
+
+
+@app.on_event("startup")
+def start_account_email_delivery():
+    from email_delivery import start_worker
+    app.state.email_worker = start_worker()
+
+
+@app.on_event("shutdown")
+def stop_account_email_delivery():
+    worker = getattr(app.state, "email_worker", None)
+    if worker:
+        stop, thread = worker
+        stop.set()
+        thread.join(timeout=1)
