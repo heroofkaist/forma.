@@ -20,7 +20,8 @@ from sqlalchemy import (
     inspect,
     select,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
+from sqlalchemy.engine import Connection, Engine
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 
 BACKEND_DIR = Path(__file__).resolve().parent
@@ -260,8 +261,19 @@ class AcademicGrade(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
 
-def init_db() -> None:
-    Base.metadata.create_all(engine)
+def init_db(
+    database_bind: Engine | Connection | None = None,
+    session_factory: sessionmaker[Session] | None = None,
+) -> None:
+    if database_bind is None:
+        database_bind = engine
+    if session_factory is None:
+        session_factory = (
+            SessionLocal
+            if database_bind is engine
+            else sessionmaker(bind=database_bind, expire_on_commit=False)
+        )
+    Base.metadata.create_all(database_bind)
     migrations = {
         "assignments": {
             "template_rotation": "INTEGER NOT NULL DEFAULT 0",
@@ -278,14 +290,21 @@ def init_db() -> None:
         },
     }
     for table, new_columns in migrations.items():
-        columns = {column["name"] for column in inspect(engine).get_columns(table)}
+        columns = {
+            column["name"] for column in inspect(database_bind).get_columns(table)
+        }
         for column_name, column_type in new_columns.items():
             if column_name not in columns:
-                with engine.begin() as connection:
-                    connection.exec_driver_sql(
+                if isinstance(database_bind, Connection):
+                    database_bind.exec_driver_sql(
                         f"ALTER TABLE {table} ADD COLUMN {column_name} {column_type}"
                     )
-    with SessionLocal() as db:
+                else:
+                    with database_bind.begin() as connection:
+                        connection.exec_driver_sql(
+                            f"ALTER TABLE {table} ADD COLUMN {column_name} {column_type}"
+                        )
+    with session_factory() as db:
         submissions = db.scalars(
             select(Submission).order_by(
                 Submission.assignment_id,

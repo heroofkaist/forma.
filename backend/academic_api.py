@@ -33,6 +33,7 @@ from persistence import (
     save_blob,
     write_blob,
 )
+from assignment_api import DEMO_MODE
 from auth import auth_required, request_user
 
 
@@ -380,50 +381,57 @@ def _extract_docx(content: bytes) -> str:
 
 
 def ensure_academic_seed() -> None:
+    if not DEMO_MODE:
+        return
+
     with SessionLocal() as db:
-        if db.get(AcademicCourse, COURSE_ID) is not None:
-            old_docx_fixture = db.get(AcademicSubmission, SEED_SUBMISSION_IDS["2025"])
-            if old_docx_fixture and old_docx_fixture.file_type != "docx":
-                relative = Path(ASSIGNMENT_IDS["2025"]) / "academic" / "seed-2025.docx"
-                write_blob(relative.as_posix(), _seed_docx(old_docx_fixture.extracted_text))
-                old_docx_fixture.file_path = relative.as_posix()
-                old_docx_fixture.file_name = "seed-2025.docx"
-                old_docx_fixture.file_type = "docx"
-                old_docx_fixture.extracted_text = _extract_docx(
-                    read_blob(relative.as_posix())
-                )
-                legacy = db.get(Submission, old_docx_fixture.legacy_submission_id)
-                if legacy:
-                    legacy.source_path = ""
-                db.commit()
-            return
-        course = AcademicCourse(
-            id=COURSE_ID,
-            code="PHY101",
-            name="General Physics I",
-            instructor="Dr. Ada Rivera",
-            department="Physics",
-        )
-        family = AssignmentFamily(
-            id=FAMILY_ID,
-            course_id=COURSE_ID,
-            title="Forces on an Incline",
-        )
-        db.add_all([course, family])
-        db.flush()
-        for year, offering_id in OFFERING_IDS.items():
+        if db.get(AcademicCourse, COURSE_ID) is None:
             db.add(
-                CourseOffering(
-                    id=offering_id,
+                AcademicCourse(
+                    id=COURSE_ID,
+                    code="PHY101",
+                    name="General Physics I",
+                    instructor="Dr. Ada Rivera",
+                    department="Physics",
+                )
+            )
+        if db.get(AssignmentFamily, FAMILY_ID) is None:
+            db.add(
+                AssignmentFamily(
+                    id=FAMILY_ID,
                     course_id=COURSE_ID,
-                    academic_year=year,
-                    term="Fall",
-                    section="01",
-                    status="archived" if year != "2026" else "active",
-                    class_code=f"PHY101-F{year[-2:]}",
+                    title="Forces on an Incline",
                 )
             )
         db.flush()
+        for year, offering_id in OFFERING_IDS.items():
+            if db.get(CourseOffering, offering_id) is None:
+                db.add(
+                    CourseOffering(
+                        id=offering_id,
+                        course_id=COURSE_ID,
+                        academic_year=year,
+                        term="Fall",
+                        section="01",
+                        status="archived" if year != "2026" else "active",
+                        class_code=f"PHY101-F{year[-2:]}",
+                    )
+                )
+        db.flush()
+
+        old_docx_fixture = db.get(AcademicSubmission, SEED_SUBMISSION_IDS["2025"])
+        if old_docx_fixture and old_docx_fixture.file_type != "docx":
+            relative = Path(ASSIGNMENT_IDS["2025"]) / "academic" / "seed-2025.docx"
+            write_blob(relative.as_posix(), _seed_docx(old_docx_fixture.extracted_text))
+            old_docx_fixture.file_path = relative.as_posix()
+            old_docx_fixture.file_name = "seed-2025.docx"
+            old_docx_fixture.file_type = "docx"
+            old_docx_fixture.extracted_text = _extract_docx(
+                read_blob(relative.as_posix())
+            )
+            legacy = db.get(Submission, old_docx_fixture.legacy_submission_id)
+            if legacy:
+                legacy.source_path = ""
 
         seed_texts = {
             "2024": (
@@ -444,45 +452,58 @@ def ensure_academic_seed() -> None:
         for year, assignment_id in ASSIGNMENT_IDS.items():
             legacy_id = f"legacy-{assignment_id}"
             legacy_ids[year] = legacy_id
-            question = _seed_questions()
-            db.add(
-                Assignment(
-                    id=legacy_id,
-                    title="Forces on an Incline",
-                    subject="Physics",
-                    description="PHY101 reusable assignment family.",
-                    status="active" if year == "2026" else "completed",
-                    questions=question,
-                    template_regions=[],
-                    template_rotation=0,
+            if db.get(Assignment, legacy_id) is None:
+                db.add(
+                    Assignment(
+                        id=legacy_id,
+                        title="Forces on an Incline",
+                        subject="Physics",
+                        description="PHY101 reusable assignment family.",
+                        status="active" if year == "2026" else "completed",
+                        questions=_seed_questions(),
+                        template_regions=[],
+                        template_rotation=0,
+                    )
                 )
-            )
-            db.add(
-                AcademicAssignment(
-                    id=assignment_id,
-                    offering_id=OFFERING_IDS[year],
-                    family_id=FAMILY_ID,
-                    legacy_assignment_id=legacy_id,
-                    title="Forces on an Incline",
-                    assignment_type="problem_set",
-                    description="Resolve gravity into components on a frictionless incline.",
-                    available_at=None,
-                    due_at=None,
-                    maximum_score=10,
-                    allow_resubmission=False,
-                    originality_enabled=True,
-                    originality_scope="family_then_course",
-                    questions=question,
-                    template_regions=[],
-                    template_rotation=0,
-                )
-            )
         db.flush()
 
+        for year, assignment_id in ASSIGNMENT_IDS.items():
+            legacy_id = legacy_ids[year]
+            academic_assignment = db.get(AcademicAssignment, assignment_id)
+            if academic_assignment is None:
+                db.add(
+                    AcademicAssignment(
+                        id=assignment_id,
+                        offering_id=OFFERING_IDS[year],
+                        family_id=FAMILY_ID,
+                        legacy_assignment_id=legacy_id,
+                        title="Forces on an Incline",
+                        assignment_type="problem_set",
+                        description="Resolve gravity into components on a frictionless incline.",
+                        available_at=None,
+                        due_at=None,
+                        maximum_score=10,
+                        allow_resubmission=False,
+                        originality_enabled=True,
+                        originality_scope="family_then_course",
+                        questions=_seed_questions(),
+                        template_regions=[],
+                        template_rotation=0,
+                    )
+                )
+            elif academic_assignment.legacy_assignment_id is None:
+                academic_assignment.legacy_assignment_id = legacy_id
+        db.flush()
+
+        extracted_texts: dict[str, str] = {}
+        legacy_submission_ids: dict[str, str] = {}
         for year, submission_id in SEED_SUBMISSION_IDS.items():
+            if db.get(AcademicSubmission, submission_id) is not None:
+                continue
             assignment_id = ASSIGNMENT_IDS[year]
             text = seed_texts[year]
             legacy_submission_id = f"legacy-{submission_id}"
+            legacy_submission_ids[year] = legacy_submission_id
             file_type = "pdf" if year == "2024" else "docx"
             relative = Path(assignment_id) / "academic" / f"seed-{year}.{file_type}"
             if not blob_exists(relative.as_posix()):
@@ -498,43 +519,61 @@ def ensure_academic_seed() -> None:
                 document.close()
             else:
                 extracted_text = _extract_docx(read_blob(relative.as_posix()))
+            extracted_texts[year] = extracted_text
             text_path = Path(assignment_id, "academic", f"seed-{year}.txt").as_posix()
             if not blob_exists(text_path):
                 write_blob(text_path, extracted_text.encode("utf-8"))
-            db.add(
-                Submission(
-                    id=legacy_submission_id,
-                    assignment_id=legacy_ids[year],
-                    student_name=f"Historical Student {year}",
-                    anonymous_student_id=f"Historical Student {year}",
-                    source_path=relative.as_posix() if file_type == "pdf" else "",
-                    page_count=1,
-                    status="ready",
+
+            if db.get(Submission, legacy_submission_id) is None:
+                db.add(
+                    Submission(
+                        id=legacy_submission_id,
+                        assignment_id=legacy_ids[year],
+                        student_name=f"Historical Student {year}",
+                        anonymous_student_id=f"Historical Student {year}",
+                        source_path=relative.as_posix() if file_type == "pdf" else "",
+                        page_count=1,
+                        status="ready",
+                    )
                 )
-            )
+        db.flush()
+
+        for year, submission_id in SEED_SUBMISSION_IDS.items():
+            if db.get(AcademicSubmission, submission_id) is not None:
+                continue
+            assignment_id = ASSIGNMENT_IDS[year]
+            file_type = "pdf" if year == "2024" else "docx"
+            relative = Path(assignment_id) / "academic" / f"seed-{year}.{file_type}"
             db.add(
                 AcademicSubmission(
                     id=submission_id,
                     assignment_id=assignment_id,
                     student_id=f"historical-student-{year}",
                     student_name=f"Historical Student {year}",
-                    legacy_submission_id=legacy_submission_id,
+                    legacy_submission_id=legacy_submission_ids[year],
                     file_path=relative.as_posix(),
                     file_name=f"seed-{year}.{file_type}",
                     file_type=file_type,
-                    extracted_text=extracted_text,
+                    extracted_text=extracted_texts[year],
                     status="submitted",
                 )
             )
         db.flush()
         for year in OFFERING_IDS:
-            db.add(
-                CourseEnrollment(
-                    offering_id=OFFERING_IDS[year],
-                    student_id=DEMO_STUDENT_ID,
-                    student_name=DEMO_STUDENT_NAME,
+            enrollment_exists = db.scalar(
+                select(CourseEnrollment.id).where(
+                    CourseEnrollment.offering_id == OFFERING_IDS[year],
+                    CourseEnrollment.student_id == DEMO_STUDENT_ID,
                 )
             )
+            if enrollment_exists is None:
+                db.add(
+                    CourseEnrollment(
+                        offering_id=OFFERING_IDS[year],
+                        student_id=DEMO_STUDENT_ID,
+                        student_name=DEMO_STUDENT_NAME,
+                    )
+                )
         db.commit()
 
 
