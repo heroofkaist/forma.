@@ -55,7 +55,12 @@ def list_submissions(assignment_id: str, request: Request):
             raise HTTPException(404, "Assignment not found.")
         require_teacher(db, request_user(request), assignment.offering_id)
         rows = db.scalars(select(AcademicSubmission).where(AcademicSubmission.assignment_id == assignment_id).order_by(AcademicSubmission.created_at.desc())).all()
-        return {"title": assignment.title, "offering_id": assignment.offering_id, "items": [{"id": row.id, "student_name": row.student_name, "file_name": row.file_name, "status": row.status, "submitted_at": utc(row.created_at)} for row in rows]}
+        from processing_models import ProcessingJob
+        jobs = db.scalars(select(ProcessingJob).join(AcademicSubmission, ProcessingJob.submission_id == AcademicSubmission.id).where(AcademicSubmission.assignment_id == assignment_id).order_by(ProcessingJob.created_at.desc())).all()
+        latest = {}
+        for job in jobs:
+            latest.setdefault(job.submission_id, job)
+        return {"title": assignment.title, "offering_id": assignment.offering_id, "items": [{"id": row.id, "student_name": row.student_name, "file_name": row.file_name, "status": row.status, "processing_status": latest[row.id].status if row.id in latest else "not_scheduled", "processing_error": latest[row.id].error if row.id in latest else "", "submitted_at": utc(row.created_at)} for row in rows]}
 
 
 @router.get("/submission-files/{submission_id}")

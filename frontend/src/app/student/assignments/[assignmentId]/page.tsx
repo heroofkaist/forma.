@@ -13,6 +13,7 @@ const MAX_FILE_BYTES = 30 * 1024 * 1024;
 export default function StudentAssignmentPage() {
   const { assignmentId } = useParams<{ assignmentId: string }>();
   const [processing, setProcessing] = useState("");
+  const [processingError, setProcessingError] = useState("");
   const [assignment, setAssignment] = useState<AcademicAssignment | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
@@ -31,7 +32,7 @@ export default function StudentAssignmentPage() {
   const formats = programming ? "PDF, DOCX, PPTX, исходный код, ZIP" : "PDF, DOCX, PPTX";
   const accepted = programming ? ".pdf,.docx,.pptx,.py,.js,.ts,.tsx,.jsx,.java,.c,.cpp,.h,.rs,.go,.sql,.txt,.zip" : ".pdf,.docx,.pptx";
   const latest = assignment?.latest_submission;
-  useEffect(()=>{const id=latest?.id;if(!id)return;let active=true;const load=()=>{void platformRequest<{jobs:{status:string}[];worker_note:string}>(`/api/document-analysis/${String(id)}/status`).then((data)=>{if(active)setProcessing(data.jobs[0]?.status??"not_scheduled");}).catch(()=>{});};load();const timer=window.setInterval(load,10000);return()=>{active=false;window.clearInterval(timer);};},[latest?.id]);
+  useEffect(()=>{const id=latest?.id;if(!id)return;let active=true;const load=()=>{void platformRequest<{jobs:{status:string;error:string}[];worker_note:string}>(`/api/document-analysis/${String(id)}/status`).then((data)=>{if(active){setProcessing(data.jobs[0]?.status??"not_scheduled");setProcessingError(data.jobs[0]?.error??"");}}).catch(()=>{if(active)setProcessingError("Не удалось обновить статус. Повторим автоматически; работа остаётся сохранённой.");});};load();const timer=window.setInterval(load,10000);return()=>{active=false;window.clearInterval(timer);};},[latest?.id]);
   const due = assignment?.due_at ? new Date(assignment.due_at) : null;
   const available = assignment?.available_at ? new Date(assignment.available_at) : null;
   const notOpen = Boolean(available && available.getTime() > Date.now());
@@ -59,6 +60,7 @@ export default function StudentAssignmentPage() {
       <aside className="student-submit-panel"><h2>Ваша работа</h2>
         {latest && <div className="submission-receipt"><span className="student-status status-submitted">{String(latest.status ?? "Отправлено")}</span><p>{String(latest.file_name ?? latest.original_filename ?? latest.filename ?? "Файл отправлен")}</p><small>Отправлено {latest.submitted_at ? new Date(String(latest.submitted_at)).toLocaleString("ru-RU") : "успешно"}</small></div>}
         {latest && processing && <p role="status">Обработка: {{queued:"В очереди",extracting:"Извлечение текста",interpreting:"Анализ документа",needs_review:"Ожидает проверки преподавателя",completed:"Структура подтверждена",failed:"Ошибка обработки; преподаватель может повторить анализ",not_scheduled:"Анализ не запланирован"}[processing]??processing}. Обработка возобновляется, когда backend доступен.</p>}
+        {latest && processingError && <p role="alert">{processingError}</p>}
         {submitted && <div className="success-notice"><Check size={15} />Работа успешно отправлена. Сохраните подтверждение.</div>}
         {error && <div className="notice error-notice"><AlertTriangle size={14} />{error}</div>}
         {notOpen ? <div className="closed-notice">Задание станет доступно {available?.toLocaleString("ru-RU")}.</div> : closed && !assignment?.allow_resubmission ? <div className="closed-notice">Срок сдачи завершён. Отправка закрыта преподавателем.</div> : <>
