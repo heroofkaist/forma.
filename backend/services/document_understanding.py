@@ -10,7 +10,7 @@ from google.genai import types
 from services.ai_grader import configured_model
 from services.processing_diagnostics import set_stage
 
-PROMPT_VERSION = 'document-understanding-v1'
+PROMPT_VERSION = 'document-understanding-v2'
 
 class Section(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -38,6 +38,24 @@ class Interpretation(BaseModel):
     question_associations: list[Association] = Field(default_factory=list, max_length=100)
     warnings: list[str] = Field(default_factory=list, max_length=200)
     requires_human_review: bool = True
+
+
+def provider_response_schema():
+    """Adapt only empirically rejected constraints; local models stay strict.
+
+    SDK 1.75 response_schema sends additionalProperties=False as the unsupported
+    additional_properties field. The large nested maxItems bounds also produce
+    HTTP 400 on the configured model. Keep those checks in Pydantic rather than
+    in the provider's constrained decoder. Never mutate the validation schema.
+    """
+    def adapt(node):
+        if isinstance(node, dict):
+            return {key: adapt(value) for key, value in node.items()
+                    if key not in {'additionalProperties', 'maxItems'}}
+        if isinstance(node, list):
+            return [adapt(value) for value in node]
+        return node
+    return adapt(Interpretation.model_json_schema())
 
 
 def limit(name, default, maximum):
@@ -146,7 +164,7 @@ def gemini_interpret(content, file_type, structure, questions, document_type, mo
     contents.append(prompt)
     set_stage('gemini_request')
     with genai.Client(api_key=os.environ['GEMINI_API_KEY'], http_options=types.HttpOptions(timeout=limit('FORMA_AI_TIMEOUT_SECONDS',60,90)*1000, retry_options=types.HttpRetryOptions(attempts=1))) as client:
-        response = client.models.generate_content(model=model or configured_model(), contents=contents, config=types.GenerateContentConfig(response_mime_type='application/json', response_schema=Interpretation, temperature=0.1, max_output_tokens=12000))
+        response = client.models.generate_content(model=model or configured_model(), contents=contents, config=types.GenerateContentConfig(response_mime_type='application/json', response_schema=provider_response_schema(), temperature=0.1, max_output_tokens=12000))
     set_stage('response_decode')
     if not response.text:
         raise ValueError('Gemini returned an empty interpretation.')

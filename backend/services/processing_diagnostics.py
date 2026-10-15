@@ -5,6 +5,7 @@ import re
 from contextvars import ContextVar
 from pathlib import PurePath
 from botocore.exceptions import ClientError
+from google.genai.errors import APIError
 
 logger = logging.getLogger('forma.document_processing')
 _stage = ContextVar('document_processing_stage', default='worker_loop')
@@ -20,6 +21,26 @@ def get_stage():
 
 def _symbol(value):
     return re.sub(r'[^a-zA-Z0-9_.<>-]', '_', value)[:100]
+
+
+def safe_provider_reason(error):
+    """Return fixed labels only, never a sanitized copy of provider messages."""
+    if not isinstance(error, APIError):
+        return {}
+    result = {}
+    if isinstance(error.status, str) and error.status in {'INVALID_ARGUMENT', 'FAILED_PRECONDITION', 'PERMISSION_DENIED', 'UNAUTHENTICATED', 'NOT_FOUND', 'RESOURCE_EXHAUSTED', 'UNAVAILABLE', 'INTERNAL', 'DEADLINE_EXCEEDED'}:
+        result['provider_reason'] = error.status
+    message = error.message if isinstance(error.message, str) else ''
+    # No captured text is emitted. Even a message echoing a private document
+    # can produce only these fixed, known schema-field names.
+    fields = []
+    for field in ('additional_properties', 'additionalProperties', 'max_items', 'maxItems', 'min_length', 'max_length'):
+        if f'Unknown name "{field}"' in message and 'generation_config.response_schema' in message:
+            fields.append('generation_config.response_schema.' + field)
+    if fields:
+        result['provider_reason'] = 'UNKNOWN_SCHEMA_FIELD'
+        result['provider_fields'] = fields
+    return result
 
 
 def log_failure(error, *, job_id=None, classification='worker_error', retryable=False):
@@ -49,6 +70,7 @@ def log_failure(error, *, job_id=None, classification='worker_error', retryable=
     code = getattr(error, 'code', None)
     if type(code) is int and 100 <= code <= 599:
         entry['provider_status'] = code
+    entry.update(safe_provider_reason(error))
     if isinstance(error, ClientError):
         status = error.response.get('ResponseMetadata', {}).get('HTTPStatusCode')
         if type(status) is int and 100 <= status <= 599:
