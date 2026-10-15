@@ -1,7 +1,7 @@
 "use client";
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import { platformRequest } from "../lib/platform";
+import { platformRequest, PlatformError } from "../lib/platform";
 import { useAuth } from "./auth-provider";
 
 import { AuthStudy } from "./auth-study";
@@ -20,10 +20,11 @@ export function AccountForm({ mode }: { mode: Mode }) {
   const [busy, setBusy] = useState(false);
   const [registration, setRegistration] = useState<boolean | null>(null);
   const [ageToken, setAgeToken] = useState("");
+  const [guardianEnabled, setGuardianEnabled] = useState(false);
   const { user } = useAuth();
   const settings = mode === "profile" || mode === "security";
   useEffect(() => {
-    if (mode === "register") platformRequest<{ registration_enabled: boolean }>("/api/accounts/status").then((data) => setRegistration(data.registration_enabled)).catch((cause: unknown) => setError(String(cause)));
+    if (mode === "register") platformRequest<{ registration_enabled: boolean; guardian_registration_enabled?: boolean }>("/api/accounts/status").then((data) => { setRegistration(data.registration_enabled); setGuardianEnabled(data.guardian_registration_enabled === true); }).catch((cause: unknown) => setError(String(cause)));
     if (mode === "profile") platformRequest<{ email: string; display_name: string }>("/api/accounts/profile").then((data) => { setEmail(data.email); setName(data.display_name); }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Не удалось загрузить профиль."));
   }, [mode]);
   async function submit(event: FormEvent) {
@@ -39,16 +40,20 @@ export function AccountForm({ mode }: { mode: Mode }) {
       const result = await platformRequest(`/api/accounts/${path}`, body, mode === "profile" ? "PATCH" : "POST");
       setMessage(({ register: "Если адрес доступен для регистрации, на него отправлено письмо для подтверждения.", "forgot-password": "Если учётная запись существует, письмо для восстановления отправлено.", "reset-password": "Пароль изменён. Войдите с новым паролем.", "verify-email": "Адрес электронной почты подтверждён.", profile: "Профиль сохранён.", security: "Пароль изменён. Войдите снова." })[mode]); setPassword(""); setCurrentPassword("");
       if (mode === "security") window.location.assign("/login");
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Не удалось выполнить запрос."); }
+    } catch (cause) {
+      if (mode === "register" && cause instanceof PlatformError && ["Complete the age check before registration.", "Guardian approval is required or has expired."].includes(String(cause.detail))) {
+        setAgeToken(""); setPassword(""); setError("Проверка возраста или согласия больше не действует. Подтвердите возраст ещё раз; имя и email сохранены на этой странице.");
+      } else setError(cause instanceof Error ? cause.message : "Не удалось выполнить запрос.");
+    }
     finally { setBusy(false); }
   }
   return <main className="auth-page"><AuthStudy/><section className="auth-card">
     <Link href={settings ? "/teacher" : "/login"} className="forma-brand auth-brand"><FormaMark/>forma<span className="brand-period">.</span></Link>
     <div className="eyebrow">{settings ? "НАСТРОЙКИ" : "УЧЁТНАЯ ЗАПИСЬ"}</div><h1>{titles[mode]}</h1>
-    {mode === "register" && <p>Публичная регистрация создаёт учётную запись студента. Преподавателям требуется приглашение и одобрение учреждения.</p>}
+    {mode === "register" && <p>Для студентов и школьников. Преподаватели получают доступ по приглашению учреждения.</p>}
     {mode === "register" && registration === false && <div className="notice" role="status">Регистрация пока недоступна. Обратитесь к администратору вашего учреждения.</div>}
     {mode === "register" && registration === null && <p role="status">Проверяем доступность регистрации…</p>}
-    {mode === "register" && registration === true && !ageToken && <AgeScreen onEligible={setAgeToken} />}
+    {mode === "register" && registration === true && !ageToken && <AgeScreen onEligible={setAgeToken} guardianEnabled={guardianEnabled}/>}
     {mode === "register" && (registration !== true || !ageToken) ? null : settings && !user?.account_id ? <p>Настройки доступны для подтверждённых учётных записей. Вход с прежними реквизитами сохраняется на время перехода.</p> : <form className="auth-form" onSubmit={(event) => void submit(event)}>
       {["register", "forgot-password", "profile"].includes(mode) && <label>Email<input type="email" autoComplete="email" required maxLength={254} readOnly={mode === "profile"} value={email} onChange={(event) => setEmail(event.target.value)} /></label>}
       {["register", "profile"].includes(mode) && <label>Имя<input autoComplete="name" required maxLength={200} value={name} onChange={(event) => setName(event.target.value)} /></label>}

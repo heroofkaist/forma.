@@ -35,6 +35,14 @@ export function submissionAvailability(assignment: { available_at?: string | nul
 }
 export function requestError(status: number, detail?: unknown) {
   const known: Record<string, string> = {
+    'Guardian registration is not configured.': 'Подтверждение родителем пока не настроено. Обратитесь в своё учебное учреждение.',
+    'Guardian approval is required or has expired.': 'Нужно действующее согласие родителя. Вернитесь к проверке возраста.',
+    'Guardian link is invalid or expired.': 'Ссылка недействительна или срок её действия истёк. Попросите ребёнка отправить новое письмо.',
+    'Guardian request has already been decided.': 'По этому запросу уже принято решение. Обновите страницу.',
+    'Use a separate child email address after guardian approval.': 'Для учётной записи ребёнка нужен отдельный email, отличный от адреса родителя.',
+    'Wait before requesting another guardian email.': 'Подождите минуту перед повторной отправкой письма.',
+    'Guardian attestation and consent are required.': 'Подтвердите, что вы совершеннолетний законный представитель и даёте согласие.',
+
     'Complete the age check before registration.': 'Пройдите проверку возраста снова, чтобы продолжить регистрацию.',
     'Resubmission is not allowed.': 'Работа уже отправлена. Повторная отправка не разрешена.',
     'The submission deadline has passed.': 'Срок сдачи завершён. Отправка закрыта.',

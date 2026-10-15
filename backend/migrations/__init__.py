@@ -40,3 +40,8 @@ def apply_migrations(bind):
         if not connection.scalar(select(SchemaMigration.version).where(SchemaMigration.version == version)):
             Base.metadata.tables["academic_originality_analyses"].create(connection, checkfirst=True)
             connection.execute(SchemaMigration.__table__.insert().values(version=version))
+
+        version = "011_guardian_registration"
+        if not connection.scalar(select(SchemaMigration.version).where(SchemaMigration.version == version)):
+            Base.metadata.tables["guardian_registrations"].create(connection, checkfirst=True)
+            connection.execute(SchemaMigration.__table__.insert().values(version=version))

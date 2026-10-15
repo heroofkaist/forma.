@@ -808,3 +808,26 @@ textarea { line-height: 1.6; }
   .dropzone { padding: 28px 18px; }
   .results-row { font-size: 12px; }
 }
+
+/* Registration age selection follows the existing Forma palette and typography. */
+.age-screen { margin-top: 24px; }
+.age-picker { border: 1px solid var(--border); padding: 24px; background: var(--accent-wash); }
+.age-value { display: block; min-height: 58px; margin-bottom: 16px; color: var(--blue); font-size: clamp(25px,4vw,38px); font-weight: 600; letter-spacing: -1.2px; }
+.auth-form input.age-range { appearance: none; -webkit-appearance: none; width: 100%; min-height: 44px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; cursor: ew-resize; }
+.age-range::-webkit-slider-runnable-track { height: 6px; background: linear-gradient(to right,var(--blue) var(--age-progress),var(--border) var(--age-progress)); }
+.age-range::-moz-range-track { height: 6px; background: var(--border); }
+.age-range::-moz-range-progress { height: 6px; background: var(--blue); }
+.age-range::-webkit-slider-thumb { -webkit-appearance: none; width: 28px; height: 28px; margin-top: -11px; border: 3px solid var(--blue); border-radius: 50%; background: var(--lime); box-shadow: 0 0 0 4px var(--surface); }
+.age-range::-moz-range-thumb { width: 22px; height: 22px; border: 3px solid var(--blue); border-radius: 50%; background: var(--lime); }
+.age-scale { display: flex; justify-content: space-between; margin: 2px 0 20px; color: var(--secondary); font: 11px var(--mono); }
+.auth-form .age-exact { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.auth-form .age-exact input { width: 85px; text-align: center; font-size: 18px; background: var(--surface); }
+.auth-form .age-confirmation { display: flex; align-items: flex-start; gap: 12px; line-height: 1.6; }
+.auth-form .age-confirmation input { flex: 0 0 20px; width: 20px; min-height: 20px; height: 20px; margin: 2px 0 0; padding: 0; accent-color: var(--blue); }
+.age-result, .guardian-request { margin-top: 24px; }
+.age-result h2, .guardian-request h2 { font-size: 22px; line-height: 1.3; }
+.age-result p { margin: 14px 0; }
+.age-request-code { display: grid; gap: 5px; border-left: 3px solid var(--blue); background: var(--accent-wash); padding: 14px 18px; }
+.age-request-code span { font-size: 12px; color: var(--secondary); }
+.age-request-code strong { font: 500 24px var(--mono); letter-spacing: 3px; }
+@media(max-width:600px) { .age-picker { padding: 20px 16px; } }

@@ -161,3 +161,20 @@ test('rubric approval and teacher assessment decisions retain same-origin cookie
     assert.equal(accepted.status, 201); assert.equal((await accepted.json()).published, false);
   }
 });
+
+test('age confirmation preserves the next step and forwards the matching HttpOnly proof at signup',async()=>{
+ const previous=process.env.NODE_ENV;process.env.NODE_ENV='production';
+ const proof='v2.eligible.synthetic.signed';
+ try{
+  global.fetch=async()=>Response.json({eligible:true,next_step:'account',age_check_token:proof});
+  const parts=['api','accounts','age-check'];
+  const checked=await route.POST(request(parts,{method:'POST',origin:'https://forma.example',body:'{"age_band":"18_or_over"}'}),context(parts));
+  assert.equal((await checked.json()).next_step,'account');
+  assert.match(checked.headers.get('set-cookie'),/forma_age_screen=v2.eligible.synthetic.signed/);
+  assert.match(checked.headers.get('set-cookie'),/HttpOnly/);assert.match(checked.headers.get('set-cookie'),/Secure/);
+  global.fetch=async(url,init)=>{assert.equal(init.headers.get('cookie'),'forma_age_screen='+proof);return Response.json({message:'queued'},{status:202});};
+  const register=['api','accounts','register'];
+  const result=await route.POST(request(register,{method:'POST',origin:'https://forma.example',cookie:'forma_age_screen='+proof,body:JSON.stringify({age_check_token:proof})}),context(register));
+  assert.equal(result.status,202);
+ }finally{if(previous===undefined)delete process.env.NODE_ENV;else process.env.NODE_ENV=previous;}
+});

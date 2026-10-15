@@ -19,7 +19,8 @@ function load(file, imports = {}) {
 }
 
 test('registration collects no identity or password before the neutral age screen', () => {
-  const { AgeScreen } = load('src/components/age-screen.tsx', { '../lib/platform': {} });
+  const age = load('src/lib/registration-age.ts');
+  const { AgeScreen } = load('src/components/age-screen.tsx', { '../lib/platform': {}, '../lib/registration-age':age, './guardian-request':{GuardianRequest:()=>null} });
   let index = 0;
   const hooks = { ...React, useEffect() {}, useState(initial) { return [index++ === 7 ? true : initial, () => {}]; } };
   const { AccountForm } = load('src/components/account-form.tsx', {
@@ -28,11 +29,12 @@ test('registration collects no identity or password before the neutral age scree
     './auth-study': { AuthStudy: () => null }, './forma-mark': { FormaMark: () => null }, './age-screen': { AgeScreen },
   });
   const html = renderToStaticMarkup(React.createElement(AccountForm, { mode: 'register' }));
-  assert.match(html, /<select[^>]*required/);
-  assert.match(html, /До 13 лет/);
-  assert.match(html, /13–17 лет/);
-  assert.match(html, /18 лет и старше/);
-  assert.doesNotMatch(html, /<input|type="email"|type="password"/);
+  assert.match(html, /type="range"/);
+  assert.match(html, /Возраст не выбран/);
+  assert.match(html, /Подтверждаю, что указал/);
+  assert.match(html, /type="checkbox" required="" disabled=""/);
+  assert.doesNotMatch(html, /type="email"|type="password"|autoComplete="name"|checked=""/);
+
 });
 
 test('all authored font sources are local files with retained licenses', () => {

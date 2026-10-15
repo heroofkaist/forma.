@@ -82,3 +82,26 @@ class EmailOutbox(Base):
     lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     lease_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     error: Mapped[str] = mapped_column(Text, default="")
+
+class GuardianRegistration(Base):
+    """One browser-bound registration permission and its encrypted transactional mail."""
+    __tablename__ = "guardian_registrations"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    proof_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    encrypted_email: Mapped[str] = mapped_column(Text)
+    encrypted_token: Mapped[str] = mapped_column(Text)
+    notice_url: Mapped[str] = mapped_column(String(1000))
+    privacy_contact: Mapped[str] = mapped_column(String(254))
+    notice_version: Mapped[str] = mapped_column(String(48))
+    notice_text: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    account_id: Mapped[str | None] = mapped_column(ForeignKey("accounts.id"), nullable=True, unique=True)
+    delivery_status: Mapped[str] = mapped_column(String(16), default="queued", index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lease_id: Mapped[str | None] = mapped_column(String(36), nullable=True)

@@ -8,7 +8,7 @@ from sqlalchemy import or_, select, update
 from account_models import Account, AccountAction, EmailOutbox
 from persistence import SessionLocal, now_utc
 
-TRANSACTIONAL_PURPOSES = frozenset({"verify", "reset", "teacher_invite"})
+TRANSACTIONAL_PURPOSES = frozenset({"verify", "reset", "teacher_invite", "guardian_consent"})
 
 
 def require_transactional_purpose(purpose):
@@ -22,6 +22,8 @@ def cipher():
 
 def enqueue_action(db, account, purpose, token):
     require_transactional_purpose(purpose)
+    if purpose == "guardian_consent":
+        raise ValueError("Guardian mail must use its browser-bound consent queue.")
     db.add(EmailOutbox(account_id=account.id, purpose=purpose, encrypted_token=cipher().encrypt(token.encode()).decode(), expires_at=now_utc() + timedelta(hours=1)))
 
 
@@ -37,7 +39,9 @@ def deliver_one():
         eligible = (EmailOutbox.available_at <= now) & (EmailOutbox.expires_at > now) & (EmailOutbox.attempts < 3) & or_(EmailOutbox.status == "queued", (EmailOutbox.status == "sending") & (EmailOutbox.lease_until < now))
         candidate = db.scalar(select(EmailOutbox.id).where(eligible).order_by(EmailOutbox.available_at).limit(1))
         if not candidate:
-            return False
+            db.rollback()  # Release this read transaction before the guardian queue claims its own lease.
+            from guardian_registration import deliver_one as deliver_guardian
+            return deliver_guardian()
         claimed = db.scalar(update(EmailOutbox).where(EmailOutbox.id == candidate, eligible).values(status="sending", lease_id=lease_id, lease_until=now + timedelta(minutes=2), attempts=EmailOutbox.attempts + 1).returning(EmailOutbox.id))
         db.commit()
         if not claimed:

@@ -87,12 +87,23 @@ def send_action(email: str, purpose: str, token: str):
     origin = os.environ["FRONTEND_ORIGIN"].rstrip("/")
     if not origin.startswith("https://") and not origin.startswith("http://localhost:"):
         raise HTTPException(503, "FRONTEND_ORIGIN must be an HTTPS frontend URL.")
-    route = "teacher-invitation" if purpose == "teacher_invite" else "verify-email" if purpose == "verify" else "reset-password"
+    route = "guardian-consent" if purpose == "guardian_consent" else "teacher-invitation" if purpose == "teacher_invite" else "verify-email" if purpose == "verify" else "reset-password"
     message = EmailMessage()
     message["From"] = os.environ["FORMA_EMAIL_FROM"]
     message["To"] = email
-    message["Subject"] = "Forma — teacher invitation" if purpose == "teacher_invite" else "Forma — verify your email" if purpose == "verify" else "Forma — reset your password"
+    message["Subject"] = "Forma — согласие родителя на регистрацию" if purpose == "guardian_consent" else "Forma — teacher invitation" if purpose == "teacher_invite" else "Forma — verify your email" if purpose == "verify" else "Forma — reset your password"
     message.set_content(f"Open this single-use link within one hour:\n{origin}/{route}?{urlencode({'token': token})}\n\nIf you did not request this, ignore this email.")
+    if purpose == 'guardian_consent':
+        from account_models import GuardianRegistration
+        with SessionLocal() as db:
+            guardian = db.scalar(select(GuardianRegistration).where(GuardianRegistration.token_hash == digest(token)))
+            if not guardian or guardian.status != 'pending' or utc(guardian.expires_at) <= now_utc():
+                return
+            code = guardian.id[:8].upper()
+        message.set_content(f"Ребёнок 13–17 лет запросил ваше согласие на регистрацию в Forma. Код запроса: {code}. "
+            "Сверьте этот код с ребёнком перед решением.\n\n"
+            f"Откройте ссылку в течение часа, чтобы прочитать условия, разрешить регистрацию или отказать:\n{origin}/{route}?{urlencode({'token': token})}\n\n"
+            "Открытие ссылки само по себе не даёт согласия. Если вы не знаете, кто отправил запрос, откажите или проигнорируйте письмо.")
     try:
         with smtplib.SMTP(os.environ["FORMA_SMTP_HOST"], int(os.getenv("FORMA_SMTP_PORT", "587")), timeout=15) as smtp:
             smtp.starttls(context=ssl.create_default_context())
@@ -206,18 +217,28 @@ def verify_session(token: str) -> AuthUser:
 
 @router.get("/status")
 def status():
-    return {"registration_enabled": registration_enabled(), "email_configured": mail_configured()}
+    from guardian_registration import configuration
+    guardian = configuration()
+    return {"registration_enabled": registration_enabled(), "email_configured": mail_configured(), "guardian_registration_enabled": guardian["enabled"]}
 
 
 @router.post("/register", status_code=202)
 def register(payload: RegisterPayload, request: Request):
     # Reject an absent/failed screen before storing even an email rate-limit hash.
-    age_screen.require_eligible(payload.age_check_token, request.cookies.get(age_screen.COOKIE))
+    age_state = age_screen.require_proof(payload.age_check_token, request.cookies.get(age_screen.COOKIE))
+    if age_state == 'guardian':
+        from guardian_registration import permission_for_registration
+        with SessionLocal() as db:
+            permission_for_registration(db, payload.age_check_token, payload.email, for_update=False)
     rate_limit(request, "register", payload.email, 5)
     if not registration_enabled():
         raise HTTPException(503, "Public registration is disabled or transactional email is not configured.")
     password_hash = hasher.hash(payload.password)
     with SessionLocal() as db:
+        permission = None
+        if age_state == 'guardian':
+            from guardian_registration import permission_for_registration
+            permission = permission_for_registration(db, payload.age_check_token, payload.email)
         account = db.scalar(select(Account).where(Account.email == payload.email))
         if account is None:
             account = Account(email=payload.email, display_name=payload.display_name, password_hash=password_hash)
@@ -233,6 +254,9 @@ def register(payload: RegisterPayload, request: Request):
             from institution_models import AccountRole
             db.add(AccountRole(account_id=account.id, role="student"))
             issue_action(db, account, "verify")
+            if permission:
+                permission.account_id = account.id
+                permission.status = "consumed"
             db.commit()
     return {"message": "If this address is eligible, a verification email has been queued for delivery."}
 
@@ -245,14 +269,17 @@ class AgeCheckPayload(BaseModel):
 @router.post("/age-check")
 def check_age(payload: AgeCheckPayload, request: Request):
     rate_limit(request, "age-check", limit=30)
-    # A known under-age visitor cannot immediately retry with a different date.
-    blocked = age_screen.proof_state(request.cookies.get(age_screen.COOKIE)) == "blocked"
-    # Kazakhstan school rollout: minors need a separately approved legal-
-    # representative/institution process, not an unchecked consent checkbox.
-    # This self-service path is for adults; it is not COPPA consent verification.
-    eligible = not blocked and payload.age_band == "18_or_over"
-    token = request.cookies[age_screen.COOKIE] if blocked else age_screen.issue_proof(eligible)
-    response = JSONResponse({"eligible": eligible, "age_check_token": token}, headers={"Cache-Control": "private, no-store"})
+    previous = request.cookies.get(age_screen.COOKIE)
+    previous_state = age_screen.proof_state(previous)
+    # Old v1 screens could lock an adult out after an accidental group selection.
+    # A new explicit confirmation replaces that legacy screen once. Current minor
+    # decisions remain bound to the browser and cannot be switched to adult access.
+    current_minor = previous and previous.startswith('v2.') and previous_state in {'blocked', 'guardian'}
+    guardian = previous_state == 'guardian' if current_minor else payload.age_band == '13_to_17'
+    eligible = not current_minor and payload.age_band == '18_or_over'
+    token = previous if current_minor else age_screen.issue_proof(eligible, guardian=guardian)
+    next_step = 'account' if eligible else 'guardian' if guardian else 'blocked'
+    response = JSONResponse({"eligible": eligible, "next_step": next_step, "age_check_token": token}, headers={"Cache-Control": "private, no-store"})
     response.set_cookie(age_screen.COOKIE, token, httponly=True, secure=request.url.scheme == "https",
         samesite="lax", path="/", max_age=age_screen.ELIGIBLE_SECONDS if eligible else age_screen.BLOCKED_SECONDS)
     return response

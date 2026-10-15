@@ -18,6 +18,6 @@ export function locationForPath(path: string) {
 }
 
 export function publicPath(path: string, development = false) {
-  return ["/", "/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/teacher-invitation"].includes(path)
+  return ["/", "/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/guardian-consent", "/teacher-invitation"].includes(path)
     || (development && path === "/design-preview");
 }

@@ -51,7 +51,9 @@ async def enforce_api_authentication(request: Request, call_next):
     if path in {"/health", "/api/health", "/api/auth/status", "/api/auth/login",
                 "/api/accounts/status", "/api/accounts/register", "/api/accounts/age-check", "/api/accounts/verify-email",
                 "/api/accounts/forgot-password", "/api/accounts/reset-password",
-                "/api/accounts/resend-verification"}:
+                "/api/accounts/resend-verification", "/api/accounts/guardian-consent/request",
+                "/api/accounts/guardian-consent/status", "/api/accounts/guardian-consent/inspect",
+                "/api/accounts/guardian-consent/decision"}:
         return await call_next(request)
 
     is_api = path.startswith(("/api/", "/academic/", "/assignments", "/answers"))
@@ -236,6 +238,8 @@ app.include_router(academic_router)
 from accounts import router as accounts_router
 from courses import router as courses_router
 app.include_router(accounts_router)
+from guardian_registration import router as guardian_router
+app.include_router(guardian_router)
 app.include_router(courses_router)
 
 @app.on_event("startup")
