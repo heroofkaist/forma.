@@ -49,7 +49,7 @@ def signup(token, email='teen@example.test'):
     return {'email':email,'display_name':'Synthetic teen','password':'Synthetic-password-123','age_check_token':token}
 
 
-def test_adult_can_replace_legacy_accidental_block_but_current_minor_cannot_flip_age(platform):
+def test_adult_can_replace_legacy_accidental_block(platform):
     client,factory,sent=platform
     # Reproduce the previous release's cookie, including the original signature.
     body='v1.blocked.'+str(int(age_screen.time.time()))+'.'+'a'*32
@@ -58,10 +58,55 @@ def test_adult_can_replace_legacy_accidental_block_but_current_minor_cannot_flip
     proof=registration_age(client)
     assert proof.startswith('v2.eligible.')
     assert client.post('/api/accounts/register',json=signup(proof,'adult-recovery@example.test')).status_code==202
-    client.cookies.clear()
-    current=teen(client)
-    assert client.post('/api/accounts/age-check',json={'age_band':'18_or_over'}).json()['age_check_token']==current
-    assert client.post('/api/accounts/register',json=signup(current)).status_code in (403,503)
+
+
+@pytest.mark.parametrize('initial_band', ['13_to_17', 'under_13'])
+@pytest.mark.parametrize('guardian_enabled', [False, True])
+def test_corrected_adult_age_replaces_current_minor_cookie(platform, monkeypatch, initial_band, guardian_enabled):
+    client,factory,sent=platform
+    monkeypatch.setenv('FORMA_GUARDIAN_REGISTRATION_ENABLED',str(guardian_enabled).lower())
+    monkeypatch.setenv('FORMA_GUARDIAN_PRIVACY_NOTICE_URL','https://forma.example/privacy')
+    monkeypatch.setenv('FORMA_GUARDIAN_PRIVACY_CONTACT','privacy@example.test')
+    previous=client.post('/api/accounts/age-check',json={'age_band':initial_band}).json()['age_check_token']
+    assert age_screen.proof_state(previous) in ('guardian','blocked')
+    corrected=client.post('/api/accounts/age-check',json={'age_band':'18_or_over'})
+    proof=corrected.json()['age_check_token']
+    assert corrected.json()['eligible'] is True and corrected.json()['next_step']=='account'
+    assert proof!=previous and client.cookies.get(age_screen.COOKIE)==proof
+    assert 'httponly' in corrected.headers['set-cookie'].lower()
+    assert client.post('/api/accounts/register',json=signup(previous)).status_code==403
+    assert client.post('/api/accounts/register',json=signup(proof,'adult-corrected@example.test')).status_code==202
+    with factory() as db:
+        assert db.scalar(select(Account)).email=='adult-corrected@example.test'
+        assert db.scalar(select(func.count()).select_from(GuardianRegistration))==0
+    assert sent[-1][:2]==('adult-corrected@example.test','verify')
+
+
+def test_rechecking_same_teen_band_resumes_permission_but_changed_band_does_not_reuse_it(enabled):
+    client,factory,_=enabled
+    token=teen(client);request(client,token);assert approve(client,parent_link(factory)).status_code==200
+    assert teen(client)==token
+    registration_age(client)
+    assert client.post('/api/accounts/guardian-consent/status',json={'age_check_token':token}).status_code==403
+    new_token=teen(client)
+    assert new_token!=token
+    assert client.post('/api/accounts/register',json=signup(new_token)).status_code==403
+    with factory() as db:
+        assert db.scalar(select(func.count()).select_from(Account))==0
+
+
+@pytest.mark.parametrize('corrected_band', ['under_13', '13_to_17'])
+def test_correcting_adult_to_minor_closes_adult_registration(enabled, corrected_band):
+    client,factory,sent=enabled
+    adult=registration_age(client)
+    corrected=client.post('/api/accounts/age-check',json={'age_band':corrected_band}).json()
+    assert corrected['eligible'] is False
+    assert corrected['next_step']==('guardian' if corrected_band=='13_to_17' else 'blocked')
+    for token in (adult,corrected['age_check_token']):
+        assert client.post('/api/accounts/register',json=signup(token)).status_code==403
+    assert sent==[]
+    with factory() as db:
+        assert db.scalar(select(func.count()).select_from(Account))==0
 
 
 def test_teen_requires_parent_approval_and_separate_verified_child_email(enabled, monkeypatch):

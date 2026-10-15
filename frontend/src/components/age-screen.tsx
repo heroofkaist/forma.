@@ -14,6 +14,7 @@ export function AgeScreen({ onEligible, guardianEnabled = false }: { onEligible:
   const [error, setError] = useState("");
   const band = ageBand(age);
   function choose(value: string) { setAge(value); setConfirmed(false); setError(""); }
+  function correctAge() { setGuardianToken(""); setBlocked(false); setConfirmed(false); setError(""); }
   async function check(event: FormEvent) {
     event.preventDefault(); if (!band || !confirmed || busy) return;
     setBusy(true); setError("");
@@ -25,8 +26,8 @@ export function AgeScreen({ onEligible, guardianEnabled = false }: { onEligible:
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Не удалось проверить возраст. Попробуйте снова."); }
     finally { setBusy(false); }
   }
-  if (guardianToken) return guardianEnabled ? <GuardianRequest ageToken={guardianToken} onEligible={onEligible}/> : <div className="age-result" role="status"><h2>Нужно согласие родителя</h2><p>Для 13–17 лет предусмотрено подтверждение родителем по email. Оно станет доступно после настройки уведомления об обработке данных и отправки писем.</p><LinkToLogin/></div>;
-  if (blocked) return <div className="age-result" role="status"><h2>Доступ через школу</h2><p>До 13 лет самостоятельная регистрация недоступна. Родителю или законному представителю нужно обратиться в ваше учебное учреждение.</p><LinkToLogin/></div>;
+  if (guardianToken) return guardianEnabled ? <GuardianRequest ageToken={guardianToken} onEligible={onEligible} onCorrectAge={correctAge}/> : <div className="age-result" role="status"><h2>Нужно согласие родителя</h2><p>Для 13–17 лет предусмотрено подтверждение родителем по email. Оно станет доступно после настройки уведомления об обработке данных и отправки писем.</p><CorrectAge onCorrect={correctAge}/><LinkToLogin/></div>;
+  if (blocked) return <div className="age-result" role="status"><h2>Доступ через школу</h2><p>До 13 лет самостоятельная регистрация недоступна. Родителю или законному представителю нужно обратиться в ваше учебное учреждение.</p><CorrectAge onCorrect={correctAge}/><LinkToLogin/></div>;
   return <form className="auth-form age-screen" onSubmit={(event) => void check(event)} data-private="true">
     <div><div className="eyebrow">ШАГ 1 / ВОЗРАСТ</div><p id={`${id}-hint`}>Перед началом укажите свой возраст. Дата рождения не нужна.</p></div>
     <div className="age-picker">
@@ -41,4 +42,5 @@ export function AgeScreen({ onEligible, guardianEnabled = false }: { onEligible:
     {error && <p className="notice error-notice" role="alert">{error}</p>}
   </form>;
 }
+function CorrectAge({onCorrect}: {onCorrect: () => void}) { return <div><p>Ошиблись при вводе? Укажите свой возраст заново.</p><button className="quiet-button" type="button" onClick={onCorrect}>Исправить возраст</button></div>; }
 function LinkToLogin() { return <a className="quiet-button" href="/login">Вернуться ко входу</a>; }

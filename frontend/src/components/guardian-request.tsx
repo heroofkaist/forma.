@@ -1,15 +1,18 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { platformRequest } from "../lib/platform";
 
 type Status = {status: string; request_code: string | null};
-export function GuardianRequest({ageToken, onEligible}: {ageToken: string; onEligible: (token: string) => void}) {
+export function GuardianRequest({ageToken, onEligible, onCorrectAge}: {ageToken: string; onEligible: (token: string) => void; onCorrectAge: () => void}) {
   const [email, setEmail] = useState(""); const [code, setCode] = useState("");
   const [finished, setFinished] = useState("");
   const [waiting, setWaiting] = useState(false); const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(""); const [error, setError] = useState("");
+  const active = useRef(true);
+  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   const check = useCallback(async () => {
     const result = await platformRequest<Status>("/api/accounts/guardian-consent/status", {age_check_token: ageToken});
+    if (!active.current) return;
     if (result.status === "approved") { onEligible(ageToken); return; }
     if (result.status === "pending") { setCode(result.request_code ?? ""); setWaiting(true); return; }
     if (result.status === "expired") { setWaiting(false); setMessage("Срок ссылки истёк. Можно отправить новое письмо родителю."); }
@@ -20,7 +23,7 @@ export function GuardianRequest({ageToken, onEligible}: {ageToken: string; onEli
   useEffect(() => { if (!waiting) return; const timer=window.setInterval(() => { void check().catch(() => setError("Не удалось обновить статус. Нажмите «Проверить согласие».")); },10000); return () => window.clearInterval(timer); }, [waiting, check]);
   async function send(event: React.FormEvent) {
     event.preventDefault(); setBusy(true); setError(""); setMessage("");
-    try { const result=await platformRequest<{request_code: string; status: string}>("/api/accounts/guardian-consent/request", {email, age_check_token: ageToken}); setCode(result.request_code);
+    try { const result=await platformRequest<{request_code: string; status: string}>("/api/accounts/guardian-consent/request", {email, age_check_token: ageToken}); if (!active.current) return; setCode(result.request_code);
       if (result.status === "approved") onEligible(ageToken);
       else if (result.status === "declined") setFinished("Родитель не дал согласие. Регистрация недоступна.");
       else if (result.status === "consumed") setFinished("Учётная запись уже создана. Подтвердите email ребёнка по письму, затем войдите.");
@@ -35,5 +38,6 @@ export function GuardianRequest({ageToken, onEligible}: {ageToken: string; onEli
       <button className="quiet-button" disabled={busy} onClick={() => {setWaiting(false);setError("");}}>Изменить email или отправить снова</button>
     </>}
     {message && <p role="status">{message}</p>}{error && <p className="notice error-notice" role="alert">{error}</p>}
+    <div><p>Ошиблись при вводе возраста?</p><button className="quiet-button" type="button" disabled={busy} onClick={onCorrectAge}>Исправить возраст</button></div>
   </section>;
 }

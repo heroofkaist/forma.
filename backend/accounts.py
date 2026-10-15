@@ -271,13 +271,12 @@ def check_age(payload: AgeCheckPayload, request: Request):
     rate_limit(request, "age-check", limit=30)
     previous = request.cookies.get(age_screen.COOKIE)
     previous_state = age_screen.proof_state(previous)
-    # Old v1 screens could lock an adult out after an accidental group selection.
-    # A new explicit confirmation replaces that legacy screen once. Current minor
-    # decisions remain bound to the browser and cannot be switched to adult access.
-    current_minor = previous and previous.startswith('v2.') and previous_state in {'blocked', 'guardian'}
-    guardian = previous_state == 'guardian' if current_minor else payload.age_band == '13_to_17'
-    eligible = not current_minor and payload.age_band == '18_or_over'
-    token = previous if current_minor else age_screen.issue_proof(eligible, guardian=guardian)
+    guardian = payload.age_band == '13_to_17'
+    eligible = payload.age_band == '18_or_over'
+    # Honor a newly confirmed age band, including corrections in the same browser.
+    # Only an unchanged teen band resumes its browser-bound parent permission.
+    resume_guardian = guardian and previous and previous.startswith('v2.') and previous_state == 'guardian'
+    token = previous if resume_guardian else age_screen.issue_proof(eligible, guardian=guardian)
     next_step = 'account' if eligible else 'guardian' if guardian else 'blocked'
     response = JSONResponse({"eligible": eligible, "next_step": next_step, "age_check_token": token}, headers={"Cache-Control": "private, no-store"})
     response.set_cookie(age_screen.COOKIE, token, httponly=True, secure=request.url.scheme == "https",

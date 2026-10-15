@@ -162,13 +162,13 @@ test('rubric approval and teacher assessment decisions retain same-origin cookie
   }
 });
 
-test('age confirmation preserves the next step and forwards the matching HttpOnly proof at signup',async()=>{
+test('corrected age replaces the previous minor cookie and forwards the matching HttpOnly proof at signup',async()=>{
  const previous=process.env.NODE_ENV;process.env.NODE_ENV='production';
  const proof='v2.eligible.synthetic.signed';
  try{
-  global.fetch=async()=>Response.json({eligible:true,next_step:'account',age_check_token:proof});
+  global.fetch=async(url,init)=>{assert.equal(init.headers.get('cookie'),'forma_age_screen=v2.guardian.previous.signed');assert.equal(new TextDecoder().decode(init.body),'{"age_band":"18_or_over"}');return Response.json({eligible:true,next_step:'account',age_check_token:proof});};
   const parts=['api','accounts','age-check'];
-  const checked=await route.POST(request(parts,{method:'POST',origin:'https://forma.example',body:'{"age_band":"18_or_over"}'}),context(parts));
+  const checked=await route.POST(request(parts,{method:'POST',origin:'https://forma.example',cookie:'forma_age_screen=v2.guardian.previous.signed',body:'{"age_band":"18_or_over"}'}),context(parts));
   assert.equal((await checked.json()).next_step,'account');
   assert.match(checked.headers.get('set-cookie'),/forma_age_screen=v2.eligible.synthetic.signed/);
   assert.match(checked.headers.get('set-cookie'),/HttpOnly/);assert.match(checked.headers.get('set-cookie'),/Secure/);

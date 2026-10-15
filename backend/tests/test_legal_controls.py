@@ -14,13 +14,12 @@ def test_minors_need_a_separate_approved_access_process(platform, band):
     assert client.post('/api/accounts/age-check', json={'age_band': band}).json()['eligible'] is False
 
 
-def test_underage_screen_sticks_and_cannot_create_account_or_email(platform):
+def test_under13_proof_cannot_create_account_or_email(platform):
     client, factory, sent = platform
     result = client.post('/api/accounts/age-check', json={'age_band': 'under_13'})
     assert result.status_code == 200 and result.json()['eligible'] is False
     assert 'httponly' in result.headers['set-cookie'].lower()
     assert result.headers['cache-control'] == 'private, no-store'
-    assert client.post('/api/accounts/age-check', json={'age_band': '18_or_over'}).json()['eligible'] is False
     body = {'email': 'child@example.test', 'display_name': 'Synthetic', 'password': 'Synthetic-password-123'}
     assert client.post('/api/accounts/register', json=body).status_code == 422
     assert client.post('/api/accounts/register', json={**body, 'age_check_token': result.json()['age_check_token']}).status_code == 403
