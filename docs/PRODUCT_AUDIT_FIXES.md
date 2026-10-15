@@ -16,4 +16,6 @@ Verification uses synthetic records and mocks only. Focused backend regressions 
 
 Native Chrome inspection used an isolated local SQLite/storage copy, disabled workers and disabled paid inference. The student published result was inspected at 1440 and 390 CSS pixels, including the result link, wrapped feedback and criterion names. Both old teacher review/results routes redirected to the same saved submission. The teacher's failed-analysis message was inspected at desktop width. Captures are kept in the ignored `.local/audit-captures/` directory. The fixture's published result was seeded solely in this disposable synthetic database; no real grade was published. This is focused regression coverage, not a complete new product audit or cross-browser certification.
 
-Final local checks: **82 backend tests**, **29 frontend tests**, TypeScript checking, OpenNext production build and `git diff --check`. Existing backend dependency/lifecycle warnings remain.
+The release check also found that Next streamed a not-found page with HTTP 200 for development preview URLs. They exposed no preview content. A narrowly matched production middleware now returns HTTP 404 before streaming; local development previews remain available.
+
+Final local checks: **82 backend tests**, **30 frontend tests**, TypeScript checking, OpenNext production build and `git diff --check`. Existing backend dependency/lifecycle warnings remain.

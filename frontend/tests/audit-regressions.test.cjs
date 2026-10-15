@@ -53,3 +53,20 @@ test('academic links resolve to one review destination while independent scan wo
   assert.equal(reviewPath({ id: 'legacy', academic_assignment_id: 'academic' }), '/teacher/assignments/academic/submissions');
   assert.equal(reviewPath({ id: 'scan', academic_assignment_id: null }), '/assignments/scan/review');
 });
+
+test('development previews return a real production 404 before response streaming begins', () => {
+  const { middleware, config } = load('src/middleware.ts');
+  assert.deepEqual(config.matcher, ['/design-preview/:path*', '/teacher/review-preview/:path*']);
+  const previous = process.env.NODE_ENV;
+  try {
+    process.env.NODE_ENV = 'production';
+    const response = middleware();
+    assert.equal(response.status, 404);
+    assert.equal(response.headers.get('cache-control'), 'private, no-store');
+    process.env.NODE_ENV = 'development';
+    assert.equal(middleware().headers.get('x-middleware-next'), '1');
+  } finally {
+    if (previous === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previous;
+  }
+});
