@@ -1,3 +1,4 @@
+import { requestError } from "./presentation";
 import { API_URL, authenticatedFetch } from "./api";
 
 export type Offering = {
@@ -118,7 +119,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) {
     const body = await response.json().catch(() => null) as { detail?: unknown } | null;
     const detail = typeof body?.detail === "string" ? body.detail : `Request failed (${response.status}).`;
-    throw new Error(detail);
+    throw new Error(requestError(response.status, detail));
   }
   return response.json() as Promise<T>;
 }

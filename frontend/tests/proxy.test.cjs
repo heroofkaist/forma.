@@ -83,6 +83,10 @@ const apiFilename = path.resolve('src/lib/api.ts');
 const apiModule = new Module(apiFilename, module);
 apiModule.filename = apiFilename;
 apiModule.paths = Module._nodeModulePaths(path.dirname(apiFilename));
+const presentationFilename = path.resolve('src/lib/presentation.ts');
+const presentationModule = new Module(presentationFilename, module);
+presentationModule._compile(ts.transpileModule(fs.readFileSync(presentationFilename, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, presentationFilename);
+apiModule.require = name => name === './presentation' ? presentationModule.exports : module.require(name);
 apiModule._compile(ts.transpileModule(fs.readFileSync(apiFilename, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, apiFilename);
 const { authenticatedResourceUrl, API_URL } = apiModule.exports;
 

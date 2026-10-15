@@ -35,12 +35,12 @@ export default function ResultsPage() {
   const resultColumns = `minmax(140px,1.4fr) repeat(${assignment?.questions.length ?? 3}, minmax(90px,1fr)) minmax(78px,.8fr) minmax(110px,.9fr)`;
 
   return <AppShell>
-    <div className="review-topline"><div className="breadcrumbs-inline"><Link href="/">Задания</Link><span>/</span><Link href={`/assignments/${id}/review`}>{assignment?.title ?? "Задание"}</Link><span>/</span><span>Результаты</span></div><Link className="quiet-button" href={`/assignments/${id}/review`}>К проверке</Link></div>
+    <div className="review-topline"><div className="breadcrumbs-inline"><Link href="/assignments">Задания</Link><span>/</span><Link href={`/assignments/${id}/review`}>{assignment?.title ?? "Задание"}</Link><span>/</span><span>Результаты</span></div><Link className="quiet-button" href={`/assignments/${id}/review`}>К проверке</Link></div>
     <section className="page-heading compact-heading"><div><div className="eyebrow">РЕЗУЛЬТАТЫ · {assignment?.subject === "Physics" ? "ФИЗИКА" : "МАТЕМАТИКА"}</div><h1>{assignment?.title ?? "Результаты"}</h1><p className="heading-subtitle">{completed} из {students.length} работ полностью утверждены. Неутверждённые предложения ИИ не включаются в итоговый балл.</p></div><button className="button primary" onClick={() => void downloadAuthenticatedFile(api.exportPath(id), `${id}-results.csv`).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Не удалось скачать экспорт."))}><Download size={15} />Экспорт CSV</button></section>
     {error && <div className="notice error-notice">{error}</div>}
     <div className="results-toolbar"><label className="filter-select">Показывать<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">Все работы</option><option value="approved">Утверждённые</option><option value="pending">Не завершённые</option></select></label><button className="quiet-button" onClick={() => setAscending(!ascending)}>{ascending ? <ArrowUp size={14} /> : <ArrowDown size={14} />}Итоговый балл</button></div>
     {students.length ? <div className="results-table">
-      <div className="results-row results-head" style={{ gridTemplateColumns: resultColumns }}><span>УЧЕНИК</span>{assignment?.questions.map((question, index) => <span key={question.id}>ЗАДАЧА {index + 1}</span>)}<span>ИТОГО</span><span>СТАТУС</span></div>
+      <div className="results-row results-head" style={{ gridTemplateColumns: resultColumns }}><span>СТУДЕНТ</span>{assignment?.questions.map((question, index) => <span key={question.id}>ЗАДАЧА {index + 1}</span>)}<span>ИТОГО</span><span>СТАТУС</span></div>
       {students.map((student) => <div className="results-row" key={student.student} style={{ gridTemplateColumns: resultColumns }}>
         <strong className="student-id">{student.student}</strong>
         {assignment?.questions.map((question) => {
@@ -52,7 +52,7 @@ export default function ResultsPage() {
         <span className="result-status"><StatusLabel status={student.allApproved ? "approved" : "ready_for_review"} /><Link href={`/assignments/${id}/review?student=${encodeURIComponent(student.student)}`} title="Открыть работу"><FileText size={14} /></Link></span>
       </div>)}
     </div> : <div className="empty-state"><div className="empty-icon"><FileText size={18} /></div><h2>Пока нет загруженных работ</h2><p>Загрузите PDF, чтобы извлечь ответы и увидеть оценки.</p><Link className="button primary" href={`/assignments/${id}/upload`}>Загрузить работы</Link></div>}
-    <div className="export-note"><strong>Экспорт включает только утверждённые оценки.</strong> Предложенные ИИ баллы остаются черновиками до подтверждения учителем.</div>
+    <div className="export-note"><strong>Экспорт включает только утверждённые оценки.</strong> Предложенные ИИ баллы остаются черновиками до подтверждения преподавателем.</div>
   </AppShell>;
 }
 

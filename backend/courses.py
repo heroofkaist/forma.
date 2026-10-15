@@ -1,4 +1,5 @@
 """Private course creation and enrollment lifecycle without replacing academic tables."""
+from student_identity import student_display_name
 import csv
 import io
 import secrets
@@ -197,7 +198,7 @@ def roster(offering_id: str, request: Request):
         items = []
         for row in rows:
             state = db.get(EnrollmentState, row.id)
-            items.append({"id": row.id, "student_name": row.student_name, "status": state.status if state else "active"})
+            items.append({"id": row.id, "student_name": student_display_name(db, row.student_id, row.student_name), "status": state.status if state else "active"})
         result = {"class_code": offering.class_code, "enabled": policy.enabled, "approval_required": policy.approval_required, "capacity": policy.capacity, "opens_at": utc(policy.opens_at) if policy.opens_at else None, "closes_at": utc(policy.closes_at) if policy.closes_at else None, "items": items}
         db.commit()
         return result

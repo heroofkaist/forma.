@@ -1,4 +1,3 @@
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
 
 :root{--canvas:#f7f8f6;--surface:#fff;--ink:#202925;--secondary:#68736d;--muted:#8a948e;--border:#e1e6e1;--accent:#285c60;--accent-hover:#204b4e;--accent-wash:#eaf1ef;--success:#32745c;--success-bg:#edf5f0;--warning:#a66a32;--warning-bg:#faf2e7;--error:#b34e4a;--error-bg:#fbefed;--mono:"IBM Plex Mono",monospace;--sans:"IBM Plex Sans",Arial,sans-serif}
 *{box-sizing:border-box}

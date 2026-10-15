@@ -160,6 +160,16 @@ def _region(value: dict[str, Any], question_id: str | None = None) -> dict[str, 
 
 def _assignment_json(db: Session, assignment: Assignment) -> dict[str, Any]:
     answers = db.scalars(select(Answer).where(Answer.assignment_id == assignment.id)).all()
+    submissions = db.scalars(select(Submission).where(Submission.assignment_id == assignment.id)).all()
+    by_submission = {}
+    for answer in answers:
+        by_submission.setdefault(answer.submission_id, []).append(answer)
+    # A submission is reviewed only after every expected answer has an explicit
+    # teacher score and confirmation. AI proposals and partial reviews do not count.
+    expected = {q['id'] for q in assignment.questions or []}
+    reviewed = sum(bool(expected) and expected <= {a.question_id for a in by_submission.get(row.id, [])}
+        and all(a.review_status in {'reviewed', 'approved'} and a.human_score is not None
+                for a in by_submission.get(row.id, [])) for row in submissions)
     return {
         "id": assignment.id,
         "title": assignment.title,
@@ -174,9 +184,9 @@ def _assignment_json(db: Session, assignment: Assignment) -> dict[str, Any]:
             "rotation": assignment.template_rotation,
             "regions": assignment.template_regions or [],
         },
-        "submission_count": len(db.scalars(select(Submission).where(Submission.assignment_id == assignment.id)).all()),
+        "submission_count": len(submissions),
         "answer_count": len(answers),
-        "reviewed_count": sum(answer.review_status in {"reviewed", "approved"} for answer in answers),
+        "reviewed_count": reviewed,
         "demo_mode": DEMO_MODE,
     }
 

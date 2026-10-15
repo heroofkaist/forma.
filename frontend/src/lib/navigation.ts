@@ -16,3 +16,8 @@ export function locationForPath(path: string) {
   if (path.startsWith("/teacher")) return { key: "courses", title: "Курсы" };
   return { key: "assignments", title: path.includes("/template") ? "Дополнительный шаблон" : path.includes("/results") ? "Результаты" : "Задания" };
 }
+
+export function publicPath(path: string, development = false) {
+  return ["/", "/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/teacher-invitation"].includes(path)
+    || (development && path === "/design-preview");
+}

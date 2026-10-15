@@ -320,7 +320,8 @@ def test_rest_submission_review_retry_and_reopen_flow():
         assert reviewed.json()["teacher_comment"] == "Teacher note."
         assert reviewed.json()["grading"]["overall_feedback"] == "AI feedback stays unchanged."
         assert reviewed.json()["grading"]["criteria_results"][0]["evidence_from_solution"] == "x = 2"
-        assert client.get(f"/assignments/{assignment_id}").json()["reviewed_count"] == 1
+        # One reviewed answer does not make a two-question submission complete.
+        assert client.get(f"/assignments/{assignment_id}").json()["reviewed_count"] == 0
         with SessionLocal() as db:
             second_answer = db.query(Answer).filter(
                 Answer.assignment_id == assignment_id,

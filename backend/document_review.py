@@ -9,6 +9,7 @@ from accounts import utc
 from document_models import DocumentReview, PublishedDocumentReview, SubmissionDocument
 from materials import access, MIMES
 from permissions import require_teacher
+from student_identity import student_display_name
 from persistence import AcademicAssignment, AcademicGrade, AcademicSubmission, SessionLocal, now_utc, read_blob
 
 router = APIRouter(prefix="/api", tags=["Document review"])
@@ -63,7 +64,7 @@ def list_submissions(assignment_id: str, request: Request):
         latest = {}
         for job in jobs:
             latest.setdefault(job.submission_id, job)
-        return {"title": assignment.title, "offering_id": assignment.offering_id, "items": [{"id": row.id, "student_name": row.student_name, "file_name": row.file_name, "status": row.status, "processing_status": latest[row.id].status if row.id in latest else "not_scheduled", "processing_error": latest[row.id].error if row.id in latest else "", "submitted_at": utc(row.created_at)} for row in rows]}
+        return {"title": assignment.title, "offering_id": assignment.offering_id, "items": [{"id": row.id, "student_name": student_display_name(db, row.student_id, row.student_name), "file_name": row.file_name, "status": row.status, "processing_status": latest[row.id].status if row.id in latest else "not_scheduled", "processing_error": latest[row.id].error if row.id in latest else "", "submitted_at": utc(row.created_at)} for row in rows]}
 
 
 @router.get("/submission-files/{submission_id}")
@@ -81,7 +82,7 @@ def get_review(submission_id: str, request: Request):
         reviews = db.scalars(select(DocumentReview).where(DocumentReview.submission_id == submission_id).order_by(DocumentReview.created_at.desc())).all()
         grade = db.scalar(select(AcademicGrade).where(AcademicGrade.submission_id == submission_id, AcademicGrade.published.is_(True)))
         published = db.get(PublishedDocumentReview, grade.id) if grade else None
-        return {"submission_id": submission_id, "assignment_id": assignment.id, "title": assignment.title, "assignment_type": assignment.assignment_type, "instructions": assignment.description, "submitted_at": utc(submission.created_at), "student_name": submission.student_name, "file_name": submission.file_name, "file_type": submission.file_type, "maximum_score": assignment.maximum_score, "questions": assignment.questions, "structure": document.structure if document else None, "reviews": [review_json(review) for review in reviews], "published_grade": {"points": grade.points, "review_id": published.review_id if published else None, "published_at": utc(grade.published_at) if grade.published_at else None} if grade else None}
+        return {"submission_id": submission_id, "assignment_id": assignment.id, "title": assignment.title, "assignment_type": assignment.assignment_type, "instructions": assignment.description, "submitted_at": utc(submission.created_at), "student_name": student_display_name(db, submission.student_id, submission.student_name), "file_name": submission.file_name, "file_type": submission.file_type, "maximum_score": assignment.maximum_score, "questions": assignment.questions, "structure": document.structure if document else None, "reviews": [review_json(review) for review in reviews], "published_grade": {"points": grade.points, "review_id": published.review_id if published else None, "published_at": utc(grade.published_at) if grade.published_at else None} if grade else None}
 
 
 @router.get('/document-review/{submission_id}/pages/{page_number}')
@@ -188,5 +189,5 @@ def teacher_overview(request: Request):
         for submission in submissions:
             published = db.scalar(select(AcademicGrade.id).where(AcademicGrade.submission_id == submission.id, AcademicGrade.published.is_(True)))
             if not published:
-                queue.append({"id": submission.id, "assignment_title": lookup[submission.assignment_id].title, "student_name": submission.student_name, "submitted_at": utc(submission.created_at)})
+                queue.append({"id": submission.id, "assignment_title": lookup[submission.assignment_id].title, "student_name": student_display_name(db, submission.student_id, submission.student_name), "submitted_at": utc(submission.created_at)})
         return {"review_queue": queue, "upcoming": [{"id": assignment.id, "title": assignment.title, "due_at": utc(assignment.due_at)} for assignment in authorized if assignment.due_at and utc(assignment.due_at) > now_utc()][:10]}

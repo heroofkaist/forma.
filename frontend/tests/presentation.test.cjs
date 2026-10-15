@@ -1,0 +1,14 @@
+const test=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const ts=require('typescript');const Module=require('node:module');
+const loaded=new Module(__filename,module);loaded._compile(ts.transpileModule(fs.readFileSync('src/lib/presentation.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,__filename);
+const {statusLabel,studentProcessingMessage,submissionAvailability,requestError}=loaded.exports;
+test('known and new statuses never expose internal enum names',()=>{for(const value of ['awaiting_budget','submitted','published','ready','new_internal_state']){assert.notEqual(statusLabel(value),value);assert.match(statusLabel(value),/[А-Яа-я]/);}});
+test('student progress and arbitrary errors reveal no operational diagnostics',()=>{for(const status of ['awaiting_budget','failed','unknown'])assert.doesNotMatch(studentProcessingMessage(status),/backend|Ollama|OpenRouter|бюджет/i);for(const status of [403,422,502])assert.doesNotMatch(requestError(status,'private provider error and key'),/private|provider|key/);});
+test('upload eligibility covers initial submission, repeat prohibition and deadline even when repeats enabled',()=>{const now=Date.parse('2026-10-15T12:00:00Z');const a={status:'open',allow_resubmission:false};assert.equal(submissionAvailability(a,now),'');assert.ok(submissionAvailability({...a,latest_submission:{id:'s'}},now));assert.equal(submissionAvailability({...a,latest_submission:{id:'s'},allow_resubmission:true},now),'');assert.ok(submissionAvailability({...a,allow_resubmission:true,due_at:'2026-10-14'},now));assert.ok(submissionAvailability({...a,available_at:'2026-10-16'},now));assert.ok(submissionAvailability({...a,status:'closed',allow_resubmission:true},now));});
+test('prohibited upload controls do not exist in rendered markup',()=>{
+ const path=require('node:path');const React=require('react');const {renderToStaticMarkup}=require('react-dom/server');
+ const file=path.resolve('src/components/submission-gate.tsx');const compiled=new Module(file,module);compiled.paths=Module._nodeModulePaths(path.dirname(file));compiled._compile(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,file);
+ const {SubmissionGate}=compiled.exports;
+ const children=React.createElement('label',null,React.createElement('input',{type:'file'}),React.createElement('button',null,'Отправить'));
+ const closed=renderToStaticMarkup(React.createElement(SubmissionGate,{reason:'Повторная отправка запрещена'},children));assert.doesNotMatch(closed,/<input|<button/);assert.match(closed,/role="status"/);
+ const open=renderToStaticMarkup(React.createElement(SubmissionGate,{reason:''},children));assert.match(open,/type="file"/);
+});

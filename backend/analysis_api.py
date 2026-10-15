@@ -76,7 +76,13 @@ def status(submission_id:str,request:Request):
     with SessionLocal() as db:
         get_submission(db,submission_id,request)
         jobs=db.scalars(select(ProcessingJob).where(ProcessingJob.submission_id==submission_id).order_by(ProcessingJob.created_at.desc())).all()
-        return {'jobs':[job_json(job) for job in jobs if job.context.get('task') != 'assessment'], 'worker_note':'Jobs resume while the backend is awake. Sleeping instances do not process work.'}
+        visible = [job for job in jobs if job.context.get('task') != 'assessment']
+        if request_user(request).role == 'student':
+            # Students receive progress, never infrastructure, provider/billing or errors.
+            from student_messages import processing_message
+            return {'jobs': [{'id': job.id, 'status': job.status, 'error': processing_message(job.status) if job.error else ''}
+                             for job in visible], 'worker_note': 'Работа сохранена. Статус обновится после обработки.'}
+        return {'jobs': [job_json(job) for job in visible], 'worker_note':'Jobs resume while the backend is awake. Sleeping instances do not process work.'}
 
 @router.get('/{submission_id}')
 def interpretation(submission_id:str,request:Request):

@@ -1,3 +1,4 @@
+import { requestError } from "./presentation";
 import type { Answer, Assignment, CriterionResult, Grading, Question, Region } from "./types";
 
 export const API_URL = "/api/backend";
@@ -54,7 +55,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       : Array.isArray(body?.detail)
         ? body.detail.map((item) => typeof item === "object" && item !== null && "msg" in item ? String(item.msg) : String(item)).join("; ")
         : `Ошибка сервера (${response.status})`;
-    throw new Error(detail);
+    throw new Error(requestError(response.status, detail));
   }
   return response.json() as Promise<T>;
 }
@@ -132,7 +133,7 @@ function normalizeAnswer(value: unknown): Answer {
             : sourceStatus as Answer["status"];
   return {
     ...(raw as unknown as Answer),
-    anonymous_student_id: String(raw.anonymous_student_id ?? "Student"),
+    anonymous_student_id: String(raw.anonymous_student_id ?? "Студент"),
     status,
     crop_url: typeof raw.crop_url === "string" ? raw.crop_url : undefined,
     source_page_url: typeof raw.source_page_url === "string" ? raw.source_page_url : undefined,

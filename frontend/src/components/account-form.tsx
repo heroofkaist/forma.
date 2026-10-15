@@ -4,6 +4,9 @@ import Link from "next/link";
 import { platformRequest } from "../lib/platform";
 import { useAuth } from "./auth-provider";
 
+import { AuthStudy } from "./auth-study";
+import { FormaMark } from "./forma-mark";
+
 type Mode = "register" | "forgot-password" | "reset-password" | "verify-email" | "profile" | "security";
 const titles: Record<Mode, string> = { register: "Создать учётную запись", "forgot-password": "Восстановить доступ", "reset-password": "Новый пароль", "verify-email": "Подтвердить email", profile: "Профиль", security: "Безопасность" };
 export function AccountForm({ mode }: { mode: Mode }) {
@@ -32,16 +35,16 @@ export function AccountForm({ mode }: { mode: Mode }) {
         : mode === "security" ? { current_password: currentPassword, password }
         : mode === "reset-password" ? { token, password } : { token };
       const result = await platformRequest(`/api/accounts/${path}`, body, mode === "profile" ? "PATCH" : "POST");
-      setMessage(result.message); setPassword(""); setCurrentPassword("");
+      setMessage(({ register: "Если адрес доступен для регистрации, на него отправлено письмо для подтверждения.", "forgot-password": "Если учётная запись существует, письмо для восстановления отправлено.", "reset-password": "Пароль изменён. Войдите с новым паролем.", "verify-email": "Адрес электронной почты подтверждён.", profile: "Профиль сохранён.", security: "Пароль изменён. Войдите снова." })[mode]); setPassword(""); setCurrentPassword("");
       if (mode === "security") window.location.assign("/login");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Не удалось выполнить запрос."); }
     finally { setBusy(false); }
   }
-  return <main className="auth-page"><section className="auth-card">
-    <Link href={settings ? "/teacher" : "/login"} className="forma-brand auth-brand">forma<span className="brand-period">.</span></Link>
+  return <main className="auth-page"><AuthStudy/><section className="auth-card">
+    <Link href={settings ? "/teacher" : "/login"} className="forma-brand auth-brand"><FormaMark/>forma<span className="brand-period">.</span></Link>
     <div className="eyebrow">{settings ? "НАСТРОЙКИ" : "УЧЁТНАЯ ЗАПИСЬ"}</div><h1>{titles[mode]}</h1>
     {mode === "register" && <p>Публичная регистрация создаёт учётную запись студента. Преподавателям требуется приглашение и одобрение учреждения.</p>}
-    {mode === "register" && registration === false && <div className="notice" role="status">Регистрация пока недоступна. Администратор должен включить регистрацию и настроить отправку email.</div>}
+    {mode === "register" && registration === false && <div className="notice" role="status">Регистрация пока недоступна. Обратитесь к администратору вашего учреждения.</div>}
     {settings && !user?.account_id ? <p>Настройки доступны для подтверждённых учётных записей. Вход с прежними реквизитами сохраняется на время перехода.</p> : <form className="auth-form" onSubmit={(event) => void submit(event)}>
       {["register", "forgot-password", "profile"].includes(mode) && <label>Email<input type="email" autoComplete="email" required maxLength={254} readOnly={mode === "profile"} value={email} onChange={(event) => setEmail(event.target.value)} /></label>}
       {["register", "profile"].includes(mode) && <label>Имя<input autoComplete="name" required maxLength={200} value={name} onChange={(event) => setName(event.target.value)} /></label>}
@@ -51,7 +54,7 @@ export function AccountForm({ mode }: { mode: Mode }) {
       <button className="button primary" type="submit" disabled={busy || (mode === "register" && registration !== true)}>{busy ? "Подождите…" : mode === "verify-email" ? "Подтвердить email" : "Продолжить"}</button>
     </form>}
     {error && <div className="notice error-notice" role="alert">{error}</div>}{message && <div className="notice" role="status">{message}</div>}
-    {mode === "verify-email" && <form className="auth-form" onSubmit={(event) => { event.preventDefault(); setBusy(true); setError(""); void platformRequest("/api/accounts/resend-verification", { email }).then((result) => setMessage(result.message)).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Не удалось отправить письмо.")).finally(() => setBusy(false)); }}><label>Повторно отправить письмо<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label><button className="button" disabled={busy}>Отправить</button></form>}
+    {mode === "verify-email" && <form className="auth-form" onSubmit={(event) => { event.preventDefault(); setBusy(true); setError(""); void platformRequest("/api/accounts/resend-verification", { email }).then(() => setMessage("Если адрес требует подтверждения, письмо отправлено.")).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Не удалось отправить письмо.")).finally(() => setBusy(false)); }}><label>Повторно отправить письмо<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label><button className="button" disabled={busy}>Отправить</button></form>}
     <div className="account-links">{settings ? <><Link href="/settings/profile">Профиль</Link><Link href="/settings/security">Безопасность</Link><Link href="/student">Обучение</Link></> : <Link href="/login">Войти</Link>}</div>
   </section></main>;
 }

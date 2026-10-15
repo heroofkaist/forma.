@@ -2,7 +2,8 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { allowedPath, homeForRole } from "../lib/navigation";
+import { allowedPath, homeForRole, publicPath } from "../lib/navigation";
+import { requestError } from "../lib/presentation";
 import { API_URL, authenticatedFetch } from "../lib/api";
 
 type AuthIdentity = { role: string; username: string | null; student_id: string | null; account_id?: string | null };
@@ -13,10 +14,6 @@ type AuthContextValue = {
   login: (role: string, username: string, password: string) => Promise<string>;
   logout: () => void;
 };
-
-function publicPath(pathname: string) {
-  return ["/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/teacher-invitation"].includes(pathname);
-}
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -68,7 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [loadIdentity]);
 
   useEffect(() => {
-    if (loading || !enabled || publicPath(pathname)) return;
+    if (loading || !enabled || publicPath(pathname, process.env.NODE_ENV === "development")) return;
     if (!user) {
       const next = pathname || "/";
       router.replace(`/login?next=${encodeURIComponent(next)}`);
@@ -85,7 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     const body = await response.json().catch(() => null) as { access_token?: string; detail?: string } | null;
     if (!response.ok) {
-      throw new Error(body?.detail ?? "Не удалось войти.");
+      throw new Error(response.status === 401 ? "Не удалось войти. Проверьте email и пароль; адрес должен быть подтверждён." : requestError(response.status, body?.detail));
     }
     window.sessionStorage.removeItem("forma_access_token");
     try {
@@ -100,17 +97,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(() => {
     void authenticatedFetch(`${API_URL}/api/auth/logout`, { method: "POST" }).then((response) => {
-      if (!response.ok) throw new Error("Unable to sign out. Please try again.");
+      if (!response.ok) throw new Error("Не удалось выйти. Попробуйте ещё раз.");
       window.sessionStorage.removeItem("forma_access_token");
       setUser(null);
       router.replace("/login");
-    }).catch((error: unknown) => window.alert(error instanceof Error ? error.message : "Unable to sign out."));
+    }).catch((error: unknown) => window.alert(error instanceof Error ? error.message : "Не удалось выйти."));
   }, [router]);
 
   const value = useMemo(() => ({ enabled, loading, user, login, logout }), [
     enabled, loading, user, login, logout,
   ]);
-  const isLogin = publicPath(pathname);
+  const isLogin = publicPath(pathname, process.env.NODE_ENV === "development");
   const wrongRolePath = enabled && user && !isLogin && !allowedPath(user.role, pathname);
   return (
     <AuthContext.Provider value={value}>

@@ -56,8 +56,8 @@ export default function UploadPage() {
   const cropSource = firstCrop?.crop_data_url || firstCrop?.crop_url || undefined;
 
   return <AppShell>
-    <div className="breadcrumbs-inline"><Link href="/">Задания</Link><span>/</span><Link href={`/assignments/${id}/template`}>{assignment?.title ?? "Задание"}</Link><span>/</span><span>Загрузить работы</span></div>
-    <section className="page-heading compact-heading"><div><div className="eyebrow">ШАГ 2 ИЗ 3 · РАБОТЫ</div><h1>Загрузить сканы</h1><p className="heading-subtitle">Один ученик на страницу. Используйте тот же шаблон и масштаб, что и в бланке Forma.</p></div></section>
+    <div className="breadcrumbs-inline"><Link href="/assignments">Задания</Link><span>/</span><Link href={`/assignments/${id}/template`}>{assignment?.title ?? "Задание"}</Link><span>/</span><span>Загрузить работы</span></div>
+    <section className="page-heading compact-heading"><div><div className="eyebrow">ШАГ 2 ИЗ 3 · РАБОТЫ</div><h1>Загрузить сканы</h1><p className="heading-subtitle">Один студент на страницу. Используйте тот же шаблон и масштаб, что и в бланке Forma.</p></div></section>
     {error && <div className="notice error-notice"><AlertTriangle size={16} />{error}</div>}
     {!uploaded ? <section className="upload-workspace">
       <label className={`dropzone ${file ? "has-file" : ""}`}>

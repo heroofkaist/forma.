@@ -598,7 +598,9 @@ def _student_identity(request: Request) -> tuple[str, str]:
         user = request_user(request)
         if user.role != "student" or user.student_id is None:
             raise HTTPException(status_code=403, detail="Student role required.")
-        return user.student_id, user.student_id
+        from student_identity import student_display_name
+        with SessionLocal() as db:
+            return user.student_id, student_display_name(db, user.student_id)
     return DEMO_STUDENT_ID, DEMO_STUDENT_NAME
 
 
@@ -688,8 +690,8 @@ def _normalize_questions(
         questions = [
             QuestionPayload(
                 id="q1",
-                title="Assignment response",
-                statement="Complete the assignment.",
+                title="Ответ на задание",
+                statement="Выполните задание.",
                 maximum_points=maximum_score,
             )
         ]
@@ -730,7 +732,7 @@ def _normalize_questions(
                 {
                     "id": f"{item['id']}-overall",
                     "criterion_id": f"{item['id']}-overall",
-                    "description": "Overall correctness",
+                    "description": "Общая корректность",
                     "maximum_points": item["maximum_points"],
                 }
             ]
@@ -1440,10 +1442,13 @@ async def create_submission(
                 document = pymupdf.open(stream=content, filetype="pdf")
                 page_count = document.page_count
                 document.close()
+            # Names belong in the authorized academic workspace, never in
+            # the legacy anonymous identifier fields. Preserve their separation.
+            pseudonym = "Student " + student_id[:8] if auth_required() else student_name
             legacy_submission = Submission(
                 assignment_id=assignment.legacy_assignment_id,
-                student_name=student_name,
-                anonymous_student_id=student_name,
+                student_name=pseudonym,
+                anonymous_student_id=pseudonym,
                 source_path=legacy_path,
                 page_count=page_count,
                 status="ready",

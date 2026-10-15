@@ -117,7 +117,7 @@ export default function ReviewWorkspace() {
     if (!await save(grading, current.id)) return;
     try {
       await api.approve(current.id);
-      setMessage("Оценка утверждена учителем");
+      setMessage("Оценка утверждена преподавателем");
       await load();
       const index = visible.findIndex((item) => item.id === current.id);
       const next = visible[index + 1];
@@ -188,7 +188,7 @@ export default function ReviewWorkspace() {
   if (loading) return <AppShell><div className="table-loading"><span className="spinner" />Открываем проверку…</div></AppShell>;
   return <AppShell>
     <div className="review-topline">
-      <div className="breadcrumbs-inline"><Link href="/">Задания</Link><span>/</span><span>{assignment?.title}</span><span>/</span><span>Проверка</span></div>
+      <div className="breadcrumbs-inline"><Link href="/assignments">Задания</Link><span>/</span><span>{assignment?.title}</span><span>/</span><span>Проверка</span></div>
       <div className="review-top-actions"><Link className="quiet-button" href={`/assignments/${id}/results`}><Download size={14} />Результаты</Link><Link className="quiet-button" href={`/assignments/${id}/template`}>Шаблон</Link></div>
     </div>
     <div className="review-heading">
@@ -201,13 +201,13 @@ export default function ReviewWorkspace() {
     {message && <div className="save-toast">{message}</div>}
     {!current ? <div className="review-empty-state"><h2>{filter === "needs_attention" ? "Нет ответов, требующих внимания" : "Пока нет загруженных ответов"}</h2><p>Сначала добавьте PDF со сканами, чтобы Forma извлекла ответы по шаблону.</p><Link className="button primary" href={`/assignments/${id}/upload`}>Загрузить работы</Link></div> : <section className="review-workspace">
       <div className="evidence-column">
-        <div className="evidence-header"><div><strong>Работа ученика</strong><span>{current.anonymous_student_id}</span></div><StatusLabel status={current.status} /></div>
+        <div className="evidence-header"><div><strong>Работа студента</strong><span>{current.anonymous_student_id}</span></div><StatusLabel status={current.status} /></div>
         <div className="scan-viewport">{crop ? <ProtectedImage url={crop} alt={`Рукописная работа ${current.anonymous_student_id}`} /> : current.status === "failed" ? <div className="scan-empty"><AlertTriangle size={21} /><span>{current.error || "Не удалось извлечь изображение."}</span><button className="button secondary" onClick={() => void retryCrop()} disabled={gradingBusy}>Повторить кроп и проверку</button><Link href={`/assignments/${id}/template`} className="text-button">Изменить шаблон</Link></div> : <span className="muted">Кроп ещё не готов</span>}</div>
         <div className="scan-tools"><span>ОРИГИНАЛ · ДОКАЗАТЕЛЬСТВО</span>{current.page_number && <span>Стр. {current.page_number}</span>}</div>
         {(crop || current.source_page_url) && <ProtectedFileLink className="open-source" url={current.source_page_url ?? crop}><ExternalLink size={13} />Открыть всю страницу скана</ProtectedFileLink>}
       </div>
       <div className="grading-column">
-        <div className="grading-header"><div><strong>Оценка по рубрике</strong><span>{question?.maximum_points ?? 0} баллов максимум</span></div><div className="grading-badges">{grading?.is_demo_output && <span className="demo-tag">ДЕМО · СИМУЛЯЦИЯ</span>}<span className={approved ? "grade-state approved" : "grade-state suggestion"}>{approved ? <Check size={13} /> : <Sparkles size={13} />}{approved ? "Утверждено учителем" : "Предложение ИИ"}</span></div></div>
+        <div className="grading-header"><div><strong>Оценка по рубрике</strong><span>{question?.maximum_points ?? 0} баллов максимум</span></div><div className="grading-badges">{grading?.is_demo_output && <span className="demo-tag">ДЕМО · СИМУЛЯЦИЯ</span>}<span className={approved ? "grade-state approved" : "grade-state suggestion"}>{approved ? <Check size={13} /> : <Sparkles size={13} />}{approved ? "Утверждено преподавателем" : "Предложение ИИ"}</span></div></div>
         {(current.status === "pending" || current.status === "processing") && <div className="processing-banner"><LoaderCircle className="spin-icon" size={15} />Обрабатываем ответ. Оценка появится здесь.</div>}
         {(current.status === "failed" || current.status === "needs_attention") && <div className="attention-banner"><AlertTriangle size={15} /><span>{current.error || grading?.attention_reasons?.join(" ") || "Нужна ручная проверка этого ответа."}{grading?.uncertainty !== undefined && grading.uncertainty > 0 ? ` Неуверенность ИИ: ${Math.round(grading.uncertainty * 100)}%.` : ""}</span>{current.status === "failed" && crop && <button className="text-button" onClick={() => void retry()}>Повторить оценку</button>}</div>}
         {grading ? <>
@@ -226,7 +226,7 @@ export default function ReviewWorkspace() {
             </article>;
           })}</div>
           {grading.overall_feedback && <div className="model-feedback"><span>ОБРАТНАЯ СВЯЗЬ ИИ</span><p>{grading.overall_feedback}</p></div>}
-          <label className="teacher-comment">Комментарий преподавателя<textarea rows={2} disabled={approved} value={grading.teacher_comment ?? ""} onChange={(event) => { setDirty(true); setGrading({ ...grading, teacher_comment: event.target.value }); }} placeholder="Добавьте комментарий ученику…" /></label>
+          <label className="teacher-comment">Комментарий преподавателя<textarea rows={2} disabled={approved} value={grading.teacher_comment ?? ""} onChange={(event) => { setDirty(true); setGrading({ ...grading, teacher_comment: event.target.value }); }} placeholder="Добавьте комментарий студенту…" /></label>
         </> : current.status === "ready_for_review" || current.status === "needs_attention" ? <div className="grading-unavailable"><p>AI-оценка не найдена для этой работы.</p><button className="button secondary" disabled={gradingBusy} onClick={() => void retry()}><RotateCcw size={14} />Повторить оценку</button></div> : null}
         {grading && <footer className="approval-footer"><div><span>ТЕКУЩИЙ БАЛЛ</span><strong>{grading.criteria_results.reduce((sum, item) => sum + (item.teacher_points ?? item.suggested_points), 0)} <small>/ {question?.maximum_points ?? 0}</small></strong></div><div className="footer-actions">{saving && <span className="saving-state"><Save size={13} />Сохраняем</span>}{approved ? <button className="button secondary" onClick={() => void api.reopen(current.id).then(() => load()).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Не удалось открыть оценку повторно."))}>Открыть повторно</button> : <button className="button primary approve-button" onClick={() => void approve()} disabled={saving || gradingBusy}>Утвердить и далее <kbd>A</kbd></button>}</div></footer>}
       </div>

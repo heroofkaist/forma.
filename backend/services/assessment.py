@@ -82,7 +82,7 @@ def rubric_for_assignment(spec, assignment):
         raise ValueError('Approve every existing assignment criterion with its unchanged point maximum. Edit assignment criteria when creating the assignment.')
     if sum(actual.values()) > assignment.maximum_score + 1e-6:
         raise ValueError('Rubric exceeds the assignment maximum.')
-    if any(c.description.strip().casefold() in {'overall correctness', 'complete the assignment.'} for c in spec.criteria):
+    if any(c.description.strip().casefold() in {'overall correctness', 'complete the assignment.', 'общая корректность', 'выполните задание.'} for c in spec.criteria):
         raise ValueError('Clarify criterion descriptions before requesting AI scores.')
     if len(spec.instructions.strip()) < 20 or any(len(c.description.strip()) < 5 for c in spec.criteria):
         raise ValueError('Supply meaningful instructions and criterion descriptions before approval.')

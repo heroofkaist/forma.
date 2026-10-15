@@ -1,65 +1,61 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { ArrowDown, ArrowUp, ArrowUpRight, Plus, Search, Trash2 } from "lucide-react";
-import { AppShell, StatusLabel } from "../components/app-shell";
-import { api } from "../lib/api";
-import type { Assignment } from "../lib/types";
+import { useState } from "react";
+import { ArrowDown, ArrowRight, ArrowUpRight, CornerDownRight, Plus } from "lucide-react";
+import { FormaMark } from "../components/forma-mark";
+import { FormStudy } from "../components/form-study";
+import { useAuth } from "../components/auth-provider";
+import { homeForRole } from "../lib/navigation";
 
-export default function AssignmentsPage() {
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [query, setQuery] = useState("");
-  const [sortAsc, setSortAsc] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState("");
-  const [deleteBusy, setDeleteBusy] = useState(false);
+const readings = [
+  { title: "Увидеть оригинал", label: "01 / ИСХОДНАЯ ТОЧКА", body: "Мысль начинается с самой работы. Оригинальный документ всегда рядом: можно вернуться к странице и проверить контекст.", note: "Слова студента — без подмены интерпретацией.", status: "ОРИГИНАЛ · СТРАНИЦА 1" },
+  { title: "Найти основания", label: "02 / ВНИМАТЕЛЬНОЕ ЧТЕНИЕ", body: "Предложения ИИ связаны с критериями и свидетельствами. Сопоставляйте вывод с работой, проверяйте аргументы, задавайте вопросы.", note: "Формула и единицы указаны. Связь с условием требует проверки.", status: "ПРЕДЛОЖЕНИЕ ИИ · НЕ ОЦЕНКА" },
+  { title: "Принять решение", label: "03 / ВАША ТОЧКА ЗРЕНИЯ", body: "Принять, изменить, отклонить или вернуться позже. Сохраните черновик, подтвердите критерии и отдельно опубликуйте готовое решение.", note: "Преподаватель определяет баллы и момент публикации.", status: "РЕШЕНИЕ ЧЕЛОВЕКА · ЕЩЁ НЕ ОПУБЛИКОВАНО" },
+];
 
-  useEffect(() => {
-    api.assignments().then(setAssignments).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Не удалось загрузить задания.")).finally(() => setLoading(false));
-  }, []);
+export default function HomePage() {
+  const { user } = useAuth();
+  const destination = user ? homeForRole(user.role) : "/login";
+  const [reading, setReading] = useState(0);
+  return <main className="bureau">
+    <a className="skip-link" href="#thought">К содержанию</a>
+    <header className="bureau-nav">
+      <Link className="bureau-brand" href="/" aria-label="Forma — главная"><FormaMark/>forma<span className="brand-square"/></Link>
+      <span className="bureau-descriptor">БЮРО МЫСЛИ<br/>И ВНИМАТЕЛЬНОЙ ПРОВЕРКИ</span>
+      <nav aria-label="О Forma"><a href="#method">Как это работает</a><a href="#people">Для кого</a></nav>
+      <Link href={destination} className="bureau-entry">{user ? "К работе" : "Войти"}<ArrowUpRight size={19}/></Link>
+    </header>
 
-  const filtered = assignments.filter((item) => item.title.toLowerCase().includes(query.toLowerCase())).sort((a, b) => {
-    const diff = Date.parse(a.created_at ?? "") - Date.parse(b.created_at ?? "");
-    return sortAsc ? diff : -diff;
-  });
-
-  async function removeAssignment(assignmentId: string) {
-    setDeleteBusy(true);
-    setError("");
-    try {
-      await api.deleteAssignment(assignmentId);
-      setAssignments((items) => items.filter((item) => item.id !== assignmentId));
-      setConfirmDelete("");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Не удалось удалить задание.");
-    } finally {
-      setDeleteBusy(false);
-    }
-  }
-
-  return <AppShell>
-    <section className="page-heading">
-      <div><div className="eyebrow">ПРЕПОДАВАНИЕ · РАБОЧЕЕ ПРОСТРАНСТВО</div><h1>Задания</h1><p className="heading-subtitle">Создавайте проверочные работы и оценивайте решения с помощью понятных критериев.</p></div>
-      <Link className="button primary" href="/assignments/new"><Plus size={16} />Новое задание</Link>
+    <section className="bureau-hero" id="thought">
+      <div className="hero-topline"><span><span className="signal-square"/> ОБРАЗОВАНИЕ. С ЧЕЛОВЕЧЕСКОЙ ТОЧКОЙ ЗРЕНИЯ.</span><span>ДОКУМЕНТ → ДИАЛОГ → РЕШЕНИЕ</span></div>
+      <div className="hero-composition">
+        <div className="hero-copy"><h1>У мысли<br/>есть <span className="hero-small-mark" aria-hidden="true">↗</span><br/><span className="hero-form">форма.</span></h1><p>Работа — больше, чем ответ.<br/>Forma помогает увидеть ход мысли<br/>и дать ему внимательную оценку.</p><Link className="bureau-cta" href={destination}>В рабочее пространство<ArrowUpRight size={21}/></Link></div>
+        <div className="hero-object"><FormStudy/></div>
+        <span className="hero-margin">МАТЕМАТИКА / ЭССЕ / ЛАБОРАТОРНЫЕ</span>
+      </div>
+      <div className="hero-bottom"><a href="#method"><span className="index-circle">01</span>ОТКРЫТЬ МЕТОД<ArrowDown size={18}/></a><p>ИИ предлагает.<br/><strong>Вы решаете.</strong></p><span className="hero-footnote">СОЗДАНО ДЛЯ ПРЕПОДАВАТЕЛЕЙ<br/>И ТЕХ, КТО УЧИТСЯ.</span></div>
     </section>
-    {error && <div className="notice error-notice">{error}</div>}
-    <div className="table-toolbar">
-      <label className="search-field"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Найти задание" /></label>
-      <button className="quiet-button" onClick={() => setSortAsc(!sortAsc)}>{sortAsc ? <ArrowUp size={14} /> : <ArrowDown size={14} />}По дате</button>
-    </div>
-    {loading ? <div className="table-loading"><span className="spinner" />Загружаем задания…</div> : filtered.length > 0 ? <div className="assignment-table">
-      <div className="assignment-row table-head"><span>НАЗВАНИЕ</span><span>ПРЕДМЕТ</span><span>ВОПРОСЫ</span><span>РАБОТЫ</span><span>ПРОВЕРКА</span><span>СТАТУС</span></div>
-      {filtered.map((assignment) => <div className="assignment-row" key={assignment.id}>
-        <span className="assignment-title"><Link href={`/assignments/${assignment.id}/review`}><strong>{assignment.title}</strong></Link>{assignment.demo_mode && <span className="demo-tag">ДЕМО</span>}<small>{assignment.created_at ? new Date(assignment.created_at).toLocaleDateString("ru-RU") : "Локальное задание"}</small></span>
-        <span>{assignment.subject === "Physics" ? "Физика" : assignment.subject === "Mathematics" ? "Математика" : assignment.subject}</span>
-        <span>{assignment.questions?.length ?? 0}</span>
-        <span>{assignment.submission_count ?? 0}</span>
-        <span className="review-cell">{assignment.reviewed_count ?? 0}<span className="muted"> / {assignment.submission_count ?? 0}</span></span>
-        <span className="assignment-end"><StatusLabel status={assignment.status} />{confirmDelete === assignment.id ? <span className="inline-confirm"><button disabled={deleteBusy} onClick={() => void removeAssignment(assignment.id)}>Да</button><button onClick={() => setConfirmDelete("")}>Нет</button></span> : <><button className="delete-assignment" title="Удалить задание и связанные файлы" aria-label={`Удалить ${assignment.title}`} onClick={() => setConfirmDelete(assignment.id)}><Trash2 size={13} /></button><Link className="row-open" href={`/assignments/${assignment.id}/review`} title="Открыть задание"><ArrowUpRight size={15} /></Link></>}</span>
-      </div>)}
-    </div> : <div className="empty-state"><div className="empty-icon"><ArrowUpRight size={18} /></div><h2>{query ? "Ничего не найдено" : "Создайте первое задание"}</h2><p>{query ? "Попробуйте изменить поисковый запрос." : "Добавьте вопросы и критерии оценивания, затем загрузите работы класса."}</p>{!query && <Link className="button primary" href="/assignments/new"><Plus size={16} />Создать задание</Link>}</div>}
-    <div className="privacy-note">Доступ к работам определяется правами преподавателя. Оценки становятся доступны студенту после публикации.</div>
-  </AppShell>;
+
+    <section className="bureau-method" id="method">
+      <div className="section-register"><span>01 — МЕТОД FORMA</span><span>ЧИТАТЬ МЕЖДУ СТРОК</span><Plus size={18}/></div>
+      <div className="method-heading"><h2>От ответа<br/>к <span>пониманию.</span></h2><p>У хорошей оценки есть основания.<br/>У каждого решения — автор.<br/>Мы оставили для этого место.</p></div>
+      <div className="reading-desk">
+        <div className="reading-navigation"><div className="reading-tabs" role="group" aria-label="Этапы проверки">{readings.map((item, i) => <button key={item.title} onClick={() => setReading(i)} aria-pressed={reading === i}><span>0{i + 1}</span><strong>{item.title}</strong><ArrowUpRight size={22}/></button>)}</div><div className="reading-explanation" aria-live="polite"><span className="micro-label">{readings[reading].label}</span><p>{readings[reading].body}</p><CornerDownRight size={30}/></div></div>
+        <div className="document-study"><div className="document-study-label"><span>УЧЕБНЫЙ ПРИМЕР / СИНТЕТИЧЕСКИЕ ДАННЫЕ</span><span>Ф / 01</span></div><div className="study-page"><div className="study-page-head"><span>ФИЗИКА</span><span>ЗАКОНЫ ДВИЖЕНИЯ</span></div><h3>Всё начинается<br/>с наблюдения.</h3><p>Масса тела — 2 кг.<br/>Ускорение — 3 м/с².</p><div className="study-equation">F = ma = <span>6 Н<svg viewBox="0 0 130 70" aria-hidden="true"><ellipse cx="65" cy="35" rx="60" ry="29" transform="rotate(-8 65 35)"/></svg></span></div><blockquote>«Сила направлена по ускорению»</blockquote><div className="study-note"><span>↳</span><p>{readings[reading].note}</p></div></div><div className="document-study-status"><span className="signal-square"/>{readings[reading].status}</div></div>
+      </div>
+    </section>
+
+    <section className="bureau-manifesto" id="principle"><div className="section-register"><span>02 — ПРИНЦИП</span><span>ИНТЕРПРЕТАЦИЯ ≠ ОЦЕНКА</span><Plus size={18}/></div><div className="manifesto-body"><div className="manifesto-aside"><FormaMark/><p>ТЕХНОЛОГИЯ ДОЛЖНА<br/>РАСШИРЯТЬ ВНИМАНИЕ.</p><span>А НЕ ПОДМЕНЯТЬ<br/>СОБСТВЕННОЕ СУЖДЕНИЕ.</span></div><h2>Последнее<br/>слово —<br/><span>ваше<svg viewBox="0 0 600 32" preserveAspectRatio="none" aria-hidden="true"><path d="M4 17Q240 0 595 13M65 28Q340 10 540 25"/></svg>.</span></h2></div><div className="manifesto-bottom"><span>ЧЕЛОВЕК В ЦЕНТРЕ РЕШЕНИЯ ↗</span><p>Предложение можно проверить. Балл — изменить.<br/>С выводом можно не согласиться.<br/>Оценка появляется у студента только после вашей публикации.</p></div></section>
+
+    <section className="bureau-people" id="people"><div className="section-register"><span>03 — ДВЕ ПЕРСПЕКТИВЫ</span><span>ОБЩЕЕ ПРОСТРАНСТВО</span><Plus size={18}/></div><div className="people-heading"><h2>По обе<br/>стороны работы.</h2><p>Понятный процесс.<br/>Внимательная обратная связь.</p></div><div className="people-grid"><article className="person-panel person-teacher"><div className="person-top"><span>ДЛЯ ПРЕПОДАВАТЕЛЯ</span><span>А / 01</span></div><h3>Смотреть.<br/>Сопоставлять.<br/>Решать.</h3><p>Курсы, критерии, оригинал и свидетельства.<br/>Место для черновика и собственного мнения.</p><Link href={destination}>Перейти к работе<ArrowUpRight size={27}/></Link></article><article className="person-panel person-student"><div className="person-top"><span>ДЛЯ СТУДЕНТА</span><span>Б / 02</span></div><h3>Пробовать.<br/>Объяснять.<br/>Расти.</h3><p>Собственный документ, понятный статус<br/>и обратная связь от преподавателя.</p><Link href={user ? destination : "/register"}>{user ? "Открыть пространство" : "Создать учётную запись"}<ArrowUpRight size={27}/></Link></article></div></section>
+
+    <section className="bureau-faq"><div><span className="micro-label">ПРИМЕЧАНИЯ НА ПОЛЯХ</span><h2>Есть<br/>вопрос.</h2><ArrowDown size={34}/></div><div>{[
+      ["Forma выставляет оценки сама?", "Нет. ИИ предлагает интерпретации и баллы. Преподаватель проверяет основания, принимает собственное решение и отдельно публикует результат."],
+      ["Какие работы можно отправлять?", "PDF, DOCX и PPTX; для заданий по программированию — также исходный код и ZIP. Предложения оценки по критериям доступны для PDF с задачами, эссе и лабораторными. Другие работы можно проверить вручную. Код не запускается."],
+      ["Обязательно использовать готовый бланк?", "Нет. Студент отправляет собственный документ. Для PDF оригинал доступен постранично рядом с критериями проверки."],
+    ].map(([question, answer], i) => <details key={question}><summary><span>0{i + 1}</span>{question}<Plus size={20}/></summary><p>{answer}</p></details>)}</div></section>
+
+    <footer className="bureau-footer"><div className="footer-invitation"><span>ПРОДОЛЖИМ МЫСЛЬ?</span><Link href={destination}>За работу.<ArrowUpRight/></Link></div><div className="footer-wordmark" aria-hidden="true">forma<span>↗</span></div><div className="footer-colophon"><span>БЮРО МЫСЛИ / FORMA</span><span>ВНИМАНИЕ К РАБОТЕ.<br/>УВАЖЕНИЕ К МЫСЛИ.</span><a href="#thought">В НАЧАЛО<ArrowRight size={17}/></a></div></footer>
+  </main>;
 }
