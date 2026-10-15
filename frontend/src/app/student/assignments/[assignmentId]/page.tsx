@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, Check, FileUp, Upload } from "lucide-react";
 import { SubmissionGate } from "../../../../components/submission-gate";
 import { StudentShell } from "../../../../components/student-shell";
+import { PublishedResult } from "../../../../components/published-result";
 import { platformRequest } from "../../../../lib/platform";
 import { academicApi, type AcademicAssignment, type Offering } from "../../../../lib/academic";
 
@@ -36,7 +37,31 @@ export default function StudentAssignmentPage() {
   const formats = programming ? "PDF, DOCX, PPTX, исходный код, ZIP" : "PDF, DOCX, PPTX";
   const accepted = programming ? ".pdf,.docx,.pptx,.py,.js,.ts,.tsx,.jsx,.java,.c,.cpp,.h,.rs,.go,.sql,.txt,.zip" : ".pdf,.docx,.pptx";
   const latest = assignment?.latest_submission;
-  useEffect(()=>{const id=latest?.id;if(!id)return;let active=true;const load=()=>{void platformRequest<{jobs:{status:string;error:string}[];worker_note:string}>(`/api/document-analysis/${String(id)}/status`).then((data)=>{if(active){setProcessing(data.jobs[0]?.status??"not_scheduled");setProcessingError("");}}).catch(()=>{if(active)setProcessingError("Не удалось обновить статус. Повторим автоматически; работа остаётся сохранённой.");});};load();const timer=window.setInterval(load,10000);return()=>{active=false;window.clearInterval(timer);};},[latest?.id]);
+  const published = assignment?.published_grade;
+  useEffect(() => {
+    const id = latest?.id;
+    setProcessing(""); setProcessingError("");
+    if (!id || published) return;
+    let active = true;
+    let pending = false;
+    const load = async () => {
+      if (pending) return;
+      pending = true;
+      const [status, refreshed] = await Promise.allSettled([
+        platformRequest<{ jobs: { status: string }[] }>(`/api/document-analysis/${String(id)}/status`),
+        academicApi.assignment(assignmentId),
+      ]);
+      if (active) {
+        if (refreshed.status === "fulfilled") setAssignment(refreshed.value);
+        if (status.status === "fulfilled") { setProcessing(status.value.jobs[0]?.status ?? "not_scheduled"); setProcessingError(""); }
+        else setProcessingError("Не удалось обновить статус. Повторим автоматически; работа остаётся сохранённой.");
+      }
+      pending = false;
+    };
+    void load();
+    const timer = window.setInterval(() => void load(), 10000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [assignmentId, latest?.id, Boolean(published)]);
   const due = assignment?.due_at ? new Date(assignment.due_at) : null;
   const uploadBlocked = assignment ? submissionAvailability(assignment) : "Загружаем условия задания…";
 
@@ -58,11 +83,12 @@ export default function StudentAssignmentPage() {
         <div className="student-detail-table"><div><span>Открывается</span><strong>{assignment?.available_at ? new Date(assignment.available_at).toLocaleString("ru-RU") : "Сейчас"}</strong></div><div><span>Срок сдачи</span><strong>{due ? due.toLocaleString("ru-RU") : "Без срока"}</strong></div><div><span>Максимальный балл</span><strong>{assignment?.maximum_score ?? "—"}</strong></div><div><span>Форматы</span><strong>{formats}</strong></div></div>
         {isHandwritten && <div className="student-instructions"><strong>Работа от руки</strong><p>Загрузите многостраничный PDF со своим решением. Фиксированный бланк не требуется для отправки. Преподаватель проверит читаемость и содержание.</p></div>}
         {programming && <p>Код рассматривается статически. Запуск и автоматическая проверка выполнения недоступны.</p>}{assignment?.questions?.map((question, index) => <article className="student-problem" key={String(question.id ?? index)}><strong>{String(question.title ?? `Задача ${index + 1}`)}</strong><p>{String(question.statement ?? "")}</p></article>)}
+        {published && <PublishedResult grade={published} id="result" />}
       </main>
       <aside className="student-submit-panel"><h2>Ваша работа</h2>
-        {latest && <div className="submission-receipt"><span className="student-status status-submitted">{statusLabel(String(latest.status ?? "submitted"))}</span><p>{String(latest.file_name ?? latest.original_filename ?? latest.filename ?? "Файл отправлен")}</p><small>Отправлено {latest.submitted_at ? new Date(String(latest.submitted_at)).toLocaleString("ru-RU") : "успешно"}</small></div>}
-        {latest && processing && <p role="status">{studentProcessingMessage(processing)}</p>}
-        {latest && processingError && <p role="alert">{processingError}</p>}
+        {latest && <div className="submission-receipt"><span className={`student-status status-${published ? "graded" : "submitted"}`}>{statusLabel(published ? "graded" : String(latest.status ?? "submitted"))}</span><p>{String(latest.file_name ?? latest.original_filename ?? latest.filename ?? "Файл отправлен")}</p><small>Отправлено {latest.submitted_at ? new Date(String(latest.submitted_at)).toLocaleString("ru-RU") : "успешно"}</small>{published && <p><a className="student-course-link" href="#result">Открыть результат →</a></p>}</div>}
+        {latest && !published && processing && <p role="status">{studentProcessingMessage(processing)}</p>}
+        {latest && !published && processingError && <p role="alert">{processingError}</p>}
         {submitted && <div className="success-notice"><Check size={15} />Работа успешно отправлена. Сохраните подтверждение.</div>}
         {error && <div className="notice error-notice"><AlertTriangle size={14} />{error}</div>}
         <SubmissionGate reason={uploadBlocked}>

@@ -1313,11 +1313,7 @@ def student_assignments(request: Request) -> dict:
                     AcademicGrade.published.is_(True),
                 )
             )
-            item["published_grade"] = (
-                {"points": grade.points, "maximum_score": grade.maximum_score, "published_at": _timestamp(grade.published_at)}
-                if grade
-                else None
-            )
+            item["published_grade"] = _published_grade_view(db, grade, assignment) if grade else None
             result.append(item)
         return {"items": result}
 
@@ -1347,19 +1343,18 @@ def student_grades(request: Request) -> dict:
             enrollment = db.scalar(select(CourseEnrollment).where(CourseEnrollment.offering_id == assignment.offering_id, CourseEnrollment.student_id == student_id))
             if not enrollment_active(db, enrollment):
                 continue
-            items.append(
-                {
-                    "id": grade.id,
-                    "assignment_id": grade.assignment_id,
-                    "assignment_title": assignment.title,
-                    "submission_id": submission.id,
-                    "points": grade.points,
-                    "maximum_score": grade.maximum_score,
-                    "published_at": _timestamp(grade.published_at),
-                    **published_feedback(db, grade),
-                }
-            )
+            items.append(_published_grade_view(db, grade, assignment))
         return {"items": items}
+
+
+def _published_grade_view(db, grade, assignment):
+    return {
+        "id": grade.id, "assignment_id": grade.assignment_id,
+        "assignment_title": assignment.title, "submission_id": grade.submission_id,
+        "points": grade.points, "maximum_score": grade.maximum_score,
+        "published_at": _timestamp(grade.published_at),
+        **published_feedback(db, grade),
+    }
 
 
 async def _read_submission_file(file: UploadFile, allow_code: bool = False) -> tuple[bytes, str, str]:

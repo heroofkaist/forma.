@@ -170,8 +170,22 @@ def published_feedback(db, grade):
     review = db.get(DocumentReview, link.review_id) if link else None
     if not review:
         return {"criteria": [], "feedback": "", "rubric": []}
-    rubric = [{"id": question["id"], "title": question["title"], "criteria": [{"criterion_id": criterion["criterion_id"], "description": criterion["description"], "maximum_points": criterion["maximum_points"]} for criterion in question["criteria"]]} for question in review.rubric_snapshot]
-    return {"criteria": review.criteria, "feedback": review.feedback, "rubric": rubric}
+    # Use the immutable review snapshot, never today's assignment rubric.
+    rubric = review.rubric_snapshot or []
+    lookup = {(q.get("id"), c.get("criterion_id", c.get("id"))): c
+              for q in rubric for c in q.get("criteria", [])}
+    criteria = []
+    for index, score in enumerate(review.criteria):
+        criterion = lookup.get((score.get("question_id"), score.get("criterion_id")), {})
+        description = str(criterion.get("description") or "").strip()
+        if not description or description == score.get("criterion_id"):
+            description = f"Критерий {index + 1}"
+        criteria.append({**score, "description": description,
+                         "maximum_points": criterion.get("maximum_points")})
+    public_rubric = [{"id": q.get("id"), "title": q.get("title", ""), "criteria": [
+        {key: c.get(key) for key in ("criterion_id", "description", "maximum_points")}
+        for c in q.get("criteria", [])]} for q in rubric]
+    return {"criteria": criteria, "feedback": review.feedback, "rubric": public_rubric}
 
 
 @router.get("/teacher-overview")

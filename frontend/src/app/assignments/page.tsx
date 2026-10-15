@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, ArrowUpRight, Plus, Search, Trash2 } from "lucide-react";
 import { AppShell, StatusLabel } from "../../components/app-shell";
 import { api } from "../../lib/api";
+import { reviewPath } from "../../lib/review-navigation";
 import type { Assignment } from "../../lib/types";
 
 export default function AssignmentsPage() {
@@ -52,12 +53,12 @@ export default function AssignmentsPage() {
     {loading ? <div className="table-loading"><span className="spinner" />Загружаем задания…</div> : filtered.length > 0 ? <div className="assignment-table">
       <div className="assignment-row table-head"><span>НАЗВАНИЕ</span><span>ПРЕДМЕТ</span><span>ВОПРОСЫ</span><span>РАБОТЫ</span><span>ПРОВЕРКА</span><span>СТАТУС</span></div>
       {filtered.map((assignment) => <div className="assignment-row" key={assignment.id}>
-        <span className="assignment-title"><Link href={`/assignments/${assignment.id}/review`}><strong>{assignment.title}</strong></Link>{assignment.demo_mode && <span className="demo-tag">ДЕМО</span>}<small>{assignment.created_at ? new Date(assignment.created_at).toLocaleDateString("ru-RU") : "Локальное задание"}</small></span>
+        <span className="assignment-title"><Link href={reviewPath(assignment)}><strong>{assignment.title}</strong></Link>{assignment.demo_mode && <span className="demo-tag">ДЕМО</span>}<small>{assignment.created_at ? new Date(assignment.created_at).toLocaleDateString("ru-RU") : "Локальное задание"}</small></span>
         <span>{assignment.subject === "Physics" ? "Физика" : assignment.subject === "Mathematics" ? "Математика" : assignment.subject}</span>
         <span>{assignment.questions?.length ?? 0}</span>
         <span>{assignment.submission_count ?? 0}</span>
         <span className="review-cell">{assignment.reviewed_count ?? 0}<span className="muted"> / {assignment.submission_count ?? 0}</span></span>
-        <span className="assignment-end"><StatusLabel status={assignment.status} />{confirmDelete === assignment.id ? <span className="inline-confirm"><button disabled={deleteBusy} onClick={() => void removeAssignment(assignment.id)}>Да</button><button onClick={() => setConfirmDelete("")}>Нет</button></span> : <><button className="delete-assignment" title="Удалить задание и связанные файлы" aria-label={`Удалить ${assignment.title}`} onClick={() => setConfirmDelete(assignment.id)}><Trash2 size={13} /></button><Link className="row-open" href={`/assignments/${assignment.id}/review`} title="Открыть задание"><ArrowUpRight size={15} /></Link></>}</span>
+        <span className="assignment-end"><StatusLabel status={assignment.status} />{confirmDelete === assignment.id ? <span className="inline-confirm"><button disabled={deleteBusy} onClick={() => void removeAssignment(assignment.id)}>Да</button><button onClick={() => setConfirmDelete("")}>Нет</button></span> : <><button className="delete-assignment" title="Удалить задание и связанные файлы" aria-label={`Удалить ${assignment.title}`} onClick={() => setConfirmDelete(assignment.id)}><Trash2 size={13} /></button><Link className="row-open" href={reviewPath(assignment)} title="Открыть задание"><ArrowUpRight size={15} /></Link></>}</span>
       </div>)}
     </div> : <div className="empty-state"><div className="empty-icon"><ArrowUpRight size={18} /></div><h2>{query ? "Ничего не найдено" : "Создайте первое задание"}</h2><p>{query ? "Попробуйте изменить поисковый запрос." : "Добавьте вопросы и критерии оценивания, затем загрузите работы класса."}</p>{!query && <Link className="button primary" href="/assignments/new"><Plus size={16} />Создать задание</Link>}</div>}
     <div className="privacy-note">Доступ к работам определяется правами преподавателя. Оценки становятся доступны студенту после публикации.</div>

@@ -13,9 +13,17 @@ const labels: Record<string, string> = {
   follow_up: 'Нужна дополнительная проверка', needs_investigation: 'Нужно внимание', analyzing: 'Анализируется',
 };
 export function statusLabel(status?: string) { return labels[status ?? ''] ?? 'Статус уточняется'; }
-export function studentProcessingMessage(status: string) {
+export function studentProcessingMessage(status: string, published = false) {
+  if (published) return 'Результат опубликован';
   if (status === 'awaiting_budget') return 'Автоматический анализ временно недоступен. Работа сохранена и доступна преподавателю для проверки.';
   if (status === 'failed') return 'Работа сохранена. Преподаватель может проверить её вручную.';
+  if (status === 'completed' || status === 'needs_review') return 'AI-анализ завершён. Работа ожидает проверки преподавателя.';
+  return statusLabel(status);
+}
+export function teacherProcessingMessage(status: string, hasError = false) {
+  if (hasError || status === 'failed') return 'AI-анализ не выполнен. Можно проверить вручную.';
+  if (status === 'awaiting_budget') return 'AI-анализ приостановлен. Можно проверить вручную.';
+  if (status === 'completed' || status === 'needs_review') return 'AI-анализ готов. Доступна проверка преподавателем.';
   return statusLabel(status);
 }
 export const assignmentTypes: Record<string, string> = { problem_set:'Задачи', essay:'Эссе', lab_report:'Лабораторная работа', presentation:'Презентация', research_report:'Исследовательская работа', programming:'Программирование', general:'Документ' };

@@ -1,15 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, Download, FileText } from "lucide-react";
 import { AppShell, StatusLabel } from "../../../../components/app-shell";
 import { api, downloadAuthenticatedFile } from "../../../../lib/api";
+import { reviewPath } from "../../../../lib/review-navigation";
 import type { Answer, Assignment, Grading } from "../../../../lib/types";
 
 export default function ResultsPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
   const [assignment, setAssignment] = useState<Assignment | null>(null);
   const [answers, setAnswers] = useState<Answer[]>([]);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -17,8 +20,20 @@ export default function ResultsPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    Promise.all([api.assignment(id), api.answers(id)]).then(([task, results]) => { setAssignment(task); setAnswers(results); }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Не удалось загрузить результаты."));
-  }, [id]);
+    let active = true;
+    void (async () => {
+      try {
+        const task = await api.assignment(id);
+        if (!active) return;
+        setAssignment(task);
+        if (task.academic_assignment_id) { router.replace(reviewPath(task)); return; }
+        const results = await api.answers(id);
+        if (active) setAnswers(results);
+      } catch (cause) { if (active) setError(cause instanceof Error ? cause.message : "Не удалось загрузить результаты."); }
+      finally { if (active) setLoading(false); }
+    })();
+    return () => { active = false; };
+  }, [id, router]);
 
   const students = useMemo(() => {
     const map = new Map<string, Answer[]>();
@@ -34,6 +49,8 @@ export default function ResultsPage() {
   const completed = students.filter((student) => student.allApproved).length;
   const resultColumns = `minmax(140px,1.4fr) repeat(${assignment?.questions.length ?? 3}, minmax(90px,1fr)) minmax(78px,.8fr) minmax(110px,.9fr)`;
 
+  if (loading || assignment?.academic_assignment_id) return <AppShell><p>Открываем результаты…</p></AppShell>;
+  if (error) return <AppShell><div className="notice error-notice" role="alert">{error}</div></AppShell>;
   return <AppShell>
     <div className="review-topline"><div className="breadcrumbs-inline"><Link href="/assignments">Задания</Link><span>/</span><Link href={`/assignments/${id}/review`}>{assignment?.title ?? "Задание"}</Link><span>/</span><span>Результаты</span></div><Link className="quiet-button" href={`/assignments/${id}/review`}>К проверке</Link></div>
     <section className="page-heading compact-heading"><div><div className="eyebrow">РЕЗУЛЬТАТЫ · {assignment?.subject === "Physics" ? "ФИЗИКА" : "МАТЕМАТИКА"}</div><h1>{assignment?.title ?? "Результаты"}</h1><p className="heading-subtitle">{completed} из {students.length} работ полностью утверждены. Неутверждённые предложения ИИ не включаются в итоговый балл.</p></div><button className="button primary" onClick={() => void downloadAuthenticatedFile(api.exportPath(id), `${id}-results.csv`).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Не удалось скачать экспорт."))}><Download size={15} />Экспорт CSV</button></section>

@@ -71,3 +71,94 @@ def test_review_counter_counts_complete_distinct_submissions_not_answers(platfor
         assert result['reviewed_count']==result['submission_count']==1
         assert result['answer_count']==2
         assert answers[0].anonymous_student_id=='Student 01'
+
+
+def test_academic_review_routes_share_submission_identity_and_count(platform, monkeypatch):
+    client, factory, teacher, student, sid, _, assignment, _ = setup_submission(platform, monkeypatch)
+    legacy_id = assignment['legacy_assignment_id']
+    for _ in range(2):  # Direct entry and refresh resolve the same canonical assignment.
+        legacy = client.get('/assignments/' + legacy_id, headers=teacher).json()
+        course = client.get('/academic/offerings/' + assignment['offering_id'], headers=teacher).json()
+        item = next(a for a in course['assignments'] if a['id'] == legacy['academic_assignment_id'])
+        submissions = client.get('/api/assignment-submissions/' + item['id'], headers=teacher).json()
+        assert legacy['academic_assignment_id'] == assignment['id']
+        assert legacy['submission_count'] == item['submission_count'] == len(submissions['items']) == 1
+        assert submissions['items'][0]['id'] == sid
+    assert client.get('/assignments/' + legacy_id, headers=student).status_code == 403
+    from test_accounts_courses import identity
+    outsider = identity(client, platform[2], 'outside-audit@example.com')
+    assert client.get('/assignments/' + legacy_id, headers=outsider).status_code == 403
+    assert client.get('/api/assignment-submissions/' + assignment['id'], headers=outsider).status_code == 403
+    with factory() as db:
+        standalone = Assignment(title='Separate scan workflow', questions=[])
+        db.add(standalone); db.flush()
+        from assignment_api import _assignment_json
+        assert _assignment_json(db, standalone)['academic_assignment_id'] is None
+
+
+def test_published_result_is_shared_and_uses_historical_rubric_despite_failed_ai(platform, monkeypatch):
+    client, factory, teacher, student, sid, _, assignment, _ = setup_submission(platform, monkeypatch)
+    from document_models import DocumentReview
+    path = '/api/document-review/' + sid
+    scores = [{'question_id': q['id'], 'criterion_id': c['criterion_id'], 'points': 0,
+               'comment': 'Human feedback'} for q in assignment['questions'] for c in q['criteria']]
+    saved = client.post(path, headers=teacher, json={'criteria': scores, 'feedback': 'Published human feedback'})
+    assert saved.status_code == 201
+    assert client.get('/academic/student/grades', headers=student).json()['items'] == []
+    assert client.post(path + '/publish', headers=teacher, json={'review_id': saved.json()['id']}).status_code == 200
+    with factory() as db:
+        # Simulate an existing failed analysis. No inference is requested.
+        from processing_models import ProcessingJob
+        job = ProcessingJob(submission_id=sid, requested_by='Synthetic teacher', input_hash='audit-failed',
+            content_hash='synthetic', model='not-invoked', prompt_version='synthetic', context={},
+            status='failed', error='Private upstream failure')
+        db.add(job)
+        current = db.get(AcademicAssignment, assignment['id'])
+        changed = __import__('copy').deepcopy(current.questions)
+        changed[0]['criteria'][0]['description'] = 'Changed after publication'
+        changed[0]['criteria'][0]['maximum_points'] = 1
+        current.questions = changed
+        db.commit()
+        frozen = db.get(DocumentReview, saved.json()['id']).rubric_snapshot
+    draft_scores = [{**score, 'points': None, 'comment': 'Unpublished draft'} for score in scores]
+    assert client.post(path, headers=teacher, json={'criteria': draft_scores, 'draft': True,
+        'feedback': 'Unpublished feedback'}).status_code == 201
+    legacy = client.get('/assignments/' + assignment['legacy_assignment_id'], headers=teacher).json()
+    assert legacy['reviewed_count'] == 1  # A working draft does not erase confirmed history.
+    grades = client.get('/academic/student/grades', headers=student).json()['items']
+    assignments = client.get('/academic/student/assignments', headers=student).json()['items']
+    result = next(a for a in assignments if a['id'] == assignment['id'])['published_grade']
+    assert result == grades[0]
+    assert result['points'] == 0 and result['maximum_score'] == 10
+    assert result['feedback'] == 'Published human feedback'
+    assert result['criteria'][0]['description'] == frozen[0]['criteria'][0]['description']
+    assert result['criteria'][0]['maximum_points'] == frozen[0]['criteria'][0]['maximum_points']
+    assert 'Changed after publication' not in str(result) and 'Private upstream' not in str(result)
+    # Another student's account cannot read this published result.
+    from test_accounts_courses import identity
+    outsider = identity(client, platform[2], 'other-student-audit@example.com')
+    assert client.get('/academic/student/grades', headers=outsider).json()['items'] == []
+    with factory() as db:
+        from persistence import AcademicGrade
+        db.scalar(select(AcademicGrade)).published = False
+        db.commit()
+    assert client.get('/academic/student/grades', headers=student).json()['items'] == []
+    assert next(a for a in client.get('/academic/student/assignments', headers=student).json()['items']
+                if a['id'] == assignment['id'])['published_grade'] is None
+
+
+def test_historical_feedback_without_criterion_description_gets_neutral_label(platform, monkeypatch):
+    client, factory, teacher, student, sid, _, assignment, _ = setup_submission(platform, monkeypatch)
+    from document_models import DocumentReview, PublishedDocumentReview
+    from persistence import AcademicGrade
+    with factory() as db:
+        review = DocumentReview(submission_id=sid, reviewer='Synthetic teacher', rubric_snapshot=[],
+            criteria=[{'question_id': 'q1', 'criterion_id': 'q1-overall', 'points': 0, 'comment': 'Historical'}])
+        db.add(review); db.flush()
+        grade = AcademicGrade(assignment_id=assignment['id'], submission_id=sid, points=0, maximum_score=10, published=True)
+        db.add(grade); db.flush()
+        db.add(PublishedDocumentReview(grade_id=grade.id, review_id=review.id)); db.commit()
+    result = client.get('/academic/student/grades', headers=student).json()['items'][0]
+    assert result['criteria'][0]['description'] == 'Критерий 1'
+    assert result['criteria'][0]['maximum_points'] is None
+    assert result['criteria'][0]['comment'] == 'Historical'

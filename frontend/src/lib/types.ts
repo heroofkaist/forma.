@@ -24,6 +24,7 @@ export type Question = {
 
 export type Assignment = {
   id: string;
+  academic_assignment_id?: string | null;
   title: string;
   subject: Subject;
   status: string;

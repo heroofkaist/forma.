@@ -1,19 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import katex from "katex";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowLeft, ArrowRight, Check, ChevronDown, ChevronUp, Download, ExternalLink, LoaderCircle, RotateCcw, Save, Sparkles } from "lucide-react";
 import { AppShell, StatusLabel } from "../../../../components/app-shell";
 import { ProtectedFileLink, ProtectedImage } from "../../../../components/protected-resource";
 import { api } from "../../../../lib/api";
+import { reviewPath } from "../../../../lib/review-navigation";
 import type { Answer, Assignment, CriterionResult, Grading } from "../../../../lib/types";
 
 type Filter = "all" | "needs_attention";
 
 export default function ReviewWorkspace() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const [assignment, setAssignment] = useState<Assignment | null>(null);
   const [answers, setAnswers] = useState<Answer[]>([]);
   const [batchProgress, setBatchProgress] = useState<{ total: number; completed?: number; failed?: number; progress?: number; status?: string } | null>(null);
@@ -31,8 +33,10 @@ export default function ReviewWorkspace() {
 
   const load = useCallback(async () => {
     try {
-      const [task, list, batch] = await Promise.all([api.assignment(id), api.answers(id), api.progress(id)]);
+      const task = await api.assignment(id);
       setAssignment(task);
+      if (task.academic_assignment_id) { router.replace(reviewPath(task)); return; }
+      const [list, batch] = await Promise.all([api.answers(id), api.progress(id)]);
       setAnswers(list);
       setBatchProgress(batch);
       const requestedStudent = new URLSearchParams(window.location.search).get("student");
@@ -44,7 +48,7 @@ export default function ReviewWorkspace() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, router]);
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
@@ -185,7 +189,8 @@ export default function ReviewWorkspace() {
     }
   }
 
-  if (loading) return <AppShell><div className="table-loading"><span className="spinner" />Открываем проверку…</div></AppShell>;
+  if (loading || assignment?.academic_assignment_id) return <AppShell><div className="table-loading"><span className="spinner" />Открываем проверку…</div></AppShell>;
+  if (error && !answers.length) return <AppShell><div className="notice error-notice" role="alert">{error}</div></AppShell>;
   return <AppShell>
     <div className="review-topline">
       <div className="breadcrumbs-inline"><Link href="/assignments">Задания</Link><span>/</span><span>{assignment?.title}</span><span>/</span><span>Проверка</span></div>

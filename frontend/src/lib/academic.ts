@@ -1,5 +1,6 @@
 import { requestError } from "./presentation";
 import { API_URL, authenticatedFetch } from "./api";
+import type { PublishedGrade } from "./published-result";
 
 export type Offering = {
   id: string;
@@ -51,6 +52,7 @@ export type AcademicAssignment = {
   submission_status?: string;
   grade?: number | null;
   published_at?: string | null;
+  published_grade?: PublishedGrade | null;
   questions?: Array<Record<string, unknown>>;
   original_assignment_id?: string | null;
   reused_from?: string | null;
@@ -276,7 +278,7 @@ export const academicApi = {
     return request<Record<string, unknown>>(`/academic/assignments/${assignmentId}/submissions`, { method: "POST", body: data });
   },
   studentGrades: async () =>
-    unwrap(await request<{ items?: Record<string, unknown>[] } | Record<string, unknown>[]>("/academic/student/grades")),
+    unwrap(await request<{ items?: PublishedGrade[] } | PublishedGrade[]>("/academic/student/grades")),
   createOffering: (payload: Record<string, unknown>) => request<Offering>("/academic/offerings", json(payload)),
   createAssignment: (payload: Record<string, unknown>) => request<AcademicAssignment>("/academic/assignments", json(payload)),
   reuseAssignment: (assignmentId: string, payload: Record<string, unknown>) =>
