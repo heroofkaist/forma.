@@ -1,5 +1,6 @@
 """Teacher document review with immutable versions and explicit publication."""
 from fastapi import APIRouter, HTTPException, Request
+import pymupdf
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
@@ -16,17 +17,19 @@ class CriterionScore(BaseModel):
     model_config = ConfigDict(extra="forbid")
     question_id: str = Field(min_length=1, max_length=80)
     criterion_id: str = Field(min_length=1, max_length=80)
-    points: float = Field(ge=0, le=10000, allow_inf_nan=False)
+    points: float | None = Field(ge=0, le=10000, allow_inf_nan=False)
     comment: str = Field(default="", max_length=4000)
 
 class ReviewPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
     criteria: list[CriterionScore] = Field(min_length=1, max_length=1000)
     feedback: str = Field(default="", max_length=10000)
+    draft: bool = False
 
 class PublishPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
     review_id: str = Field(min_length=1, max_length=36)
+    expected_published_review_id: str | None = Field(default=None, max_length=36)
 
 
 def get_submission(db, submission_id, request, teacher=False):
@@ -77,7 +80,31 @@ def get_review(submission_id: str, request: Request):
         document = db.get(SubmissionDocument, submission_id)
         reviews = db.scalars(select(DocumentReview).where(DocumentReview.submission_id == submission_id).order_by(DocumentReview.created_at.desc())).all()
         grade = db.scalar(select(AcademicGrade).where(AcademicGrade.submission_id == submission_id, AcademicGrade.published.is_(True)))
-        return {"submission_id": submission_id, "assignment_id": assignment.id, "title": assignment.title, "student_name": submission.student_name, "file_name": submission.file_name, "file_type": submission.file_type, "maximum_score": assignment.maximum_score, "questions": assignment.questions, "structure": document.structure if document else None, "reviews": [review_json(review) for review in reviews], "published_grade": {"points": grade.points, "published_at": utc(grade.published_at) if grade.published_at else None} if grade else None}
+        published = db.get(PublishedDocumentReview, grade.id) if grade else None
+        return {"submission_id": submission_id, "assignment_id": assignment.id, "title": assignment.title, "assignment_type": assignment.assignment_type, "instructions": assignment.description, "submitted_at": utc(submission.created_at), "student_name": submission.student_name, "file_name": submission.file_name, "file_type": submission.file_type, "maximum_score": assignment.maximum_score, "questions": assignment.questions, "structure": document.structure if document else None, "reviews": [review_json(review) for review in reviews], "published_grade": {"points": grade.points, "review_id": published.review_id if published else None, "published_at": utc(grade.published_at) if grade.published_at else None} if grade else None}
+
+
+@router.get('/document-review/{submission_id}/pages/{page_number}')
+def preview_page(submission_id: str, page_number: int, request: Request):
+    """Single bounded raster page: private, inert and independent of AI processing."""
+    with SessionLocal() as db:
+        submission, _ = get_submission(db, submission_id, request, teacher=True)
+        if submission.file_type != 'pdf': raise HTTPException(415, 'PDF preview only.')
+        try: content = read_blob(submission.file_path)
+        except FileNotFoundError as error: raise HTTPException(404, 'Original document unavailable.') from error
+    if len(content) > 30 * 1024 * 1024: raise HTTPException(413, 'PDF exceeds preview limits.')
+    try:
+        with pymupdf.open(stream=content, filetype='pdf') as document:
+            if document.needs_pass or not 1 <= document.page_count <= 50:
+                raise HTTPException(422, 'PDF is unavailable for preview.')
+            if not 1 <= page_number <= document.page_count: raise HTTPException(404, 'Page not found.')
+            page = document[page_number - 1]
+            longest = max(page.rect.width, page.rect.height)
+            if longest <= 0: raise HTTPException(422, 'Invalid PDF dimensions.')
+            png = page.get_pixmap(matrix=pymupdf.Matrix(1600 / longest, 1600 / longest), alpha=False).tobytes('png')
+    except (pymupdf.FileDataError, RuntimeError, ValueError) as error:
+        raise HTTPException(422, 'PDF is unavailable for preview.') from error
+    return Response(png, media_type='image/png', headers={'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff'})
 
 
 @router.post("/document-review/{submission_id}", status_code=201)
@@ -88,9 +115,11 @@ def save_review(submission_id: str, payload: ReviewPayload, request: Request):
         keys = [(criterion.question_id, criterion.criterion_id) for criterion in payload.criteria]
         if len(keys) != len(set(keys)) or set(keys) != set(maximums):
             raise HTTPException(422, "Every rubric criterion must be scored exactly once.")
-        if any(score.points > maximums[(score.question_id, score.criterion_id)] for score in payload.criteria) or sum(score.points for score in payload.criteria) > assignment.maximum_score:
+        if not payload.draft and any(score.points is None for score in payload.criteria):
+            raise HTTPException(422, 'Every criterion needs a teacher score before confirmation.')
+        if any(score.points is not None and score.points > maximums[(score.question_id, score.criterion_id)] for score in payload.criteria) or sum(score.points or 0 for score in payload.criteria) > assignment.maximum_score:
             raise HTTPException(422, "Scores exceed rubric or assignment bounds.")
-        review = DocumentReview(submission_id=submission_id, reviewer=request_user(request).username, criteria=[score.model_dump() for score in payload.criteria], rubric_snapshot=assignment.questions, feedback=payload.feedback)
+        review = DocumentReview(submission_id=submission_id, reviewer=request_user(request).username, criteria=[dict(score.model_dump(), confirmed=not payload.draft) for score in payload.criteria], rubric_snapshot=assignment.questions, feedback=payload.feedback)
         db.add(review); db.commit()
         return review_json(review)
 
@@ -108,10 +137,19 @@ def publish_review(submission_id: str, payload: PublishPayload, request: Request
         review = db.get(DocumentReview, payload.review_id)
         if not review or review.submission_id != submission_id:
             raise HTTPException(404, "Review does not belong to this submission.")
+        expected = {(q['id'], c['criterion_id']): c['maximum_points'] for q in assignment.questions for c in q['criteria']}
+        keys = [(c['question_id'], c['criterion_id']) for c in review.criteria]
+        if (len(set(keys)) != len(keys) or set(keys) != set(expected) or
+            any(c.get('confirmed') is False or c['points'] is None or c['points'] < 0 or c['points'] > expected[(c['question_id'], c['criterion_id'])] for c in review.criteria)):
+            raise HTTPException(409, 'Complete the current rubric before publishing this review.')
         points = sum(score["points"] for score in review.criteria)
         if points > assignment.maximum_score:
             raise HTTPException(409, "Assignment scoring has changed; create a new review.")
         grade = db.scalar(select(AcademicGrade).where(AcademicGrade.submission_id == submission_id))
+        existing_link = db.get(PublishedDocumentReview, grade.id) if grade else None
+        if ('expected_published_review_id' in payload.model_fields_set and
+                payload.expected_published_review_id != (existing_link.review_id if existing_link else None)):
+            raise HTTPException(409, 'The published review changed. Refresh and review it before publishing again.')
         if not grade:
             grade = AcademicGrade(assignment_id=assignment.id, submission_id=submission_id, points=points, maximum_score=assignment.maximum_score)
             db.add(grade); db.flush()

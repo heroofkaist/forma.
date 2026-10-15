@@ -1,0 +1,520 @@
+{
+  "synthetic_only": true,
+  "paid_calls": false,
+  "cases": [
+    {
+      "name": "math-correct",
+      "category": "problem_set",
+      "expected": "Correct law, numerical result and unit. No mathematical concern justified.",
+      "expected_finding": "strength",
+      "submission_id": "248bf4e8-9856-4dc9-93f0-1480e90a1452",
+      "understanding_seconds": 9.674,
+      "request_status": 202,
+      "assessment_seconds": 8.056,
+      "assessment": {
+        "items": [
+          {
+            "id": "fbf63325-b782-4d6b-afe4-1e662a4638b2",
+            "job_id": "23ce961d-6d96-45e2-a402-70ece88b62af",
+            "result": {
+              "criteria": [
+                {
+                  "question_id": "q1",
+                  "criterion_id": "reasoning",
+                  "proposed_score": 5.0,
+                  "rationale": "The source correctly applies Newton's second law (F = ma), substitutes the given values (m = 2 kg, F = 6 N), performs the division (6 / 2 = 3), and reports the result with the correct SI unit (m/s^2). All required elements are present and accurate.",
+                  "evidence": [
+                    {
+                      "section_id": "p1-s1",
+                      "page_number": 1,
+                      "quote": "F = ma\nm = 2 kg, F = 6 N\na = F / m = 6 / 2 = 3 m/s^2"
+                    }
+                  ],
+                  "interpretation": "The reasoning is fully aligned with the assignment instructions: law stated, substitution shown, result computed, and unit included.",
+                  "finding": "strength",
+                  "suggested_improvement": "None required; submission meets all criteria perfectly.",
+                  "missing_evidence": [],
+                  "uncertainty": [],
+                  "verification_status": "needs_review"
+                }
+              ]
+            },
+            "rubric": {
+              "id": "0bc19f44-42b2-4df6-b34e-c12be66e1952",
+              "spec": {
+                "category": "problem_set",
+                "instructions": "For a 2 kg body under a net force of 6 N, calculate acceleration. Show the law, substitution, result and SI unit.\nWhole submission: For a 2 kg body under a net force of 6 N, calculate acceleration. Show the law, substitution, result and SI unit.",
+                "reference_material": "",
+                "criteria": [
+                  {
+                    "question_id": "q1",
+                    "criterion_id": "reasoning",
+                    "description": "Apply F = ma, substitute values correctly and report acceleration with SI units.",
+                    "maximum_points": 5.0,
+                    "performance_descriptions": "5: correct law, substitution, 3 m/s^2 and units; 2: correct law but incorrect calculation; 0: no relevant work.",
+                    "feedback_requirements": "",
+                    "weight": null,
+                    "insight_tag": "reasoning"
+                  }
+                ]
+              },
+              "approved_by": "local-teacher@example.test",
+              "created_at": "2026-10-15T04:07:32.425508+00:00"
+            },
+            "interpretation_id": "50a940a5-339c-40eb-8e42-9cf0854d63d6",
+            "correction_id": null,
+            "source": {
+              "sections": [
+                {
+                  "id": "p1-s1",
+                  "page_number": 1,
+                  "kind": "equation",
+                  "transcription": "Newton second law\nF = ma\nm = 2 kg, F = 6 N\na = F / m = 6 / 2 = 3 m/s^2",
+                  "readability": "readable",
+                  "evidence_kind": "visual_page"
+                }
+              ]
+            },
+            "decisions": []
+          }
+        ],
+        "jobs": [
+          {
+            "id": "23ce961d-6d96-45e2-a402-70ece88b62af",
+            "status": "needs_review",
+            "error": ""
+          }
+        ],
+        "supported": true
+      },
+      "finding_matches_expected": true,
+      "strict_validation_passed": true,
+      "teacher_override": {
+        "id": "b2756f3b-ecc4-4300-8e75-8bee2b8a3031",
+        "review_id": "3ef7c5ed-4e16-46af-b199-ca1134192d6b",
+        "published": false
+      },
+      "grade_rows": 0
+    },
+    {
+      "name": "math-incorrect",
+      "category": "problem_set",
+      "expected": "Incorrect rearrangement a=F*m; expected a=F/m=3 m/s^2. Law alone earns partial credit.",
+      "expected_finding": "concern",
+      "submission_id": "2e1ecbd4-8b37-4439-841b-2b5bc774f135",
+      "understanding_seconds": 9.353,
+      "request_status": 202,
+      "assessment_seconds": 10.542,
+      "assessment": {
+        "items": [
+          {
+            "id": "0999b055-7fdd-42e3-b095-a5d5ddfbbaa8",
+            "job_id": "4176616c-8f66-4445-be3c-c686e9be5c73",
+            "result": {
+              "criteria": [
+                {
+                  "question_id": "q1",
+                  "criterion_id": "reasoning",
+                  "proposed_score": null,
+                  "rationale": "The source text correctly states Newton's second law (F = ma) and substitutes the given values (m = 2 kg, F = 6 N). However, the calculation is incorrect: it computes a = 6 * 2 = 12 m/s^2, which violates the law since acceleration should be F/m = 6/2 = 3 m/s^2. The error is in the algebraic substitution — the formula is misapplied as multiplication instead of division. The SI unit is correctly stated as m/s^2, but the numerical result is wrong.",
+                  "evidence": [
+                    {
+                      "section_id": "p1-s1",
+                      "page_number": 1,
+                      "quote": "a = F * m = 6 * 2 = 12 m/s^2"
+                    }
+                  ],
+                  "interpretation": "The student applied the law correctly in form but made a conceptual error in the operation — using multiplication instead of division — which is a fundamental misunderstanding of Newton’s second law.",
+                  "finding": "concern",
+                  "suggested_improvement": "Correct the calculation to a = F/m = 6 N / 2 kg = 3 m/s^2. Emphasize that acceleration is force divided by mass, not force multiplied by mass. Double-check units and operations for consistency with the law.",
+                  "missing_evidence": [],
+                  "uncertainty": [],
+                  "verification_status": "needs_review"
+                }
+              ]
+            },
+            "rubric": {
+              "id": "c26740c8-68b7-4232-9574-5880daba8ad7",
+              "spec": {
+                "category": "problem_set",
+                "instructions": "For a 2 kg body under a net force of 6 N, calculate acceleration. Show the law, substitution, result and SI unit.\nWhole submission: For a 2 kg body under a net force of 6 N, calculate acceleration. Show the law, substitution, result and SI unit.",
+                "reference_material": "",
+                "criteria": [
+                  {
+                    "question_id": "q1",
+                    "criterion_id": "reasoning",
+                    "description": "Apply F = ma, substitute values correctly and report acceleration with SI units.",
+                    "maximum_points": 5.0,
+                    "performance_descriptions": "5: correct law, substitution, 3 m/s^2 and units; 2: correct law but incorrect calculation; 0: no relevant work.",
+                    "feedback_requirements": "",
+                    "weight": null,
+                    "insight_tag": "reasoning"
+                  }
+                ]
+              },
+              "approved_by": "local-teacher@example.test",
+              "created_at": "2026-10-15T04:07:49.899204+00:00"
+            },
+            "interpretation_id": "3b2bb6e2-e04c-450c-8bcb-5341c2f9bd49",
+            "correction_id": null,
+            "source": {
+              "sections": [
+                {
+                  "id": "p1-s1",
+                  "page_number": 1,
+                  "kind": "equation",
+                  "transcription": "Newton second law\nF = ma\nm = 2 kg, F = 6 N\na = F * m = 6 * 2 = 12 m/s^2",
+                  "readability": "readable",
+                  "evidence_kind": "visual_page"
+                }
+              ]
+            },
+            "decisions": []
+          }
+        ],
+        "jobs": [
+          {
+            "id": "4176616c-8f66-4445-be3c-c686e9be5c73",
+            "status": "needs_review",
+            "error": ""
+          }
+        ],
+        "supported": true
+      },
+      "finding_matches_expected": true,
+      "strict_validation_passed": true,
+      "teacher_override": {
+        "id": "aa161918-734f-47b1-a970-7f38e5e07cd5",
+        "review_id": "345fc5ae-e49c-4875-8d42-5126a4f05b57",
+        "published": false
+      },
+      "grade_rows": 0
+    },
+    {
+      "name": "essay-strong",
+      "category": "essay",
+      "expected": "Clear thesis, two reasons, counterargument and conclusion. Do not invent a citation requirement.",
+      "expected_finding": "strength",
+      "submission_id": "bf7c4bc2-798d-4aa3-a745-dd5d76f20397",
+      "understanding_seconds": 10.089,
+      "request_status": 202,
+      "assessment_seconds": 11.161,
+      "assessment": {
+        "items": [
+          {
+            "id": "e80ea6da-ccb0-4b4e-b7ca-87f2371dac92",
+            "job_id": "13d02db6-de84-48b2-a742-7f12b74c5128",
+            "result": {
+              "criteria": [
+                {
+                  "question_id": "q1",
+                  "criterion_id": "reasoning",
+                  "proposed_score": 5.0,
+                  "rationale": "The submission fully satisfies the rubric's requirement: it presents a clear thesis ('School libraries should stay open two evenings each week'), two supporting reasons (quiet study space for students with noisy homes, and access to computers for students sharing devices), a counterargument response ('Staffing costs are a reasonable objection...'), and a coherent conclusion ('A limited extension therefore improves access while controlling expense').",
+                  "evidence": [
+                    {
+                      "section_id": "p1-s1",
+                      "page_number": 1,
+                      "quote": "School libraries should stay open two evenings each week."
+                    },
+                    {
+                      "section_id": "p1-s1",
+                      "page_number": 1,
+                      "quote": "First, students with noisy homes need a quiet study space."
+                    },
+                    {
+                      "section_id": "p1-s1",
+                      "page_number": 1,
+                      "quote": "Second, students who share devices can use library computers after lessons."
+                    },
+                    {
+                      "section_id": "p1-s1",
+                      "page_number": 1,
+                      "quote": "Staffing costs are a reasonable objection. A two-evening pilot with a fixed budget would limit\nthat cost."
+                    },
+                    {
+                      "section_id": "p1-s1",
+                      "page_number": 1,
+                      "quote": "A limited extension therefore improves access while controlling expense."
+                    }
+                  ],
+                  "interpretation": "The argument is logically structured and directly addresses all required components of the prompt.",
+                  "finding": "strength",
+                  "suggested_improvement": "None required; the argument is complete and well-structured per the rubric.",
+                  "missing_evidence": [],
+                  "uncertainty": [],
+                  "verification_status": "needs_review"
+                }
+              ]
+            },
+            "rubric": {
+              "id": "78667577-4248-47ff-90aa-99a899b93d6c",
+              "spec": {
+                "category": "essay",
+                "instructions": "Write a short argument about whether a school library should extend evening hours. State a thesis, give two reasons, address a counterargument and conclude. No outside sources are required.\nWhole submission: Write a short argument about whether a school library should extend evening hours. State a thesis, give two reasons, address a counterargument and conclude. No outside sources are required.",
+                "reference_material": "",
+                "criteria": [
+                  {
+                    "question_id": "q1",
+                    "criterion_id": "reasoning",
+                    "description": "Present a clear thesis, two relevant supporting reasons, a counterargument response and a coherent conclusion.",
+                    "maximum_points": 5.0,
+                    "performance_descriptions": "5: thesis, two reasons, counterargument and conclusion; 2: opinion with limited support; 0: no argument.",
+                    "feedback_requirements": "",
+                    "weight": null,
+                    "insight_tag": "reasoning"
+                  }
+                ]
+              },
+              "approved_by": "local-teacher@example.test",
+              "created_at": "2026-10-15T04:08:10.573947+00:00"
+            },
+            "interpretation_id": "5ff95e06-8c54-4149-af30-8a6c5eba96f9",
+            "correction_id": null,
+            "source": {
+              "sections": [
+                {
+                  "id": "p1-s1",
+                  "page_number": 1,
+                  "kind": "paragraph",
+                  "transcription": "School libraries should stay open two evenings each week.\nFirst, students with noisy homes need a quiet study space.\nSecond, students who share devices can use library computers after lessons.\nStaffing costs are a reasonable objection. A two-evening pilot with a fixed budget would limit\nthat cost.\nA limited extension therefore improves access while controlling expense.\n",
+                  "readability": "readable",
+                  "evidence_kind": "visual_page"
+                }
+              ]
+            },
+            "decisions": []
+          }
+        ],
+        "jobs": [
+          {
+            "id": "13d02db6-de84-48b2-a742-7f12b74c5128",
+            "status": "needs_review",
+            "error": ""
+          }
+        ],
+        "supported": true
+      },
+      "finding_matches_expected": true,
+      "strict_validation_passed": true,
+      "teacher_override": {
+        "id": "5328fab8-a45f-433d-8322-c052a1d34797",
+        "review_id": "d4eb9c00-2f3e-4550-ad69-3c164d248b11",
+        "published": false
+      },
+      "grade_rows": 0
+    },
+    {
+      "name": "essay-weak",
+      "category": "essay",
+      "expected": "Circular support and unsupported generalization; no two developed reasons or counterargument. No citation penalty.",
+      "expected_finding": "concern",
+      "submission_id": "e66e4ac9-b3e1-4f5d-b263-73d1e3f32b27",
+      "understanding_seconds": 6.152,
+      "request_status": 202,
+      "assessment_seconds": 11.489,
+      "assessment": {
+        "items": [
+          {
+            "id": "81c486be-7aee-4732-bf97-35b6482fe417",
+            "job_id": "837e1ba2-8c8a-469c-8897-27edb7c91b7f",
+            "result": {
+              "criteria": [
+                {
+                  "question_id": "q1",
+                  "criterion_id": "reasoning",
+                  "proposed_score": null,
+                  "rationale": "The submission fails to meet the rubric's requirement for a clear thesis, two supporting reasons, a counterargument, and a coherent conclusion. Instead, it contains a vague assertion ('libraries are good') and dismisses disagreement without addressing a counterargument or providing structured reasoning. The text lacks any evidence of logical structure or argumentative development.",
+                  "evidence": [
+                    {
+                      "section_id": "p1-s1",
+                      "page_number": 1,
+                      "quote": "Libraries should stay open because libraries are good.\nEveryone knows it. Anyone who disagrees is wrong.\nThis proves the point."
+                    }
+                  ],
+                  "interpretation": "The text does not present a thesis that clearly argues for or against extending library hours. It does not provide two reasons, address a counterargument, or conclude with a summary. The content is superficial and lacks argumentative structure.",
+                  "finding": "insufficient_evidence",
+                  "suggested_improvement": "To meet the rubric, the student should write a clear thesis statement (e.g., 'School libraries should extend evening hours to support student learning and provide safe spaces after school'), provide two specific reasons (e.g., increased access to study materials and reduced risk of unsafe environments), address a counterargument (e.g., 'Some may argue that extended hours increase maintenance costs, but the educational benefits outweigh these costs'), and conclude with a summary that reinforces the thesis.",
+                  "missing_evidence": [
+                    "No evidence of a structured argument with thesis, two reasons, counterargument, or conclusion."
+                  ],
+                  "uncertainty": [
+                    "The text is too brief and lacks any argumentative structure."
+                  ],
+                  "verification_status": "needs_review"
+                }
+              ]
+            },
+            "rubric": {
+              "id": "0bcad324-8793-45ab-b33d-b521c9b9f402",
+              "spec": {
+                "category": "essay",
+                "instructions": "Write a short argument about whether a school library should extend evening hours. State a thesis, give two reasons, address a counterargument and conclude. No outside sources are required.\nWhole submission: Write a short argument about whether a school library should extend evening hours. State a thesis, give two reasons, address a counterargument and conclude. No outside sources are required.",
+                "reference_material": "",
+                "criteria": [
+                  {
+                    "question_id": "q1",
+                    "criterion_id": "reasoning",
+                    "description": "Present a clear thesis, two relevant supporting reasons, a counterargument response and a coherent conclusion.",
+                    "maximum_points": 5.0,
+                    "performance_descriptions": "5: thesis, two reasons, counterargument and conclusion; 2: opinion with limited support; 0: no argument.",
+                    "feedback_requirements": "",
+                    "weight": null,
+                    "insight_tag": "reasoning"
+                  }
+                ]
+              },
+              "approved_by": "local-teacher@example.test",
+              "created_at": "2026-10-15T04:08:27.926485+00:00"
+            },
+            "interpretation_id": "02295a46-618e-4e89-a0ea-2216c4a1524c",
+            "correction_id": null,
+            "source": {
+              "sections": [
+                {
+                  "id": "p1-s1",
+                  "page_number": 1,
+                  "kind": "paragraph",
+                  "transcription": "Libraries should stay open because libraries are good.\nEveryone knows it. Anyone who disagrees is wrong.\nThis proves the point.",
+                  "readability": "readable",
+                  "evidence_kind": "visual_page"
+                }
+              ]
+            },
+            "decisions": []
+          }
+        ],
+        "jobs": [
+          {
+            "id": "837e1ba2-8c8a-469c-8897-27edb7c91b7f",
+            "status": "needs_review",
+            "error": ""
+          }
+        ],
+        "supported": true
+      },
+      "finding_matches_expected": false,
+      "strict_validation_passed": true,
+      "teacher_override": {
+        "id": "52089759-4392-42fe-a16c-63b14a893ad5",
+        "review_id": "97d1be8e-f1f6-4c46-8b43-0eccbd239151",
+        "published": false
+      },
+      "grade_rows": 0
+    },
+    {
+      "name": "lab-uncertainty",
+      "category": "lab_report",
+      "expected": "Repeats do not remove shared systematic calibration uncertainty; zero uncertainty is unjustified.",
+      "expected_finding": "concern",
+      "submission_id": "00bf7b09-8e38-4d0c-a17b-18e024772d99",
+      "understanding_seconds": 8.795,
+      "request_status": 202,
+      "assessment_seconds": 10.274,
+      "assessment": {
+        "items": [
+          {
+            "id": "d3f933b1-eb8f-4c3e-8112-7cf9bd73ca75",
+            "job_id": "0ca2ea0d-4349-45bd-a0e4-32ae4485d3f9",
+            "result": {
+              "criteria": [
+                {
+                  "question_id": "q1",
+                  "criterion_id": "reasoning",
+                  "proposed_score": null,
+                  "rationale": "The student incorrectly claims that repeating measurements cancels calibration uncertainty. Calibration uncertainty is systematic and does not disappear with repeated measurements. The student conflates random variation (which can be reduced by averaging) with systematic error (which remains unchanged). The conclusion that 'final uncertainty is zero' is fundamentally flawed.",
+                  "evidence": [
+                    {
+                      "section_id": "p1-s1",
+                      "page_number": 1,
+                      "quote": "Repeating three times cancels all calibration uncertainty, so the final uncertainty is zero."
+                    }
+                  ],
+                  "interpretation": "The student misunderstands the nature of systematic uncertainty. Calibration uncertainty is inherent to the instrument and does not reduce with repeated measurements. The student correctly identifies random variation (by averaging) but erroneously applies it to systematic error.",
+                  "finding": "concern",
+                  "suggested_improvement": "Clarify that systematic uncertainty (e.g., calibration error) remains unchanged regardless of measurement repetitions. Random uncertainty can be reduced by averaging, but systematic uncertainty must be addressed by calibrating the instrument or using a better one. The final uncertainty should reflect the systematic uncertainty (±0.1 cm) and not be zero.",
+                  "missing_evidence": [],
+                  "uncertainty": [],
+                  "verification_status": "needs_review"
+                }
+              ]
+            },
+            "rubric": {
+              "id": "4b0effb8-5d77-42b7-bdba-b06de5f9524b",
+              "spec": {
+                "category": "lab_report",
+                "instructions": "Report three independent length measurements, compute their mean, and discuss whether repeating measurements removes instrument calibration uncertainty. Separate random variation from systematic uncertainty.\nWhole submission: Report three independent length measurements, compute their mean, and discuss whether repeating measurements removes instrument calibration uncertainty. Separate random variation from systematic uncertainty.",
+                "reference_material": "",
+                "criteria": [
+                  {
+                    "question_id": "q1",
+                    "criterion_id": "reasoning",
+                    "description": "Distinguish random variation and systematic calibration uncertainty and justify the uncertainty conclusion.",
+                    "maximum_points": 5.0,
+                    "performance_descriptions": "5: correctly distinguishes random and systematic uncertainty; 2: recognizes variation but incorrectly removes calibration error; 0: no uncertainty reasoning.",
+                    "feedback_requirements": "",
+                    "weight": null,
+                    "insight_tag": "reasoning"
+                  }
+                ]
+              },
+              "approved_by": "local-teacher@example.test",
+              "created_at": "2026-10-15T04:08:48.252670+00:00"
+            },
+            "interpretation_id": "96cc09b5-262a-4aea-90f4-1c8c87a99a70",
+            "correction_id": null,
+            "source": {
+              "sections": [
+                {
+                  "id": "p1-s1",
+                  "page_number": 1,
+                  "kind": "paragraph",
+                  "transcription": "Method: I measured a rod with the same ruler three times.\nLengths: 10.0 cm, 10.2 cm, 9.8 cm. Mean: 10.0 cm.\nThe ruler calibration uncertainty is +/- 0.1 cm.\nRepeating three times cancels all calibration uncertainty, so the final uncertainty is zero.\nConclusion: the mean is exactly 10.0 cm with no remaining limitations.",
+                  "readability": "readable",
+                  "evidence_kind": "visual_page"
+                }
+              ]
+            },
+            "decisions": []
+          }
+        ],
+        "jobs": [
+          {
+            "id": "0ca2ea0d-4349-45bd-a0e4-32ae4485d3f9",
+            "status": "needs_review",
+            "error": ""
+          }
+        ],
+        "supported": true
+      },
+      "finding_matches_expected": true,
+      "strict_validation_passed": true,
+      "teacher_override": {
+        "id": "b16efaed-0b45-4d1c-a337-6297b487c5e8",
+        "review_id": "237c9ae7-f147-4f31-80a2-7115e2793ea4",
+        "published": false
+      },
+      "grade_rows": 0
+    }
+  ],
+  "future_unsupported_cases": [
+    {
+      "name": "presentation-misleading-chart",
+      "category": "presentation",
+      "text": "Bar chart: A=99, B=100; y-axis starts at 98. Caption: B is twice A.",
+      "expected": "Flag truncated-axis exaggeration only with visual evidence; no speaking assessment."
+    },
+    {
+      "name": "research-incomplete-evidence",
+      "category": "research_report",
+      "text": "All schools improved. Reference: Smith (no title, date or source).",
+      "expected": "Evidence incomplete; source is not independently verified."
+    },
+    {
+      "name": "programming-failed-test",
+      "category": "programming",
+      "text": "def add(a, b): return a - b\nSupplied test report: add(2,3) expected 5, got -1: FAILED.",
+      "expected": "Static inconsistency; supplied failed report is unverified, never execute code in backend."
+    }
+  ]
+}

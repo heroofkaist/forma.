@@ -1,0 +1,33 @@
+"""Public synthetic ground truth for local evaluation; no real student material."""
+CASES = [
+    {'name': 'math-correct', 'category': 'problem_set', 'instructions': 'For a 2 kg body under a net force of 6 N, calculate acceleration. Show the law, substitution, result and SI unit.',
+     'criterion': 'Apply F = ma, substitute values correctly and report acceleration with SI units.',
+     'performance': '5: correct law, substitution, 3 m/s^2 and units; 2: correct law but incorrect calculation; 0: no relevant work.',
+     'text': 'Newton second law\nF = ma\nm = 2 kg, F = 6 N\na = F / m = 6 / 2 = 3 m/s^2',
+     'expected': 'Correct law, numerical result and unit. No mathematical concern justified.', 'expected_finding': 'strength'},
+    {'name': 'math-incorrect', 'category': 'problem_set', 'instructions': 'For a 2 kg body under a net force of 6 N, calculate acceleration. Show the law, substitution, result and SI unit.',
+     'criterion': 'Apply F = ma, substitute values correctly and report acceleration with SI units.',
+     'performance': '5: correct law, substitution, 3 m/s^2 and units; 2: correct law but incorrect calculation; 0: no relevant work.',
+     'text': 'Newton second law\nF = ma\nm = 2 kg, F = 6 N\na = F * m = 6 * 2 = 12 m/s^2',
+     'expected': 'Incorrect rearrangement a=F*m; expected a=F/m=3 m/s^2. Law alone earns partial credit.', 'expected_finding': 'concern'},
+    {'name': 'essay-strong', 'category': 'essay', 'instructions': 'Write a short argument about whether a school library should extend evening hours. State a thesis, give two reasons, address a counterargument and conclude. No outside sources are required.',
+     'criterion': 'Present a clear thesis, two relevant supporting reasons, a counterargument response and a coherent conclusion.',
+     'performance': '5: thesis, two reasons, counterargument and conclusion; 2: opinion with limited support; 0: no argument.',
+     'text': 'School libraries should stay open two evenings each week.\nFirst, students with noisy homes need a quiet study space.\nSecond, students who share devices can use library computers after lessons.\nStaffing costs are a reasonable objection. A two-evening pilot with a fixed budget would limit that cost.\nA limited extension therefore improves access while controlling expense.',
+     'expected': 'Clear thesis, two reasons, counterargument and conclusion. Do not invent a citation requirement.', 'expected_finding': 'strength'},
+    {'name': 'essay-weak', 'category': 'essay', 'instructions': 'Write a short argument about whether a school library should extend evening hours. State a thesis, give two reasons, address a counterargument and conclude. No outside sources are required.',
+     'criterion': 'Present a clear thesis, two relevant supporting reasons, a counterargument response and a coherent conclusion.',
+     'performance': '5: thesis, two reasons, counterargument and conclusion; 2: opinion with limited support; 0: no argument.',
+     'text': 'Libraries should stay open because libraries are good.\nEveryone knows it. Anyone who disagrees is wrong.\nThis proves the point.',
+     'expected': 'Circular support and unsupported generalization; no two developed reasons or counterargument. No citation penalty.', 'expected_finding': 'concern'},
+    {'name': 'lab-uncertainty', 'category': 'lab_report', 'instructions': 'Report three independent length measurements, compute their mean, and discuss whether repeating measurements removes instrument calibration uncertainty. Separate random variation from systematic uncertainty.',
+     'criterion': 'Distinguish random variation and systematic calibration uncertainty and justify the uncertainty conclusion.',
+     'performance': '5: correctly distinguishes random and systematic uncertainty; 2: recognizes variation but incorrectly removes calibration error; 0: no uncertainty reasoning.',
+     'text': 'Method: I measured a rod with the same ruler three times.\nLengths: 10.0 cm, 10.2 cm, 9.8 cm. Mean: 10.0 cm.\nThe ruler calibration uncertainty is +/- 0.1 cm.\nRepeating three times cancels all calibration uncertainty, so the final uncertainty is zero.\nConclusion: the mean is exactly 10.0 cm with no remaining limitations.',
+     'expected': 'Repeats do not remove shared systematic calibration uncertainty; zero uncertainty is unjustified.', 'expected_finding': 'concern'},
+]
+FUTURE_CASES = [
+    {'name': 'presentation-misleading-chart', 'category': 'presentation', 'text': 'Bar chart: A=99, B=100; y-axis starts at 98. Caption: B is twice A.', 'expected': 'Flag truncated-axis exaggeration only with visual evidence; no speaking assessment.'},
+    {'name': 'research-incomplete-evidence', 'category': 'research_report', 'text': 'All schools improved. Reference: Smith (no title, date or source).', 'expected': 'Evidence incomplete; source is not independently verified.'},
+    {'name': 'programming-failed-test', 'category': 'programming', 'text': 'def add(a, b): return a - b\nSupplied test report: add(2,3) expected 5, got -1: FAILED.', 'expected': 'Static inconsistency; supplied failed report is unverified, never execute code in backend.'},
+]

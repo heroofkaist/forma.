@@ -95,8 +95,8 @@ def test_live_synthetic_schema_when_explicit_test_key_is_configured(monkeypatch)
     from google import genai
     from google.genai import types
     key = os.getenv('FORMA_TEST_GEMINI_API_KEY')
-    if not key:
-        pytest.skip('Set FORMA_TEST_GEMINI_API_KEY for a bounded synthetic live compatibility check.')
+    if os.getenv('FORMA_TEST_PAID_ENABLED', 'false').lower() != 'true' or not key:
+        pytest.skip('Live inference requires explicit FORMA_TEST_PAID_ENABLED=true and a dedicated test key.')
     with genai.Client(api_key=key, http_options=types.HttpOptions(timeout=30000, retry_options=types.HttpRetryOptions(attempts=1))) as client:
         response = client.models.generate_content(
             model=os.getenv('GEMINI_MODEL', 'gemini-flash-lite-latest'),

@@ -1,0 +1,22 @@
+{
+  "ollama": {
+    "version": "0.40.4"
+  },
+  "details": {
+    "parent_model": "",
+    "format": "gguf",
+    "family": "qwen3vl",
+    "families": [
+      "qwen3vl"
+    ],
+    "parameter_size": "8.8B",
+    "quantization_level": "Q4_K_M"
+  },
+  "capabilities": [
+    "completion",
+    "vision",
+    "tools"
+  ],
+  "memory_bytes": 25769803776,
+  "cpu": "Apple M5 Pro"
+}

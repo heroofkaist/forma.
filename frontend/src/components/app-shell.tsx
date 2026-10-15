@@ -6,12 +6,12 @@ import { BookOpenCheck, ClipboardList, GraduationCap, Library, ScanSearch } from
 import { teacherRole, locationForPath } from "../lib/navigation";
 import { useAuth } from "./auth-provider";
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({ children, workspaceClassName = "" }: { children: React.ReactNode; workspaceClassName?: string }) {
   const pathname = usePathname();
   const location = locationForPath(pathname);
   const { enabled, user, logout } = useAuth();
   return (
-    <div className="app-frame">
+    <div className={`app-frame ${workspaceClassName === "workspace-review" ? "review-frame" : ""}`}>
       <aside className="sidebar">
         <Link href="/" className="forma-brand"><span className="brand-mark"><GraduationCap size={17} /></span>forma<span className="brand-period">.</span></Link>
         <div className="workspace-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
@@ -33,7 +33,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="breadcrumbs"><span>Forma</span><span className="crumb-sep">/</span><span>{location.title}</span></div>
           {enabled && <button className="quiet-button" onClick={logout}>Выйти</button>}
         </header>
-        <div className="workspace">{user?.role === "migration_pending" && <div className="notice">Существующие курсы сохранены. Для создания новых курсов требуется операторское одобрение роли и учреждения.</div>}{children}</div>
+        <div className={`workspace ${workspaceClassName}`}>{user?.role === "migration_pending" && <div className="notice">Существующие курсы сохранены. Для создания новых курсов требуется операторское одобрение роли и учреждения.</div>}{children}</div>
       </main>
     </div>
   );

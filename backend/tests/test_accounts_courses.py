@@ -7,6 +7,7 @@ from sqlalchemy import create_engine, event, select
 from sqlalchemy.orm import sessionmaker
 import persistence
 import accounts
+import ai_budget
 import account_models
 import courses
 import permissions
@@ -27,7 +28,7 @@ def platform(tmp_path, monkeypatch):
         connection.execute("PRAGMA foreign_keys=ON")
     Base.metadata.create_all(engine)
     factory = sessionmaker(engine, expire_on_commit=False)
-    for module in (persistence, accounts, courses, permissions, academic_api, assignment_api, email_delivery, institutions, document_processing):
+    for module in (persistence, accounts, ai_budget, courses, permissions, academic_api, assignment_api, email_delivery, institutions, document_processing):
         monkeypatch.setattr(module, "SessionLocal", factory)
     monkeypatch.setattr(persistence, "engine", engine)
     monkeypatch.setenv("FORMA_AUTH_REQUIRED", "true")
@@ -219,7 +220,7 @@ def test_additive_migration_repeated_and_profile_security(platform):
     engine = factory.kw["bind"]
     apply_migrations(engine); apply_migrations(engine)
     with factory() as db:
-        assert len(db.scalars(select(account_models.SchemaMigration)).all()) == 7
+        assert len(db.scalars(select(account_models.SchemaMigration)).all()) == 9
         assert db.scalar(select(account_models.Account)).display_name == "New Name"
     assert client.post('/api/accounts/password', headers=headers, json={"current_password": "bad", "password": "new-password-123"}).status_code == 400
     assert client.post('/api/accounts/password', headers=headers, json={"current_password": "correct-password-123", "password": "new-password-123"}).status_code == 200

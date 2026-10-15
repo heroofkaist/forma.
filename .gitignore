@@ -16,3 +16,10 @@ frontend/.wrangler/
 frontend/tsconfig.tsbuildinfo
 
 /frontend/.env.production.local
+
+# Isolated local Qwen runtime and synthetic benchmark databases.
+.local/
+.env.ollama.local
+artifacts/**/*.sqlite3
+artifacts/**/storage/
+artifacts/**/runtime.env

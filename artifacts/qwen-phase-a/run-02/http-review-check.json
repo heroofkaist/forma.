@@ -1,0 +1,11 @@
+{
+  "cookie_login": {
+    "authenticated": true
+  },
+  "cookie_httponly": true,
+  "review_status": 200,
+  "review_versions": 1,
+  "pdf_status": 200,
+  "pdf_mime": "application/pdf",
+  "pdf_bytes_match": true
+}

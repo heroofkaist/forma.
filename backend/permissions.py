@@ -77,7 +77,7 @@ async def authorize_request(request, user):
             raise HTTPException(403, "Student account required.")
         if not student and user.role == "student":
             raise HTTPException(403, "Teacher permission required.")
-    if path.startswith(("/api/course-materials/", "/api/materials/", "/api/submission-documents/", "/api/submission-files/", "/api/assignment-submissions/", "/api/document-review/", "/api/teacher-overview")):
+    if path.startswith(("/api/assessment/", "/api/assessment-rubrics/", "/api/course-materials/", "/api/materials/", "/api/submission-documents/", "/api/submission-files/", "/api/assignment-submissions/", "/api/document-review/", "/api/teacher-overview")):
         return  # Dedicated document handlers validate memberships and visibility.
     if path.startswith("/api/accounts/") or path.startswith("/api/courses") or path.startswith("/api/enrollment"):
         return  # These handlers require an account and check course ownership.

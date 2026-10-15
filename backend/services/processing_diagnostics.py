@@ -2,6 +2,7 @@
 import json
 import logging
 import re
+import httpx
 from contextvars import ContextVar
 from pathlib import PurePath
 from botocore.exceptions import ClientError
@@ -71,6 +72,8 @@ def log_failure(error, *, job_id=None, classification='worker_error', retryable=
     if type(code) is int and 100 <= code <= 599:
         entry['provider_status'] = code
     entry.update(safe_provider_reason(error))
+    if isinstance(error, httpx.HTTPStatusError):
+        entry['http_status'] = error.response.status_code
     if isinstance(error, ClientError):
         status = error.response.get('ResponseMetadata', {}).get('HTTPStatusCode')
         if type(status) is int and 100 <= status <= 599:

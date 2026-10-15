@@ -1,0 +1,442 @@
+{
+  "synthetic_only": true,
+  "paid_calls": false,
+  "cases": [
+    {
+      "name": "math-correct",
+      "category": "problem_set",
+      "expected": "Correct law, numerical result and unit. No mathematical concern justified.",
+      "expected_finding": "strength",
+      "submission_id": "3f6ef76b-ce08-42c9-98bc-70c5b53be909",
+      "understanding_seconds": 10.835,
+      "request_status": 202,
+      "assessment_seconds": 7.862,
+      "assessment": {
+        "items": [
+          {
+            "id": "fa9ef712-ee55-4767-9448-b6508dbf3869",
+            "job_id": "5a6eef41-771f-4769-841f-53024ea0cf53",
+            "result": {
+              "criteria": [
+                {
+                  "question_id": "q1",
+                  "criterion_id": "reasoning",
+                  "proposed_score": 5.0,
+                  "rationale": "The source text correctly applies Newton's second law (F = ma), substitutes m = 2 kg and F = 6 N, computes a = 6 / 2 = 3 m/s^2, and reports the result with SI units. This matches the full requirement for 5 points.",
+                  "evidence": [
+                    {
+                      "section_id": "p1-s1",
+                      "page_number": 1,
+                      "quote": "F = ma\nm = 2 kg, F = 6 N\na = F / m = 6 / 2 = 3 m/s^2"
+                    }
+                  ],
+                  "interpretation": "The reasoning is complete and accurate: law stated, values substituted, calculation performed, and units included.",
+                  "finding": "strength",
+                  "suggested_improvement": "None required; full compliance with rubric.",
+                  "missing_evidence": [],
+                  "uncertainty": [],
+                  "verification_status": "needs_review"
+                }
+              ]
+            },
+            "rubric": {
+              "id": "f16bf362-8c37-43dc-8bee-151be58aae3e",
+              "spec": {
+                "category": "problem_set",
+                "instructions": "For a 2 kg body under a net force of 6 N, calculate acceleration. Show the law, substitution, result and SI unit.\nWhole submission: For a 2 kg body under a net force of 6 N, calculate acceleration. Show the law, substitution, result and SI unit.",
+                "reference_material": "",
+                "criteria": [
+                  {
+                    "question_id": "q1",
+                    "criterion_id": "reasoning",
+                    "description": "Apply F = ma, substitute values correctly and report acceleration with SI units.",
+                    "maximum_points": 5.0,
+                    "performance_descriptions": "5: correct law, substitution, 3 m/s^2 and units; 2: correct law but incorrect calculation; 0: no relevant work.",
+                    "feedback_requirements": "",
+                    "weight": null,
+                    "insight_tag": "reasoning"
+                  }
+                ]
+              },
+              "approved_by": "local-teacher@example.test",
+              "created_at": "2026-10-15T04:03:22.429705+00:00"
+            },
+            "interpretation_id": "8467d34b-6635-4052-b605-ea76b167f57b",
+            "correction_id": null,
+            "source": {
+              "sections": [
+                {
+                  "id": "p1-s1",
+                  "page_number": 1,
+                  "kind": "equation",
+                  "transcription": "Newton second law\nF = ma\nm = 2 kg, F = 6 N\na = F / m = 6 / 2 = 3 m/s^2",
+                  "readability": "readable",
+                  "evidence_kind": "visual_page"
+                }
+              ]
+            },
+            "decisions": []
+          }
+        ],
+        "jobs": [
+          {
+            "id": "5a6eef41-771f-4769-841f-53024ea0cf53",
+            "status": "needs_review",
+            "error": ""
+          }
+        ],
+        "supported": true
+      },
+      "finding_matches_expected": true,
+      "strict_validation_passed": true,
+      "teacher_override": {
+        "id": "55f1f1ef-c4f4-4233-b3a6-04ce4dcb41bb",
+        "review_id": "68ca3d90-18d2-4cd2-b009-de76daf3bb87",
+        "published": false
+      },
+      "grade_rows": 0
+    },
+    {
+      "name": "math-incorrect",
+      "category": "problem_set",
+      "expected": "Incorrect rearrangement a=F*m; expected a=F/m=3 m/s^2. Law alone earns partial credit.",
+      "expected_finding": "concern",
+      "submission_id": "524a7710-79f5-4692-9d5a-b89cd7572222",
+      "understanding_seconds": 9.764,
+      "request_status": 202,
+      "assessment_seconds": 11.414,
+      "assessment": {
+        "items": [
+          {
+            "id": "dc113269-11ae-4fe4-b40b-b335d9abc213",
+            "job_id": "0a4bbc7c-2750-483b-9e55-9153c174ff92",
+            "result": {
+              "criteria": [
+                {
+                  "question_id": "q1",
+                  "criterion_id": "reasoning",
+                  "proposed_score": null,
+                  "rationale": "The source text incorrectly applies Newton's second law. It states 'a = F * m = 6 * 2 = 12 m/s^2', which is mathematically incorrect because acceleration should be F/m, not F*m. The correct calculation is a = 6 N / 2 kg = 3 m/s^2. The source fails to correctly substitute values and compute acceleration, violating the requirement to show correct substitution and result. The law is stated correctly, but the substitution and result are erroneous.",
+                  "evidence": [
+                    {
+                      "section_id": "p1-s1",
+                      "page_number": 1,
+                      "quote": "a = F * m = 6 * 2 = 12 m/s^2"
+                    }
+                  ],
+                  "interpretation": "The student incorrectly used multiplication instead of division in Newton's second law, leading to an erroneous result of 12 m/s^2 instead of the correct 3 m/s^2. The SI unit is correctly stated, but the calculation is fundamentally flawed.",
+                  "finding": "insufficient_evidence",
+                  "suggested_improvement": "Correctly apply Newton's second law: a = F/m. Substitute F = 6 N and m = 2 kg to get a = 3 m/s^2. Ensure division is used, not multiplication, and verify units are consistent (N/kg = m/s^2).",
+                  "missing_evidence": [],
+                  "uncertainty": [],
+                  "verification_status": "needs_review"
+                }
+              ]
+            },
+            "rubric": {
+              "id": "9bf5d941-facd-4ad8-a261-9628277a1554",
+              "spec": {
+                "category": "problem_set",
+                "instructions": "For a 2 kg body under a net force of 6 N, calculate acceleration. Show the law, substitution, result and SI unit.\nWhole submission: For a 2 kg body under a net force of 6 N, calculate acceleration. Show the law, substitution, result and SI unit.",
+                "reference_material": "",
+                "criteria": [
+                  {
+                    "question_id": "q1",
+                    "criterion_id": "reasoning",
+                    "description": "Apply F = ma, substitute values correctly and report acceleration with SI units.",
+                    "maximum_points": 5.0,
+                    "performance_descriptions": "5: correct law, substitution, 3 m/s^2 and units; 2: correct law but incorrect calculation; 0: no relevant work.",
+                    "feedback_requirements": "",
+                    "weight": null,
+                    "insight_tag": "reasoning"
+                  }
+                ]
+              },
+              "approved_by": "local-teacher@example.test",
+              "created_at": "2026-10-15T04:03:40.104657+00:00"
+            },
+            "interpretation_id": "40c2b71d-87fe-4df5-9e22-43b19589c33c",
+            "correction_id": null,
+            "source": {
+              "sections": [
+                {
+                  "id": "p1-s1",
+                  "page_number": 1,
+                  "kind": "equation",
+                  "transcription": "Newton second law\nF = ma\nm = 2 kg, F = 6 N\na = F * m = 6 * 2 = 12 m/s^2",
+                  "readability": "readable",
+                  "evidence_kind": "visual_page"
+                }
+              ]
+            },
+            "decisions": []
+          }
+        ],
+        "jobs": [
+          {
+            "id": "0a4bbc7c-2750-483b-9e55-9153c174ff92",
+            "status": "needs_review",
+            "error": ""
+          }
+        ],
+        "supported": true
+      },
+      "finding_matches_expected": false,
+      "strict_validation_passed": true,
+      "teacher_override": {
+        "id": "cb7c9128-6dd3-4f6b-b34a-ead8ff12b26d",
+        "review_id": "bbf06e12-a67a-4cfd-81f1-4cedd80ad98a",
+        "published": false
+      },
+      "grade_rows": 0
+    },
+    {
+      "name": "essay-strong",
+      "category": "essay",
+      "expected": "Clear thesis, two reasons, counterargument and conclusion. Do not invent a citation requirement.",
+      "expected_finding": "strength",
+      "submission_id": "9675da2d-ce23-4ecf-9f86-fe5fcbbf7157",
+      "understanding_seconds": 9.986,
+      "request_status": 202,
+      "assessment_seconds": 11.375,
+      "assessment": {
+        "items": [],
+        "jobs": [
+          {
+            "id": "dda97258-1f7b-4fec-8e6a-b029822656a9",
+            "status": "failed",
+            "error": "Document analysis failed. Check processing limits, document validity and provider configuration; request re-analysis after resolving the cause."
+          }
+        ],
+        "supported": true
+      },
+      "strict_validation_passed": false,
+      "grade_rows": 0
+    },
+    {
+      "name": "essay-weak",
+      "category": "essay",
+      "expected": "Circular support and unsupported generalization; no two developed reasons or counterargument. No citation penalty.",
+      "expected_finding": "concern",
+      "submission_id": "1bcef897-7952-48df-920f-862126b66d83",
+      "understanding_seconds": 6.273,
+      "request_status": 202,
+      "assessment_seconds": 10.492,
+      "assessment": {
+        "items": [
+          {
+            "id": "994803dc-1789-4ea7-b4bd-e084c1886084",
+            "job_id": "a63e4e54-a7fd-4246-a2aa-fd717c385190",
+            "result": {
+              "criteria": [
+                {
+                  "question_id": "q1",
+                  "criterion_id": "reasoning",
+                  "proposed_score": null,
+                  "rationale": "The submission fails to meet the rubric's requirement for a clear thesis, two supporting reasons, a counterargument, and a coherent conclusion. Instead, it contains a vague assertion ('libraries are good'), an unsupported claim ('Anyone who disagrees is wrong'), and no structured argument or conclusion. The text lacks any evidence of critical thinking or logical structure required by the rubric.",
+                  "evidence": [
+                    {
+                      "section_id": "p1-s1",
+                      "page_number": 1,
+                      "quote": "Libraries should stay open because libraries are good.\nEveryone knows it. Anyone who disagrees is wrong.\nThis proves the point."
+                    }
+                  ],
+                  "interpretation": "The text does not present a thesis, reasons, counterargument, or conclusion as required. It is a non-argumentative, opinionated statement with no supporting logic or structure.",
+                  "finding": "insufficient_evidence",
+                  "suggested_improvement": "The student should revise to include a clear thesis statement, two specific reasons (e.g., extended hours support student study needs and promote equitable access), address a counterargument (e.g., 'Some may argue that extended hours disrupt student sleep schedules'), and conclude with a summary of the argument's main points.",
+                  "missing_evidence": [
+                    "No thesis statement that clearly states the position on extending library hours.",
+                    "No two supporting reasons with explanation.",
+                    "No counterargument addressed.",
+                    "No coherent conclusion."
+                  ],
+                  "uncertainty": [
+                    "The text is too brief and lacks structure to evaluate reasoning fully.",
+                    "The content does not align with the assignment instructions."
+                  ],
+                  "verification_status": "needs_review"
+                }
+              ]
+            },
+            "rubric": {
+              "id": "c31fb347-7478-45a0-8e20-364e3830b6ac",
+              "spec": {
+                "category": "essay",
+                "instructions": "Write a short argument about whether a school library should extend evening hours. State a thesis, give two reasons, address a counterargument and conclude. No outside sources are required.\nWhole submission: Write a short argument about whether a school library should extend evening hours. State a thesis, give two reasons, address a counterargument and conclude. No outside sources are required.",
+                "reference_material": "",
+                "criteria": [
+                  {
+                    "question_id": "q1",
+                    "criterion_id": "reasoning",
+                    "description": "Present a clear thesis, two relevant supporting reasons, a counterargument response and a coherent conclusion.",
+                    "maximum_points": 5.0,
+                    "performance_descriptions": "5: thesis, two reasons, counterargument and conclusion; 2: opinion with limited support; 0: no argument.",
+                    "feedback_requirements": "",
+                    "weight": null,
+                    "insight_tag": "reasoning"
+                  }
+                ]
+              },
+              "approved_by": "local-teacher@example.test",
+              "created_at": "2026-10-15T04:04:19.233660+00:00"
+            },
+            "interpretation_id": "3d75122d-783e-4763-a271-c4b5e7d071a8",
+            "correction_id": null,
+            "source": {
+              "sections": [
+                {
+                  "id": "p1-s1",
+                  "page_number": 1,
+                  "kind": "paragraph",
+                  "transcription": "Libraries should stay open because libraries are good.\nEveryone knows it. Anyone who disagrees is wrong.\nThis proves the point.",
+                  "readability": "readable",
+                  "evidence_kind": "visual_page"
+                }
+              ]
+            },
+            "decisions": []
+          }
+        ],
+        "jobs": [
+          {
+            "id": "a63e4e54-a7fd-4246-a2aa-fd717c385190",
+            "status": "needs_review",
+            "error": ""
+          }
+        ],
+        "supported": true
+      },
+      "finding_matches_expected": false,
+      "strict_validation_passed": true,
+      "teacher_override": {
+        "id": "7f33acab-701c-4860-a88d-ca9a5917b775",
+        "review_id": "de32a967-ff70-4003-8a9b-0e92a15b182e",
+        "published": false
+      },
+      "grade_rows": 0
+    },
+    {
+      "name": "lab-uncertainty",
+      "category": "lab_report",
+      "expected": "Repeats do not remove shared systematic calibration uncertainty; zero uncertainty is unjustified.",
+      "expected_finding": "concern",
+      "submission_id": "601032da-4409-40ca-8a75-08f01f17dc2b",
+      "understanding_seconds": 7.675,
+      "request_status": 202,
+      "assessment_seconds": 11.0,
+      "assessment": {
+        "items": [
+          {
+            "id": "910854c2-e0a6-4ecb-8859-1419167ec30f",
+            "job_id": "1979cc36-f8c4-4826-ad5f-28f8abe63ef3",
+            "result": {
+              "criteria": [
+                {
+                  "question_id": "q1",
+                  "criterion_id": "reasoning",
+                  "proposed_score": null,
+                  "rationale": "The student incorrectly claims that repeating measurements 'cancels all calibration uncertainty,' which is a fundamental misunderstanding. Calibration uncertainty is systematic and does not diminish with repeated measurements. The student also states the final uncertainty is 'zero,' which is incorrect. The text correctly identifies random variation (10.0, 10.2, 9.8 cm) but fails to separate it from systematic uncertainty (±0.1 cm calibration). The conclusion that 'the mean is exactly 10.0 cm with no remaining limitations' is flawed because systematic uncertainty remains.",
+                  "evidence": [
+                    {
+                      "section_id": "p1-s1",
+                      "page_number": 1,
+                      "quote": "Repeating three times cancels all calibration uncertainty, so the final uncertainty is zero."
+                    },
+                    {
+                      "section_id": "p1-s1",
+                      "page_number": 1,
+                      "quote": "Conclusion: the mean is exactly 10.0 cm with no remaining limitations."
+                    }
+                  ],
+                  "interpretation": "The student conflates random error reduction with systematic error elimination, which is a critical conceptual error in uncertainty analysis.",
+                  "finding": "insufficient_evidence",
+                  "suggested_improvement": "Clarify that calibration uncertainty is systematic and unaffected by repeated measurements. Separate random uncertainty (from repeated measurements) from systematic uncertainty (from instrument calibration). The final uncertainty should reflect the systematic uncertainty (±0.1 cm) and not be zero.",
+                  "missing_evidence": [
+                    "No evidence that the student correctly distinguishes random variation from systematic uncertainty."
+                  ],
+                  "uncertainty": [
+                    "The student's reasoning is incorrect and does not meet the 2-point threshold for recognizing variation without removing calibration error."
+                  ],
+                  "verification_status": "needs_review"
+                }
+              ]
+            },
+            "rubric": {
+              "id": "b8fac574-06ce-4006-acb1-514aa9195d0c",
+              "spec": {
+                "category": "lab_report",
+                "instructions": "Report three independent length measurements, compute their mean, and discuss whether repeating measurements removes instrument calibration uncertainty. Separate random variation from systematic uncertainty.\nWhole submission: Report three independent length measurements, compute their mean, and discuss whether repeating measurements removes instrument calibration uncertainty. Separate random variation from systematic uncertainty.",
+                "reference_material": "",
+                "criteria": [
+                  {
+                    "question_id": "q1",
+                    "criterion_id": "reasoning",
+                    "description": "Distinguish random variation and systematic calibration uncertainty and justify the uncertainty conclusion.",
+                    "maximum_points": 5.0,
+                    "performance_descriptions": "5: correctly distinguishes random and systematic uncertainty; 2: recognizes variation but incorrectly removes calibration error; 0: no uncertainty reasoning.",
+                    "feedback_requirements": "",
+                    "weight": null,
+                    "insight_tag": "reasoning"
+                  }
+                ]
+              },
+              "approved_by": "local-teacher@example.test",
+              "created_at": "2026-10-15T04:04:37.438551+00:00"
+            },
+            "interpretation_id": "3761d741-aff4-4782-aa5b-7163c908f524",
+            "correction_id": null,
+            "source": {
+              "sections": [
+                {
+                  "id": "p1-s1",
+                  "page_number": 1,
+                  "kind": "paragraph",
+                  "transcription": "Method: I measured a rod with the same ruler three times.\nLengths: 10.0 cm, 10.2 cm, 9.8 cm. Mean: 10.0 cm.\nThe ruler calibration uncertainty is +/- 0.1 cm.\nRepeating three times cancels all calibration uncertainty, so the final uncertainty is zero.\nConclusion: the mean is exactly 10.0 cm with no remaining limitations.",
+                  "readability": "readable",
+                  "evidence_kind": "visual_page"
+                }
+              ]
+            },
+            "decisions": []
+          }
+        ],
+        "jobs": [
+          {
+            "id": "1979cc36-f8c4-4826-ad5f-28f8abe63ef3",
+            "status": "needs_review",
+            "error": ""
+          }
+        ],
+        "supported": true
+      },
+      "finding_matches_expected": false,
+      "strict_validation_passed": true,
+      "teacher_override": {
+        "id": "7543a4aa-6d55-45bf-955d-f4804c5f4ad8",
+        "review_id": "17f85dce-611d-4a62-b291-713fa148ccce",
+        "published": false
+      },
+      "grade_rows": 0
+    }
+  ],
+  "future_unsupported_cases": [
+    {
+      "name": "presentation-misleading-chart",
+      "category": "presentation",
+      "text": "Bar chart: A=99, B=100; y-axis starts at 98. Caption: B is twice A.",
+      "expected": "Flag truncated-axis exaggeration only with visual evidence; no speaking assessment."
+    },
+    {
+      "name": "research-incomplete-evidence",
+      "category": "research_report",
+      "text": "All schools improved. Reference: Smith (no title, date or source).",
+      "expected": "Evidence incomplete; source is not independently verified."
+    },
+    {
+      "name": "programming-failed-test",
+      "category": "programming",
+      "text": "def add(a, b): return a - b\nSupplied test report: add(2,3) expected 5, got -1: FAILED.",
+      "expected": "Static inconsistency; supplied failed report is unverified, never execute code in backend."
+    }
+  ]
+}

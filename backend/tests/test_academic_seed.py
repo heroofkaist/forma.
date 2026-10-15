@@ -151,6 +151,7 @@ def _assert_seed_is_idempotent(
                 Submission, academic_submission.legacy_submission_id
             )
             assert legacy_submission is not None
+            assert len(legacy_submission.id) <= 36
             assert db.get(Assignment, legacy_submission.assignment_id) is not None
 
         assert db.scalar(
@@ -225,4 +226,4 @@ def test_account_migrations_preserve_existing_records_and_repeat(monkeypatch, po
         init_db(connection, factory)
         with factory() as db:
             assert db.get(AcademicCourse, "preserved-chemistry").name == "Chemistry"
-            assert len(db.scalars(select(SchemaMigration)).all()) == 7
+            assert len(db.scalars(select(SchemaMigration)).all()) == 9

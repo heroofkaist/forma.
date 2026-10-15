@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import select
+from sqlalchemy import select, func
 from auth import request_user
 from accounts import rate_limit, utc
 from document_review import get_submission
@@ -9,7 +9,9 @@ from processing_models import ProcessingJob, DocumentInterpretation, Interpretat
 from institution_models import AuditEvent
 from institutions import audit
 from persistence import SessionLocal
-from document_processing import enqueue
+from document_processing import enqueue, MAX_ATTEMPTS, ACTIVE
+from persistence import now_utc
+import ai_budget
 from services.document_understanding import Interpretation, validate_result
 
 router=APIRouter(prefix='/api/document-analysis',tags=['Document understanding'])
@@ -26,7 +28,7 @@ class CorrectRequest(BaseModel):
 
 
 def job_json(job):
-    return {'id':job.id,'status':job.status,'stage':job.stage,'attempts':job.attempts,'error':job.error,'error_class':job.error_class,'created_at':utc(job.created_at),'updated_at':utc(job.updated_at),'model':job.model,'prompt_version':job.prompt_version,'usage':job.usage}
+    return {'id':job.id,'status':job.status,'stage':job.stage,'attempts':job.attempts,'error':job.error,'error_class':job.error_class,'created_at':utc(job.created_at),'updated_at':utc(job.updated_at),'provider':job.context.get('ai',{}).get('name','gemini'),'partial':bool(job.usage.get('partial')),'model':job.model,'prompt_version':job.prompt_version,'usage':job.usage}
 
 @router.post('/{submission_id}',status_code=202)
 def analyze(submission_id: str,payload: AnalyzeRequest,request:Request):
@@ -39,12 +41,42 @@ def analyze(submission_id: str,payload: AnalyzeRequest,request:Request):
         audit(db,user,'document.analysis.request',job.id,{'submission_id':submission_id,'reanalyze':payload.reanalyze})
         db.commit(); return job_json(job)
 
+@router.post('/{submission_id}/resume', status_code=202)
+def resume(submission_id: str, request: Request):
+    user = request_user(request)
+    with SessionLocal() as db:
+        get_submission(db, submission_id, request, teacher=True)
+        rate_limit(request, 'document-analysis-resume', user.account_id or user.username, 10)
+        # Same lock as enqueue: a simultaneous reanalysis must not create a
+        # competing active version while this original job is resumed.
+        if db.bind.dialect.name == 'postgresql':
+            from sqlalchemy import text
+            db.execute(text('SELECT pg_advisory_xact_lock(62401704)'))
+        else:
+            from sqlalchemy import update
+            db.execute(update(ProcessingJob).where(ProcessingJob.submission_id == submission_id).values(updated_at=ProcessingJob.updated_at))
+        job = db.scalar(select(ProcessingJob).where(ProcessingJob.submission_id == submission_id).order_by(ProcessingJob.created_at.desc()).limit(1).with_for_update())
+        if not job or job.status != 'awaiting_budget' or job.attempts >= MAX_ATTEMPTS:
+            raise HTTPException(409, 'No paused job with remaining attempts can be resumed.')
+        if job.context.get('ai', {}).get('name') != 'openrouter' or not ai_budget.can_resume(job.id, db=db):
+            raise HTTPException(409, 'Paid allowance is not available; reconcile billing or use manual review.')
+        active = db.scalar(select(ProcessingJob.id).where(ProcessingJob.submission_id == submission_id, ProcessingJob.status.in_(('queued', *ACTIVE))))
+        midnight = now_utc().replace(hour=0, minute=0, second=0, microsecond=0)
+        requester_jobs = db.scalar(select(func.count()).select_from(ProcessingJob).where(ProcessingJob.requested_by == job.requested_by, ProcessingJob.created_at >= midnight))
+        versions = db.scalar(select(func.count()).select_from(ProcessingJob).where(ProcessingJob.submission_id == submission_id, ProcessingJob.created_at >= midnight))
+        if active or requester_jobs > 20 or versions > 3:
+            raise HTTPException(429, 'Existing job/version limits prevent resuming this analysis.')
+        # Attempt history and the safe pause reason are retained until success.
+        job.status = 'queued'; job.stage = 'queued'; job.available_at = now_utc(); job.updated_at = now_utc()
+        audit(db, user, 'document.analysis.resume', job.id, {'submission_id': submission_id, 'previous_error_class': job.error_class, 'attempts': job.attempts})
+        db.commit(); return job_json(job)
+
 @router.get('/{submission_id}/status')
 def status(submission_id:str,request:Request):
     with SessionLocal() as db:
         get_submission(db,submission_id,request)
         jobs=db.scalars(select(ProcessingJob).where(ProcessingJob.submission_id==submission_id).order_by(ProcessingJob.created_at.desc())).all()
-        return {'jobs':[job_json(job) for job in jobs], 'worker_note':'Jobs resume while the backend is awake. Sleeping instances do not process work.'}
+        return {'jobs':[job_json(job) for job in jobs if job.context.get('task') != 'assessment'], 'worker_note':'Jobs resume while the backend is awake. Sleeping instances do not process work.'}
 
 @router.get('/{submission_id}')
 def interpretation(submission_id:str,request:Request):

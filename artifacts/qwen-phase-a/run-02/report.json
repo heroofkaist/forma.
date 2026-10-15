@@ -1,0 +1,250 @@
+{
+  "provider": "ollama",
+  "config": {
+    "name": "ollama",
+    "model": "qwen3-vl:8b-instruct",
+    "version": "qwen-document-v1",
+    "options": {
+      "base_url": "http://127.0.0.1:11434",
+      "pages": 3,
+      "batch_pages": 1,
+      "image_edge": 1120,
+      "context": 8192,
+      "output_tokens": 2200,
+      "timeout": 120,
+      "total_seconds": 480
+    }
+  },
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "synthetic_only": true,
+  "submission_id": "372c22c3-7bc8-4474-a2e4-624665c2a4d0",
+  "processed": true,
+  "wall_seconds": 26.339,
+  "jobs": [
+    {
+      "id": "9e2fe6ef-83fe-44d0-a3e6-f225e22a6449",
+      "status": "needs_review",
+      "stage": "review",
+      "attempts": 1,
+      "error": "",
+      "error_class": "",
+      "created_at": "2026-10-15T02:48:29.340448+00:00",
+      "updated_at": "2026-10-15T02:48:55.679582+00:00",
+      "provider": "ollama",
+      "partial": false,
+      "model": "qwen3-vl:8b-instruct",
+      "prompt_version": "qwen-document-v1",
+      "usage": {
+        "provider": "ollama",
+        "ai_called": true,
+        "visual_pages": 3,
+        "input_tokens": 4507,
+        "output_tokens": 875,
+        "analyzed_pages": [
+          1,
+          2,
+          3
+        ],
+        "omitted_pages": [],
+        "batches": [
+          {
+            "pages": [
+              1
+            ],
+            "seconds": 10.665,
+            "load_duration": 2057204750,
+            "prompt_eval_duration": 2559698000,
+            "eval_duration": 6015608000,
+            "eval_count": 308,
+            "prompt_eval_count": 1523
+          },
+          {
+            "pages": [
+              2
+            ],
+            "seconds": 4.673,
+            "load_duration": 1544125,
+            "prompt_eval_duration": 2168753000,
+            "eval_duration": 2466210000,
+            "eval_count": 125,
+            "prompt_eval_count": 1467
+          },
+          {
+            "pages": [
+              3
+            ],
+            "seconds": 10.89,
+            "load_duration": 911584,
+            "prompt_eval_duration": 2240459000,
+            "eval_duration": 8603907000,
+            "eval_count": 442,
+            "prompt_eval_count": 1517
+          }
+        ],
+        "partial": false,
+        "seconds": 26.32
+      }
+    }
+  ],
+  "review": {
+    "items": [
+      {
+        "id": "69386c5e-20d1-4346-b04e-1e80e184ac49",
+        "job_id": "9e2fe6ef-83fe-44d0-a3e6-f225e22a6449",
+        "original": {
+          "document_type": "problem_set",
+          "sections": [
+            {
+              "id": "p1-s1",
+              "page_number": 1,
+              "kind": "equation",
+              "transcription": "Question 1: Newton's second law\nm = 2 kg, F = 6 N.\nF = ma\na = F / m = 3 m/s^2\nThe solution continues on page 2.",
+              "question_id": "q1",
+              "readability": "readable",
+              "rationale": "Provider-proposed observation; mathematical interpretation is separate and unverified.",
+              "uncertainty_notes": [],
+              "evidence_kind": "visual_page",
+              "latex": "a = \\frac{F}{m} = 3 \\, \\text{m/s}^2",
+              "interpretation": "The problem applies Newton's second law (F = ma) to calculate acceleration. Given a mass of 2 kg and a force of 6 N, the acceleration is calculated as 3 m/s². The text indicates the solution continues on page 2."
+            },
+            {
+              "id": "p1-s2",
+              "page_number": 1,
+              "kind": "diagram",
+              "transcription": "2 kg\nF = 6 N",
+              "question_id": "q1",
+              "readability": "readable",
+              "rationale": "Provider-proposed observation; mathematical interpretation is separate and unverified.",
+              "uncertainty_notes": [],
+              "evidence_kind": "visual_page",
+              "latex": "",
+              "interpretation": "A diagram shows a 2 kg block with a force of 6 N applied to it, directed to the right. This visually represents the scenario described in the text."
+            },
+            {
+              "id": "p2-s1",
+              "page_number": 2,
+              "kind": "answer",
+              "transcription": "Question 1 (continued)\nv = u + at\nu = 0, t = 4 s\nv = 0 + 3 x 4 = 12 m/s\nThe force points to the right.\n\nmotion to the right",
+              "question_id": "q1",
+              "readability": "readable",
+              "rationale": "Provider-proposed observation; mathematical interpretation is separate and unverified.",
+              "uncertainty_notes": [],
+              "evidence_kind": "visual_page",
+              "latex": "",
+              "interpretation": ""
+            },
+            {
+              "id": "p3-s1",
+              "page_number": 3,
+              "kind": "equation",
+              "transcription": "E_k = (1/2) m v^2",
+              "question_id": "q2",
+              "readability": "readable",
+              "rationale": "Provider-proposed observation; mathematical interpretation is separate and unverified.",
+              "uncertainty_notes": [],
+              "evidence_kind": "visual_page",
+              "latex": "E_k = \\frac{1}{2} m v^2",
+              "interpretation": "The kinetic energy formula is given as E_k = (1/2) m v^2."
+            },
+            {
+              "id": "p3-s2",
+              "page_number": 3,
+              "kind": "equation",
+              "transcription": "m = 2 kg, v = 3 m/s",
+              "question_id": "q2",
+              "readability": "readable",
+              "rationale": "Provider-proposed observation; mathematical interpretation is separate and unverified.",
+              "uncertainty_notes": [],
+              "evidence_kind": "visual_page",
+              "latex": "m = 2 \\text{ kg}, v = 3 \\text{ m/s}",
+              "interpretation": "The mass is 2 kg and the velocity is 3 m/s."
+            },
+            {
+              "id": "p3-s3",
+              "page_number": 3,
+              "kind": "equation",
+              "transcription": "E_k = 9 J",
+              "question_id": "q2",
+              "readability": "readable",
+              "rationale": "Provider-proposed observation; mathematical interpretation is separate and unverified.",
+              "uncertainty_notes": [],
+              "evidence_kind": "visual_page",
+              "latex": "E_k = 9 \\text{ J}",
+              "interpretation": "The calculated kinetic energy is 9 joules."
+            },
+            {
+              "id": "p3-s4",
+              "page_number": 3,
+              "kind": "diagram",
+              "transcription": "inclined plane",
+              "question_id": "q2",
+              "readability": "readable",
+              "rationale": "Provider-proposed observation; mathematical interpretation is separate and unverified.",
+              "uncertainty_notes": [],
+              "evidence_kind": "visual_page",
+              "latex": "",
+              "interpretation": "A diagram of an inclined plane with a block on it. The label 'inclined plane' is written above the plane. A vertical line labeled 'mg' is drawn from the center of the block, indicating the force of gravity."
+            }
+          ],
+          "question_associations": [
+            {
+              "question_id": "q1",
+              "section_ids": [
+                "p1-s1",
+                "p1-s2",
+                "p2-s1"
+              ],
+              "status": "proposed",
+              "reason": "Unverified page observations; continuations require teacher review."
+            },
+            {
+              "question_id": "q2",
+              "section_ids": [
+                "p3-s1",
+                "p3-s2",
+                "p3-s3",
+                "p3-s4"
+              ],
+              "status": "proposed",
+              "reason": "Unverified page observations; continuations require teacher review."
+            }
+          ],
+          "warnings": [
+            "Question context is bounded to 20 definitions and 2000 text characters; verify associations against full assignment instructions.",
+            "Local Qwen output is unverified: observations and model interpretations require teacher review; no grade was assigned."
+          ],
+          "requires_human_review": true
+        },
+        "created_at": "2026-10-15T02:48:55.678601+00:00",
+        "corrections": []
+      }
+    ],
+    "questions": [
+      {
+        "id": "q1",
+        "title": "Question 1",
+        "statement": "Explain acceleration and continuation to velocity.",
+        "label": "Question 1"
+      },
+      {
+        "id": "q2",
+        "title": "Question 2",
+        "statement": "Describe energy and the inclined-plane diagram.",
+        "label": "Question 2"
+      }
+    ]
+  },
+  "original_pdf_match": true,
+  "schema_valid": true,
+  "raw_schema_validity": [
+    true,
+    true,
+    true
+  ],
+  "fixture_pages": {
+    "1": "Typed mathematics plus embedded vector force diagram",
+    "2": "Generated handwriting-style equations and continuation of question 1",
+    "3": "Typed energy solution, inclined-plane diagram and deliberately blurred image patch"
+  },
+  "peak_ollama_process_rss_bytes": 8479244288
+}

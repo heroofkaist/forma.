@@ -26,7 +26,8 @@ from auth import (
     verify_token,
 )
 
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+if os.getenv("FORMA_LOAD_ENV_FILE", "true").lower() == "true":
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 app = FastAPI(title="AI Grader MVP", version="0.1.0")
 
@@ -276,6 +277,8 @@ app.include_router(institutions_router)
 
 from analysis_api import router as analysis_router
 app.include_router(analysis_router)
+from assessment_api import router as assessment_router
+app.include_router(assessment_router)
 
 @app.on_event("startup")
 def start_document_processing():

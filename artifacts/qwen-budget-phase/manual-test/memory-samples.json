@@ -1,0 +1,305 @@
+[
+  {
+    "seconds": 0.031,
+    "ollama_process_rss_bytes": 53428224,
+    "models": []
+  },
+  {
+    "seconds": 1.065,
+    "ollama_process_rss_bytes": 4414767104,
+    "models": []
+  },
+  {
+    "seconds": 2.121,
+    "ollama_process_rss_bytes": 7299809280,
+    "models": []
+  },
+  {
+    "seconds": 3.17,
+    "ollama_process_rss_bytes": 8118599680,
+    "models": [
+      {
+        "name": "qwen3-vl:8b-instruct",
+        "size": 6718215945,
+        "size_vram": 6718215945,
+        "context_length": 8192
+      }
+    ]
+  },
+  {
+    "seconds": 4.218,
+    "ollama_process_rss_bytes": 8368357376,
+    "models": [
+      {
+        "name": "qwen3-vl:8b-instruct",
+        "size": 6718215945,
+        "size_vram": 6718215945,
+        "context_length": 8192
+      }
+    ]
+  },
+  {
+    "seconds": 5.265,
+    "ollama_process_rss_bytes": 8358084608,
+    "models": [
+      {
+        "name": "qwen3-vl:8b-instruct",
+        "size": 6718215945,
+        "size_vram": 6718215945,
+        "context_length": 8192
+      }
+    ]
+  },
+  {
+    "seconds": 6.307,
+    "ollama_process_rss_bytes": 8366997504,
+    "models": [
+      {
+        "name": "qwen3-vl:8b-instruct",
+        "size": 6718215945,
+        "size_vram": 6718215945,
+        "context_length": 8192
+      }
+    ]
+  },
+  {
+    "seconds": 7.356,
+    "ollama_process_rss_bytes": 8311652352,
+    "models": [
+      {
+        "name": "qwen3-vl:8b-instruct",
+        "size": 6718215945,
+        "size_vram": 6718215945,
+        "context_length": 8192
+      }
+    ]
+  },
+  {
+    "seconds": 8.401,
+    "ollama_process_rss_bytes": 8311848960,
+    "models": [
+      {
+        "name": "qwen3-vl:8b-instruct",
+        "size": 6718215945,
+        "size_vram": 6718215945,
+        "context_length": 8192
+      }
+    ]
+  },
+  {
+    "seconds": 9.447,
+    "ollama_process_rss_bytes": 8098054144,
+    "models": [
+      {
+        "name": "qwen3-vl:8b-instruct",
+        "size": 6718215945,
+        "size_vram": 6718215945,
+        "context_length": 8192
+      }
+    ]
+  },
+  {
+    "seconds": 10.494,
+    "ollama_process_rss_bytes": 8088928256,
+    "models": [
+      {
+        "name": "qwen3-vl:8b-instruct",
+        "size": 6718215945,
+        "size_vram": 6718215945,
+        "context_length": 8192
+      }
+    ]
+  },
+  {
+    "seconds": 11.536,
+    "ollama_process_rss_bytes": 8250769408,
+    "models": [
+      {
+        "name": "qwen3-vl:8b-instruct",
+        "size": 6718215945,
+        "size_vram": 6718215945,
+        "context_length": 8192
+      }
+    ]
+  },
+  {
+    "seconds": 12.567,
+    "ollama_process_rss_bytes": 8416788480,
+    "models": [
+      {
+        "name": "qwen3-vl:8b-instruct",
+        "size": 6718215945,
+        "size_vram": 6718215945,
+        "context_length": 8192
+      }
+    ]
+  },
+  {
+    "seconds": 13.616,
+    "ollama_process_rss_bytes": 8420818944,
+    "models": [
+      {
+        "name": "qwen3-vl:8b-instruct",
+        "size": 6718215945,
+        "size_vram": 6718215945,
+        "context_length": 8192
+      }
+    ]
+  },
+  {
+    "seconds": 14.661,
+    "ollama_process_rss_bytes": 8434548736,
+    "models": [
+      {
+        "name": "qwen3-vl:8b-instruct",
+        "size": 6718215945,
+        "size_vram": 6718215945,
+        "context_length": 8192
+      }
+    ]
+  },
+  {
+    "seconds": 15.704,
+    "ollama_process_rss_bytes": 8434794496,
+    "models": [
+      {
+        "name": "qwen3-vl:8b-instruct",
+        "size": 6718215945,
+        "size_vram": 6718215945,
+        "context_length": 8192
+      }
+    ]
+  },
+  {
+    "seconds": 16.748,
+    "ollama_process_rss_bytes": 8599715840,
+    "models": [
+      {
+        "name": "qwen3-vl:8b-instruct",
+        "size": 6718215945,
+        "size_vram": 6718215945,
+        "context_length": 8192
+      }
+    ]
+  },
+  {
+    "seconds": 17.792,
+    "ollama_process_rss_bytes": 8595292160,
+    "models": [
+      {
+        "name": "qwen3-vl:8b-instruct",
+        "size": 6718215945,
+        "size_vram": 6718215945,
+        "context_length": 8192
+      }
+    ]
+  },
+  {
+    "seconds": 18.839,
+    "ollama_process_rss_bytes": 8525447168,
+    "models": [
+      {
+        "name": "qwen3-vl:8b-instruct",
+        "size": 6718215945,
+        "size_vram": 6718215945,
+        "context_length": 8192
+      }
+    ]
+  },
+  {
+    "seconds": 19.887,
+    "ollama_process_rss_bytes": 8362606592,
+    "models": [
+      {
+        "name": "qwen3-vl:8b-instruct",
+        "size": 6718215945,
+        "size_vram": 6718215945,
+        "context_length": 8192
+      }
+    ]
+  },
+  {
+    "seconds": 20.936,
+    "ollama_process_rss_bytes": 8280211456,
+    "models": [
+      {
+        "name": "qwen3-vl:8b-instruct",
+        "size": 6718215945,
+        "size_vram": 6718215945,
+        "context_length": 8192
+      }
+    ]
+  },
+  {
+    "seconds": 21.98,
+    "ollama_process_rss_bytes": 8276541440,
+    "models": [
+      {
+        "name": "qwen3-vl:8b-instruct",
+        "size": 6718215945,
+        "size_vram": 6718215945,
+        "context_length": 8192
+      }
+    ]
+  },
+  {
+    "seconds": 23.055,
+    "ollama_process_rss_bytes": 7736524800,
+    "models": [
+      {
+        "name": "qwen3-vl:8b-instruct",
+        "size": 6718215945,
+        "size_vram": 6718215945,
+        "context_length": 8192
+      }
+    ]
+  },
+  {
+    "seconds": 24.095,
+    "ollama_process_rss_bytes": 7737196544,
+    "models": [
+      {
+        "name": "qwen3-vl:8b-instruct",
+        "size": 6718215945,
+        "size_vram": 6718215945,
+        "context_length": 8192
+      }
+    ]
+  },
+  {
+    "seconds": 25.131,
+    "ollama_process_rss_bytes": 7738720256,
+    "models": [
+      {
+        "name": "qwen3-vl:8b-instruct",
+        "size": 6718215945,
+        "size_vram": 6718215945,
+        "context_length": 8192
+      }
+    ]
+  },
+  {
+    "seconds": 26.169,
+    "ollama_process_rss_bytes": 7724580864,
+    "models": [
+      {
+        "name": "qwen3-vl:8b-instruct",
+        "size": 6718215945,
+        "size_vram": 6718215945,
+        "context_length": 8192
+      }
+    ]
+  },
+  {
+    "seconds": 27.209,
+    "ollama_process_rss_bytes": 7724875776,
+    "models": [
+      {
+        "name": "qwen3-vl:8b-instruct",
+        "size": 6718215945,
+        "size_vram": 6718215945,
+        "context_length": 8192
+      }
+    ]
+  }
+]

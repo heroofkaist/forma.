@@ -56,6 +56,11 @@ def grade_image(
             "GEMINI_API_KEY is not configured. Add it to the backend environment."
         )
 
+    from ai_budget import guard_gemini, BudgetUnavailable
+    try: guard_gemini()
+    except BudgetUnavailable as error:
+        raise GradingConfigurationError(str(error)) from error
+
     image = Image.open(BytesIO(image_bytes)).convert("RGB")
     prompt = f"""
 Ты — строгий, но справедливый проверяющий работ по математике и физике.

@@ -1,5 +1,7 @@
 # Forma
 
+Local Qwen3-VL document understanding is available through the modular provider engine. See [Mac setup and measured benchmark](docs/QWEN_LOCAL_ENGINE.md). Student PDFs use the existing secure upload and teacher-review flow; templates are optional and document interpretation assigns no grades. Cloud Qwen is implemented with paid inference disabled by default: see [budget controls and approval-gated deployment steps](docs/QWEN_BUDGET_AND_OPENROUTER.md). The legacy crop-based MVP is described below; its unmetered paid Gemini calls are paused under the strict budget policy.
+
 Forma — локальное рабочее пространство для проверки рукописных решений по математике и физике. Сервис извлекает ответы из шаблонных областей, предлагает расшифровку и оценку по рубрике, а преподаватель проверяет и утверждает каждую работу. Оценки ИИ остаются предложениями и не попадают в финальный экспорт до одобрения учителем.
 
 ## Возможности MVP
@@ -35,7 +37,7 @@ cd frontend
 npm install
 ```
 
-В `.env` можно оставить `DEMO_MODE=true` для локального знакомства с интерфейсом или указать `GEMINI_API_KEY` и выключить деморежим для оценки через Gemini. Никогда не добавляйте настоящий ключ в репозиторий.
+В `.env` можно оставить `DEMO_MODE=true` для локального знакомства с интерфейсом. Код Gemini сохранён, но платные вызовы без учёта стоимости приостановлены политикой бюджета; используйте локальный Qwen или явно разрешённый адаптер OpenRouter. Никогда не добавляйте настоящий ключ в репозиторий.
 
 Запустите backend в первом окне терминала:
 
@@ -81,7 +83,7 @@ npm run dev
 | --- | --- |
 | `DEMO_MODE` | `true` включает локальный деморежим; значение в `.env.example` предназначено для первого запуска. |
 | `FORMA_DEMO_MODE` | Если задана, переопределяет `DEMO_MODE`; для production укажите `false`. |
-| `GEMINI_API_KEY` | Ключ Google GenAI для мультимодальной оценки вне деморежима. |
+| `GEMINI_API_KEY` | Сохранён для совместимости; платные вызовы приостановлены политикой бюджета. |
 | `GEMINI_MODEL` | Модель Gemini; по умолчанию `gemini-flash-lite-latest`. |
 | `FRONTEND_ORIGIN` | Origin браузерного приложения, по умолчанию `http://localhost:3000`. |
 | `FORMA_DATABASE_URL` | Необязательный URL PostgreSQL; без него используется локальная SQLite. Для Neon используйте URL с `sslmode=require`. |
@@ -189,7 +191,13 @@ and platform administrators use explicit institution membership and operator
 bootstrap. See [Phase 3 implementation and operator steps](docs/PHASE3_IMPLEMENTATION_REPORT.md).
 
 Submitted documents can be interpreted without answer-crop templates. PostgreSQL
-jobs persist across restart, resume while Render is awake, and use bounded Gemini
-visual pages plus deterministic extraction. Teacher task-sheet questions require
+jobs persist across restart, resume while Render is awake, and use bounded provider adapters and deterministic extraction. Local Ollama and
+explicitly budgeted OpenRouter are available; unmetered paid Gemini is paused. Teacher task-sheet questions require
 approval; interpretation corrections preserve the original and do not publish
 grades. The same-origin Cloudflare proxy retains `redirect: "manual"`.
+
+### Universal rubric assessment
+
+Problem sets, essays and lab reports share rubric evaluation and explicit teacher confirmation. Assessment defaults to local Ollama; explicitly configured OpenRouter reuses the strict budget ledger. See the [local cloud pilot and approval-gated smoke test](docs/CLOUD_QWEN_PILOT.md) and separate [staging plan](docs/CLOUD_QWEN_STAGING_PLAN.md). See [Phase 4 implementation, real examples, file support and rollout](docs/UNIVERSAL_ASSESSMENT_PHASE4.md). Suggestions never publish grades; unsupported formats/categories remain available for manual review.
+
+The [Teacher Review Workspace guide](docs/TEACHER_REVIEW_WORKSPACE.md) covers the redesigned document/criteria interface, persisted drafts, explicit publication, verification and exact local commands using saved data without inference.

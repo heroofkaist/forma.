@@ -516,7 +516,9 @@ def ensure_academic_seed() -> None:
                 continue
             assignment_id = ASSIGNMENT_IDS[year]
             text = seed_texts[year]
-            legacy_submission_id = f"legacy-{submission_id}"
+            # New synthetic IDs must fit submissions.id's PostgreSQL VARCHAR(36).
+            # Existing academic fixtures above retain their original references.
+            legacy_submission_id = f"legacy-phy101-submission-{year}"
             legacy_submission_ids[year] = legacy_submission_id
             file_type = "pdf" if year == "2024" else "docx"
             relative = Path(assignment_id) / "academic" / f"seed-{year}.{file_type}"

@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 import threading
+from ai_budget import BudgetUnavailable
 from datetime import timedelta
 from uuid import uuid4
 from sqlalchemy import select, update, or_, func, text
@@ -13,8 +14,8 @@ from processing_models import ProcessingJob, DocumentInterpretation, Interpretat
 from document_models import SubmissionDocument
 from persistence import SessionLocal, AcademicSubmission, AcademicAssignment, now_utc, read_blob
 from services.document_ingestion import ingest
-from services.document_understanding import PROMPT_VERSION, gemini_interpret, limit
-from services.ai_grader import configured_model
+from services.document_understanding import limit
+from services.ai_providers.engine import configuration, config_for_job, interpret_document, asdict
 
 MAX_ATTEMPTS = 3
 ACTIVE = ('extracting', 'interpreting')
@@ -26,6 +27,8 @@ class ProcessingLimitError(ValueError):
 def retryable_error(error):
     from google.genai.errors import APIError
     import httpx
+    if isinstance(error, httpx.HTTPStatusError):
+        return error.response.status_code == 429 or 500 <= error.response.status_code <= 599
     if isinstance(error, FileNotFoundError):
         return False
     if isinstance(error, ClientError):
@@ -44,24 +47,30 @@ def retryable_error(error):
     return isinstance(error, (OSError, TimeoutError, httpx.TransportError, StorageConnectionError, HTTPClientError))
 
 
-def enqueue(db, submission, assignment, actor, force=False):
+def enqueue(db, submission, assignment, actor, force=False, *, task_context=None, provider_config=None):
     if db.bind.dialect.name == 'postgresql':
         db.execute(text('SELECT pg_advisory_xact_lock(62401704)'))
     else:
         db.execute(update(ProcessingJob).where(ProcessingJob.status=='queued').values(stage=ProcessingJob.stage))
+    ai = provider_config or configuration()
     document = db.get(SubmissionDocument, submission.id)
     content_hash = document.content_hash if document else hashlib.sha256(read_blob(submission.file_path)).hexdigest()
     context = {'document_type':assignment.assignment_type, 'questions':[{'id':q['id'], 'title':q['title'], 'statement':q.get('statement',''), 'label':q.get('label','')} for q in assignment.questions], 'visual_pages':limit('FORMA_AI_VISUAL_PAGES',8,12)}
+    context['ai'] = asdict(ai)
+    if task_context: context.update(task_context)
     briefs=db.scalars(select(AssignmentBrief).where(AssignmentBrief.assignment_id==assignment.id).order_by(AssignmentBrief.created_at.desc()).limit(3)).all()
     approved=next((brief.approved_questions for brief in briefs if brief.approved_questions),None)
     if approved: context['questions']=approved
-    context['cache_key'] = hashlib.sha256(json.dumps([assignment.offering_id, content_hash, context, PROMPT_VERSION, configured_model()],sort_keys=True).encode()).hexdigest()
-    signature = hashlib.sha256(json.dumps([submission.id,content_hash,context,PROMPT_VERSION,configured_model()], sort_keys=True).encode()).hexdigest()
+    context['cache_key'] = hashlib.sha256(json.dumps([assignment.offering_id, content_hash, context, ai.version, ai.model],sort_keys=True).encode()).hexdigest()
+    signature = hashlib.sha256(json.dumps([submission.id,content_hash,context,ai.version,ai.model], sort_keys=True).encode()).hexdigest()
     existing = db.scalar(select(ProcessingJob).where(ProcessingJob.input_hash == signature))
     if existing and not force:
         return existing
     pending = db.scalar(select(ProcessingJob).where(ProcessingJob.submission_id == submission.id, ProcessingJob.status.in_(('queued', *ACTIVE))))
-    if pending: return pending
+    if pending:
+        if pending.context.get('task', 'understanding') != context.get('task', 'understanding'):
+            raise ValueError('Another document task is active; wait for it to finish.')
+        return pending
     midnight = now_utc().replace(hour=0, minute=0, second=0, microsecond=0)
     if db.scalar(select(func.count()).select_from(ProcessingJob).where(ProcessingJob.requested_by == actor, ProcessingJob.created_at >= midnight)) >= 20:
         raise ValueError('Daily document processing limit (20 jobs) reached.')
@@ -69,7 +78,7 @@ def enqueue(db, submission, assignment, actor, force=False):
         raise ValueError('Maximum three analysis versions per submission per day.')
     if force: context['bypass_cache'] = True
     if force: signature = hashlib.sha256((signature + str(uuid4())).encode()).hexdigest()
-    job = ProcessingJob(submission_id=submission.id, requested_by=actor, input_hash=signature, content_hash=content_hash, context=context, model=configured_model(), prompt_version=PROMPT_VERSION)
+    job = ProcessingJob(submission_id=submission.id, requested_by=actor, input_hash=signature, content_hash=content_hash, context=context, model=ai.model, prompt_version=ai.version)
     try:
         with db.begin_nested():
             db.add(job); db.flush()
@@ -88,7 +97,9 @@ def claim():
             db.execute(update(ProcessingJob).where(ProcessingJob.status == 'queued').values(stage=ProcessingJob.stage))
         db.execute(update(ProcessingJob).where(ProcessingJob.status.in_(ACTIVE), ProcessingJob.lease_until < now, ProcessingJob.attempts >= MAX_ATTEMPTS).values(status='failed', stage='failed', error_class='lease_exhausted', error='Worker lease expired after maximum attempts.', updated_at=now))
         busy = db.scalar(select(func.count()).select_from(ProcessingJob).where(ProcessingJob.status.in_(ACTIVE), ProcessingJob.lease_until > now))
-        if busy >= limit('FORMA_DOCUMENT_CONCURRENCY',1,2):
+        local_active = db.scalars(select(ProcessingJob).where(ProcessingJob.status.in_(ACTIVE), ProcessingJob.lease_until > now)).all()
+        local_mode = os.getenv('FORMA_AI_PROVIDER', 'gemini') == 'ollama' or any(j.context.get('ai', {}).get('name') == 'ollama' for j in local_active)
+        if busy >= (1 if local_mode else limit('FORMA_DOCUMENT_CONCURRENCY',1,2)):
             db.commit(); return None
         eligible = (ProcessingJob.attempts < MAX_ATTEMPTS) & (ProcessingJob.available_at <= now) & or_(ProcessingJob.status == 'queued', (ProcessingJob.status.in_(ACTIVE)) & (ProcessingJob.lease_until < now))
         candidate = db.scalar(select(ProcessingJob.id).where(eligible).order_by(ProcessingJob.created_at).limit(1))
@@ -118,6 +129,7 @@ def process_one():
             structure = structure_row.structure if structure_row else None
             path, file_name, file_type = submission.file_path, submission.file_name, submission.file_type
             context, expected_hash, model = job.context, job.content_hash, job.model
+            ai = config_for_job(context, model, job.prompt_version)
         # Reuse deterministic extraction. Original is fetched only for validation
         # of old records or for bounded PDF page rendering when needed.
         set_stage('source_read')
@@ -144,17 +156,41 @@ def process_one():
         with SessionLocal() as db:
             cached = db.get(InterpretationCache, context['cache_key']) if not context.get('bypass_cache') else None
             cached_result = cached.result if cached else None
-        if cached_result:
+        if context.get('task') == 'assessment':
+            from services.assessment import evaluate
+            def assessment_heartbeat():
+                with SessionLocal() as lease_db:
+                    renewed = lease_db.scalar(update(ProcessingJob).where(ProcessingJob.id == job_id,
+                        ProcessingJob.lease_owner == owner, ProcessingJob.status.in_(ACTIVE),
+                        ProcessingJob.lease_until > now_utc()).values(lease_until=now_utc()+timedelta(minutes=5)).returning(ProcessingJob.id))
+                    lease_db.commit()
+                    if not renewed: raise ValueError('Assessment worker lease was lost.')
+            result, usage = evaluate(context['assessment'], ai, progress=assessment_heartbeat, job_id=job_id)
+        elif cached_result:
             result, usage = cached_result, {'cache_hit':True, 'ai_called':False, 'visual_pages':0}
         else:
             set_stage('interpretation')
-            result, usage = gemini_interpret(content, file_type, structure, context['questions'], context['document_type'], model, context['visual_pages'])
+            def heartbeat():
+                with SessionLocal() as lease_db:
+                    renewed = lease_db.scalar(update(ProcessingJob).where(ProcessingJob.id == job_id,
+                        ProcessingJob.lease_owner == owner, ProcessingJob.status.in_(ACTIVE),
+                        ProcessingJob.lease_until > now_utc()).values(lease_until=now_utc()+timedelta(minutes=5), updated_at=now_utc()).returning(ProcessingJob.id))
+                    lease_db.commit()
+                    if not renewed: raise ValueError('Document worker lease was lost.')
+            result, usage = interpret_document(content, file_type, structure, context['questions'], context['document_type'], ai, progress=heartbeat, job_id=job_id)
         set_stage('analysis_persist')
         with SessionLocal() as db:
             current = db.scalar(select(ProcessingJob).where(ProcessingJob.id==job_id, ProcessingJob.lease_owner==owner, ProcessingJob.status=='interpreting', ProcessingJob.lease_until>now_utc()).with_for_update())
             if current:
-                db.add(DocumentInterpretation(submission_id=current.submission_id, job_id=job_id, result=result))
-                if usage.get('ai_called') and not db.get(InterpretationCache, context['cache_key']):
+                if context.get('task') == 'assessment':
+                    from assessment_models import AssessmentSuggestion
+                    snapshot = context['assessment']
+                    db.add(AssessmentSuggestion(submission_id=current.submission_id, job_id=job_id,
+                        rubric_id=snapshot['rubric_id'], interpretation_id=snapshot['interpretation_id'],
+                        correction_id=snapshot['correction_id'], result=result))
+                else:
+                    db.add(DocumentInterpretation(submission_id=current.submission_id, job_id=job_id, result=result))
+                if context.get('task') != 'assessment' and usage.get('ai_called') and not usage.get('partial') and not db.get(InterpretationCache, context['cache_key']):
                     try:
                         with db.begin_nested():
                             db.add(InterpretationCache(input_hash=context['cache_key'],result=result)); db.flush()
@@ -168,16 +204,18 @@ def process_one():
                 db.commit()
     except Exception as error:
         retryable = retryable_error(error)
-        classification = 'processing_limit' if isinstance(error, ProcessingLimitError) else 'source_missing' if isinstance(error, FileNotFoundError) else 'database_temporary' if retryable and isinstance(error, OperationalError) else 'storage_temporary' if retryable and isinstance(error, (ClientError, StorageConnectionError, HTTPClientError)) else 'provider_temporary' if retryable else 'invalid_document_or_model_output' if isinstance(error, ValueError) else 'processing_error'
+        classification = 'awaiting_budget' if isinstance(error, BudgetUnavailable) else 'processing_limit' if isinstance(error, ProcessingLimitError) else 'source_missing' if isinstance(error, FileNotFoundError) else 'database_temporary' if retryable and isinstance(error, OperationalError) else 'storage_temporary' if retryable and isinstance(error, (ClientError, StorageConnectionError, HTTPClientError)) else 'provider_temporary' if retryable else 'invalid_document_or_model_output' if isinstance(error, ValueError) else 'processing_error'
         log_failure(error, job_id=job_id, classification=classification, retryable=retryable)
         try:
             set_stage('failure_persist')
             with SessionLocal() as db:
                 current=db.scalar(select(ProcessingJob).where(ProcessingJob.id==job_id, ProcessingJob.lease_owner==owner, ProcessingJob.status.in_(ACTIVE), ProcessingJob.lease_until>now_utc()).with_for_update())
                 if current:
-                    current.status='queued' if retryable and current.attempts<MAX_ATTEMPTS else 'failed'
+                    current.status='awaiting_budget' if isinstance(error, BudgetUnavailable) else 'queued' if retryable and current.attempts<MAX_ATTEMPTS else 'failed'
                     current.stage=current.status; current.error_class=classification
                     current.error='Temporary processing dependency failure; bounded retry scheduled.' if current.status=='queued' else 'Document analysis failed. Check processing limits, document validity and provider configuration; request re-analysis after resolving the cause.'
+                    if isinstance(error, BudgetUnavailable):
+                        current.error=str(error)
                     if isinstance(error, ProcessingLimitError):
                         current.error='Document exceeds the configured analysis page/unit limit. Manual review remains available.'
                     if isinstance(error, FileNotFoundError):

@@ -71,7 +71,7 @@ def test_uploaded_pdf_failure_is_visible_and_retryable(platform, monkeypatch):
     client, factory, teacher, student, sid, *_ = setup_submission(platform, monkeypatch)
     path = '/api/document-analysis/' + sid
     client.post(path, headers=teacher, json={})
-    monkeypatch.setattr(document_processing, 'gemini_interpret', lambda *args: (_ for _ in ()).throw(ValueError('sensitive provider response')))
+    monkeypatch.setattr(document_processing, 'interpret_document', lambda *args, **kwargs: (_ for _ in ()).throw(ValueError('sensitive provider response')))
     assert document_processing.process_one()
     status = client.get(path + '/status', headers=student).json()['jobs'][0]
     assert status['status'] == 'failed' and status['error']

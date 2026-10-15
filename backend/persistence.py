@@ -25,7 +25,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sess
 
 
 BACKEND_DIR = Path(__file__).resolve().parent
-STORAGE_DIR = BACKEND_DIR / "storage"
+STORAGE_DIR = Path(os.getenv("FORMA_STORAGE_DIR", str(BACKEND_DIR / "storage")))
 STORAGE_BACKEND = os.getenv("FORMA_STORAGE_BACKEND", "local").strip().lower()
 if STORAGE_BACKEND not in {"local", "r2"}:
     raise ValueError("FORMA_STORAGE_BACKEND must be 'local' or 'r2'.")
@@ -273,7 +273,7 @@ def init_db(
             if database_bind is engine
             else sessionmaker(bind=database_bind, expire_on_commit=False)
         )
-    identity_tables = {"accounts", "account_sessions", "account_actions", "account_rate_buckets", "course_owners", "offering_policies", "enrollment_states", "assignment_owners", "schema_migrations", "submission_documents", "course_materials", "document_reviews", "published_document_reviews", "email_outbox", "account_roles", "institutions", "institution_memberships", "course_institutions", "teacher_invitations", "audit_events", "document_processing_jobs", "document_interpretations", "interpretation_corrections", "document_interpretation_cache", "assignment_briefs"}
+    identity_tables = {"accounts", "account_sessions", "account_actions", "account_rate_buckets", "course_owners", "offering_policies", "enrollment_states", "assignment_owners", "schema_migrations", "submission_documents", "course_materials", "document_reviews", "published_document_reviews", "email_outbox", "account_roles", "institutions", "institution_memberships", "course_institutions", "teacher_invitations", "audit_events", "document_processing_jobs", "document_interpretations", "interpretation_corrections", "document_interpretation_cache", "assignment_briefs", "ai_budget_periods", "ai_budget_controls", "ai_request_charges", "assessment_rubrics", "assessment_suggestions", "assessment_decisions"}
     Base.metadata.create_all(database_bind, tables=[table for name, table in Base.metadata.tables.items() if name not in identity_tables])
     migrations = {
         "assignments": {

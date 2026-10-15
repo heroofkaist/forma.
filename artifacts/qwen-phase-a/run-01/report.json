@@ -1,0 +1,82 @@
+{
+  "provider": "ollama",
+  "config": {
+    "name": "ollama",
+    "model": "qwen3-vl:8b-instruct",
+    "version": "qwen-document-v1",
+    "options": {
+      "base_url": "http://127.0.0.1:11434",
+      "pages": 3,
+      "batch_pages": 1,
+      "image_edge": 1120,
+      "context": 8192,
+      "output_tokens": 2200,
+      "timeout": 120,
+      "total_seconds": 480
+    }
+  },
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "synthetic_only": true,
+  "submission_id": "3708af83-8c3f-4256-8bfd-03e671c55ae9",
+  "processed": true,
+  "wall_seconds": 14.888,
+  "jobs": [
+    {
+      "id": "a7ff95ff-3a51-4367-b0ed-1d233f12769b",
+      "status": "failed",
+      "stage": "failed",
+      "attempts": 1,
+      "error": "Document analysis failed. Check processing limits, document validity and provider configuration; request re-analysis after resolving the cause.",
+      "error_class": "invalid_document_or_model_output",
+      "created_at": "2026-10-15T02:46:30.178897+00:00",
+      "updated_at": "2026-10-15T02:46:45.053487+00:00",
+      "provider": "ollama",
+      "partial": false,
+      "model": "qwen3-vl:8b-instruct",
+      "prompt_version": "qwen-document-v1",
+      "usage": {}
+    }
+  ],
+  "review": {
+    "items": [],
+    "questions": [
+      {
+        "id": "q1",
+        "title": "Question 1",
+        "label": "Question 1",
+        "statement": "Explain acceleration and continuation to velocity.",
+        "reference_solution": "",
+        "maximum_points": 1.0,
+        "criteria": [
+          {
+            "id": "q1-overall",
+            "criterion_id": "q1-overall",
+            "description": "Overall correctness",
+            "maximum_points": 1.0
+          }
+        ],
+        "region": null
+      },
+      {
+        "id": "q2",
+        "title": "Question 2",
+        "label": "Question 2",
+        "statement": "Describe energy and the inclined-plane diagram.",
+        "reference_solution": "",
+        "maximum_points": 1.0,
+        "criteria": [
+          {
+            "id": "q2-overall",
+            "criterion_id": "q2-overall",
+            "description": "Overall correctness",
+            "maximum_points": 1.0
+          }
+        ],
+        "region": null
+      }
+    ]
+  },
+  "original_pdf_match": true,
+  "schema_valid": false,
+  "peak_ollama_process_rss_bytes": 4365631488
+}

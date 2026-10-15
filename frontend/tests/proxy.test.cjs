@@ -46,6 +46,26 @@ test('cookie authorizes private document and logout revokes account backend sess
   const response = await route.POST(request(['api','auth','logout'], { method: 'POST', origin: 'https://forma.example', cookie: 'forma_session=acct_secret' }), context(['api','auth','logout']));
   assert.match(response.headers.get('set-cookie'), /Max-Age=0/);
 });
+test('budget status and authorized resume use the cookie proxy without AI credentials', async () => {
+  const parts = ['api','document-analysis','synthetic-submission','resume'];
+  let calls = 0;
+  global.fetch = async (url, init) => {
+    calls++;
+    assert.equal(url.pathname, '/api/document-analysis/synthetic-submission/resume');
+    assert.equal(init.headers.get('authorization'), 'Bearer acct_secret');
+    assert.equal(init.method, 'POST');
+    return Response.json({ detail: 'Paid allowance is not available; review manually.' }, { status: 409 });
+  };
+  const denied = await route.POST(request(parts, { method:'POST', origin:'https://attacker.example', cookie:'forma_session=acct_secret', body:'{}' }), context(parts));
+  assert.equal(denied.status, 403); assert.equal(calls, 0);
+  const paused = await route.POST(request(parts, { method:'POST', origin:'https://forma.example', cookie:'forma_session=acct_secret', body:'{}' }), context(parts));
+  assert.equal(paused.status, 409); assert.equal(calls, 1);
+  const statusParts = ['api','document-analysis','synthetic-submission','status'];
+  global.fetch = async () => Response.json({ jobs:[{status:'awaiting_budget', error:'Manual review remains available.'}] });
+  const status = await route.GET(request(statusParts, {cookie:'forma_session=acct_secret'}), context(statusParts));
+  assert.equal((await status.json()).jobs[0].status, 'awaiting_budget');
+  assert.equal(status.headers.get('cache-control'), 'no-store');
+});
 test('rejects traversal and arbitrary proxy paths without fetching', async () => {
   let calls = 0; global.fetch = async () => { calls++; throw new Error(); };
   for (const parts of [['api','..','secret'], ['https:','attacker.example'], ['api','bad\\path']]) {
@@ -118,4 +138,22 @@ test('proxy preserves a private PDF access denial without exposing file bytes', 
   assert.equal(response.status, 403);
   assert.match(response.headers.get('cache-control'), /no-store/);
   assert.deepEqual(await response.json(), { detail: 'Student account required.' });
+});
+
+test('rubric approval and teacher assessment decisions retain same-origin cookie protection', async () => {
+  for (const parts of [['api','assessment-rubrics','synthetic-assignment'], ['api','assessment','synthetic-submission','decisions']]) {
+    let calls = 0;
+    const body = JSON.stringify({ marker: 'synthetic-teacher-decision' });
+    global.fetch = async (url, init) => {
+      calls++;
+      assert.equal(url.pathname, '/' + parts.join('/'));
+      assert.equal(init.headers.get('authorization'), 'Bearer acct_secret');
+      assert.equal(new TextDecoder().decode(init.body), body);
+      return Response.json({ published: false }, { status: 201 });
+    };
+    const blocked = await route.POST(request(parts, { method:'POST', origin:'https://attacker.example', cookie:'forma_session=acct_secret', body }), context(parts));
+    assert.equal(blocked.status, 403); assert.equal(calls, 0);
+    const accepted = await route.POST(request(parts, { method:'POST', origin:'https://forma.example', cookie:'forma_session=acct_secret', body }), context(parts));
+    assert.equal(accepted.status, 201); assert.equal((await accepted.json()).published, false);
+  }
 });

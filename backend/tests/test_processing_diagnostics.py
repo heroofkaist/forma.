@@ -42,6 +42,7 @@ def test_failure_diagnostics_and_job_fencing(platform, monkeypatch, caplog, fail
     elif failure == 'hash':
         monkeypatch.setattr(processing, 'read_blob', lambda _: b'changed synthetic content')
     elif failure in {'provider', 'json', 'schema'}:
+        monkeypatch.setattr(__import__('ai_budget'), 'guard_gemini', lambda: None)  # Offline transport only.
         monkeypatch.setenv('GEMINI_API_KEY', 'synthetic-key')
         class FakeClient:
             def __init__(self, **kwargs): self.models = self
@@ -57,7 +58,7 @@ def test_failure_diagnostics_and_job_fencing(platform, monkeypatch, caplog, fail
             if statement.startswith('INSERT INTO document_interpretations'):
                 raise ValueError(PRIVATE)
         event.listen(engine, 'before_cursor_execute', fail_insert)
-        monkeypatch.setattr(processing, 'gemini_interpret', lambda *args: ({}, {'ai_called': False}))
+        monkeypatch.setattr(processing, 'interpret_document', lambda *args, **kwargs: ({}, {'ai_called': False}))
     try:
         assert processing.process_one()
     finally:
@@ -97,7 +98,7 @@ def test_claim_failure_logs_without_losing_job_or_private_sql(monkeypatch, caplo
 def test_failure_state_write_logs_both_exceptions_and_leaves_recoverable_lease(platform, monkeypatch, caplog):
     client, factory, teacher, student, sid, *_ = setup_submission(platform, monkeypatch)
     job_id = client.post('/api/document-analysis/' + sid, headers=teacher, json={}).json()['id']
-    def fail(*args):
+    def fail(*args, **kwargs):
         # Simulate DB becoming unavailable after source read failed.
         monkeypatch.setattr(processing, 'SessionLocal', lambda: (_ for _ in ()).throw(ConnectionError(PRIVATE)))
         raise FileNotFoundError(PRIVATE)
@@ -171,6 +172,7 @@ def test_real_gemini_sdk_schema_and_request_path_offline(platform, monkeypatch):
         kwargs['http_options'].httpx_client = httpx.Client(transport=httpx.MockTransport(respond))
         return original(**kwargs)
     monkeypatch.setattr(understanding.genai, 'Client', offline_client)
+    monkeypatch.setattr(__import__('ai_budget'), 'guard_gemini', lambda: None)  # Offline SDK only.
     monkeypatch.setenv('GEMINI_API_KEY', 'synthetic-test-key')
     job = client.post('/api/document-analysis/' + sid, headers=teacher, json={}).json()
     assert processing.process_one()
@@ -184,10 +186,10 @@ def test_explicit_retry_preserves_failed_history_and_original_submission(platfor
     client, factory, teacher, student, sid, structure, assignment, content = setup_submission(platform, monkeypatch)
     path = '/api/document-analysis/' + sid
     old_id = client.post(path, headers=teacher, json={}).json()['id']
-    real_interpret = processing.gemini_interpret
-    monkeypatch.setattr(processing, 'gemini_interpret', lambda *args: (_ for _ in ()).throw(ValueError(PRIVATE)))
+    real_interpret = processing.interpret_document
+    monkeypatch.setattr(processing, 'interpret_document', lambda *args, **kwargs: (_ for _ in ()).throw(ValueError(PRIVATE)))
     assert processing.process_one()
-    monkeypatch.setattr(processing, 'gemini_interpret', real_interpret)
+    monkeypatch.setattr(processing, 'interpret_document', real_interpret)
     retried = client.post(path, headers=teacher, json={'reanalyze': True})
     assert retried.status_code == 202 and retried.json()['id'] != old_id
     # Repeated retry requests converge on the active job; student has no retry authority.
@@ -207,7 +209,7 @@ def test_non_collision_cache_integrity_failure_is_not_silenced(platform, monkeyp
     client, factory, teacher, student, sid, structure, assignment, content = setup_submission(platform, monkeypatch)
     path = '/api/document-analysis/' + sid
     job_id = client.post(path, headers=teacher, json={}).json()['id']
-    monkeypatch.setattr(processing, 'gemini_interpret', lambda *args: ({}, {'ai_called': True}))
+    monkeypatch.setattr(processing, 'interpret_document', lambda *args, **kwargs: ({}, {'ai_called': True}))
     engine = factory.kw['bind']
     def fail_cache(conn, cursor, statement, parameters, context, executemany):
         if statement.startswith('INSERT INTO document_interpretation_cache'):

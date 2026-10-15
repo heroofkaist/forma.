@@ -19,6 +19,13 @@ os.environ["FORMA_PUBLIC_REGISTRATION"] = "false"
 os.environ["FORMA_EMAIL_WORKER_ENABLED"] = "false"
 os.environ["FORMA_DOCUMENT_WORKER_ENABLED"] = "false"
 os.environ["GEMINI_API_KEY"] = ""
+os.environ["FORMA_AI_PAID_ENABLED"] = "false"
+os.environ["FORMA_AI_PAID_FALLBACK_ENABLED"] = "false"
+os.environ["FORMA_OPENROUTER_API_KEY"] = ""
+os.environ["FORMA_OPENROUTER_PRIVACY_ACKNOWLEDGED"] = "false"
+os.environ["FORMA_AI_PROVIDER"] = "gemini"
+os.environ["FORMA_ASSESSMENT_PROVIDER"] = "ollama"
+os.environ["FORMA_LOAD_ENV_FILE"] = "false"
 os.environ["FORMA_SMTP_HOST"] = ""
 
 import persistence

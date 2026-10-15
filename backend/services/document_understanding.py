@@ -23,6 +23,8 @@ class Section(BaseModel):
     rationale: str = Field(default='', max_length=2000)
     uncertainty_notes: list[str] = Field(default_factory=list, max_length=20)
     evidence_kind: Literal['embedded_text','visual_page','teacher_correction']
+    latex: str = Field(default='', max_length=5000)
+    interpretation: str = Field(default='', max_length=4000)
 
 class Association(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -107,6 +109,8 @@ def validate_result(result, structure, questions, visual_pages=(), teacher=False
             raise ValueError('Embedded text evidence must quote actual extracted content.')
         if section['readability'] in {'unreadable','missing'} and section['transcription'] and not teacher:
             raise ValueError('Unreadable content cannot be invented.')
+        if section['readability'] in {'unreadable', 'missing'} and (section['latex'] or section['interpretation']) and not teacher:
+            raise ValueError('Unreadable content cannot have invented mathematical interpretation.')
         sections[section['id']] = section
     seen = set()
     for association in parsed['question_associations']:

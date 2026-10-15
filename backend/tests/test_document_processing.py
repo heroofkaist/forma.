@@ -72,7 +72,7 @@ def test_atomic_claim_expired_lease_and_bounded_retries(platform,monkeypatch):
 def test_model_response_evidence_validation_and_corrections_preserve_original(platform,monkeypatch):
     client,factory,teacher,student,sid,structure,assignment,*_=setup_submission(platform,monkeypatch)
     original=deterministic_interpretation(structure,assignment['questions'],'problem_set')
-    monkeypatch.setattr(processing,'gemini_interpret',lambda *args:(original,{'ai_called':True,'input_tokens':100}))
+    monkeypatch.setattr(processing,'interpret_document',lambda *args, **kwargs:(original,{'ai_called':True,'input_tokens':100}))
     path='/api/document-analysis/'+sid
     client.post(path,headers=teacher,json={});assert processing.process_one()
     item=client.get(path,headers=teacher).json()['items'][0]
@@ -91,8 +91,8 @@ def test_model_response_evidence_validation_and_corrections_preserve_original(pl
 def test_retry_temporary_provider_failure(platform,monkeypatch):
     client,factory,teacher,student,sid,*_=setup_submission(platform,monkeypatch)
     client.post('/api/document-analysis/'+sid,headers=teacher,json={})
-    def fail(*args): raise TimeoutError('private content must never enter logs')
-    monkeypatch.setattr(processing,'gemini_interpret',fail)
+    def fail(*args, **kwargs): raise TimeoutError('private content must never enter logs')
+    monkeypatch.setattr(processing,'interpret_document',fail)
     for attempt in range(3):
         assert processing.process_one()
         with factory() as db:
@@ -150,8 +150,8 @@ def test_identical_same_offering_document_uses_validated_cache(platform,monkeypa
     client,factory,teacher,student,sid,structure,assignment,content=setup_submission(platform,monkeypatch)
     calls=[]
     result=deterministic_interpretation(structure,assignment['questions'],'problem_set')
-    def interpret(*args):calls.append(1);return result,{'ai_called':True,'visual_pages':0}
-    monkeypatch.setattr(processing,'gemini_interpret',interpret)
+    def interpret(*args, **kwargs):calls.append(1);return result,{'ai_called':True,'visual_pages':0}
+    monkeypatch.setattr(processing,'interpret_document',interpret)
     client.post('/api/document-analysis/'+sid,headers=teacher,json={});processing.process_one()
     with factory() as db:
         original=db.get(AcademicSubmission,sid)
@@ -177,7 +177,7 @@ def test_uploaded_task_sheet_requires_approval_and_informs_job(platform,monkeypa
     import assignment_briefs
     client,factory,teacher,student,sid,structure,assignment,*_=setup_submission(platform,monkeypatch)
     monkeypatch.setattr(assignment_briefs,'SessionLocal',factory)
-    monkeypatch.setattr(assignment_briefs,'write_blob',lambda *args:None)
+    monkeypatch.setattr(assignment_briefs,'write_blob',lambda *args, **kwargs:None)
     paper=pymupdf.open();paper.new_page().insert_text((48,72),'Question 7: Explain forces.\nQuestion 8: Discuss uncertainty.');content=paper.tobytes();paper.close()
     path='/api/assignment-briefs/'+assignment['id']
     assert client.post(path,headers=student,files={'file':('task.pdf',content,'application/pdf')}).status_code==403
