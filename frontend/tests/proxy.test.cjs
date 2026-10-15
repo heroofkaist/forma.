@@ -58,3 +58,64 @@ test('oversized upload rejected and backend outages reported accurately', async 
   assert.equal((await route.POST(request(['api','upload'], { method: 'POST', origin: 'https://forma.example', headers: { 'content-length': String(33*1024*1024) } }), context(['api','upload']))).status, 413);
   assert.equal((await route.GET(request(['api','health']), context(['api','health']))).status, 502);
 });
+
+const apiFilename = path.resolve('src/lib/api.ts');
+const apiModule = new Module(apiFilename, module);
+apiModule.filename = apiFilename;
+apiModule.paths = Module._nodeModulePaths(path.dirname(apiFilename));
+apiModule._compile(ts.transpileModule(fs.readFileSync(apiFilename, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, apiFilename);
+const { authenticatedResourceUrl, API_URL } = apiModule.exports;
+
+test('PDF preview fetches private binary through proxy once using the session cookie', async () => {
+  const previousWindow = global.window;
+  const previousObjectUrl = URL.createObjectURL;
+  const previousFetch = global.fetch;
+  const pdf = Buffer.from('%PDF-1.7\nsynthetic multi-page PDF\n%%EOF');
+  const browserPaths = [];
+  const upstreamPaths = [];
+  let blob;
+  global.window = { location: { href: 'https://forma.example/teacher/submissions/synthetic-submission/review' }, sessionStorage: { getItem: () => null } };
+  URL.createObjectURL = (value) => { blob = value; return 'blob:synthetic-preview'; };
+  // Browser fetch -> actual proxy handler -> upstream fetch. No JS-readable
+  // token exists: browser cookie is attached using credentials:same-origin.
+  global.fetch = async (url, init) => {
+    if (typeof url === 'string' && url.startsWith('/')) {
+      browserPaths.push(url);
+      assert.equal(init.credentials, 'same-origin');
+      assert.equal(init.headers.get('authorization'), null);
+      const requestedParts = url.slice('/api/backend/'.length).split('/');
+      return route.GET(request(requestedParts, { cookie: 'forma_session=acct_teacher' }), context(requestedParts));
+    }
+    upstreamPaths.push(url.pathname);
+    assert.equal(init.headers.get('authorization'), 'Bearer acct_teacher');
+    assert.equal(init.redirect, 'manual');
+    if (url.pathname !== '/api/submission-files/synthetic-submission') {
+      return Response.json({ detail: 'This route has no access policy.' }, { status: 403 });
+    }
+    return new Response(pdf, { headers: { 'content-type': 'application/pdf', 'content-disposition': 'attachment; filename="submission.pdf"', 'cache-control': 'private, no-store' } });
+  };
+  try {
+    for (const url of [`${API_URL}/api/submission-files/synthetic-submission`, '/api/submission-files/synthetic-submission']) {
+      assert.equal(await authenticatedResourceUrl(url), 'blob:synthetic-preview');
+      assert.equal(blob.type, 'application/pdf');
+      assert.deepEqual(Buffer.from(await blob.arrayBuffer()), pdf);
+    }
+    assert.deepEqual(browserPaths, Array(2).fill('/api/backend/api/submission-files/synthetic-submission'));
+    assert.deepEqual(upstreamPaths, Array(2).fill('/api/submission-files/synthetic-submission'));
+  } finally {
+    global.window = previousWindow; URL.createObjectURL = previousObjectUrl; global.fetch = previousFetch;
+  }
+});
+
+test('proxy preserves a private PDF access denial without exposing file bytes', async () => {
+  global.fetch = async (url, init) => {
+    assert.equal(url.pathname, '/api/submission-files/synthetic-submission');
+    assert.equal(init.headers.get('authorization'), 'Bearer acct_unrelated');
+    return Response.json({ detail: 'Student account required.' }, { status: 403 });
+  };
+  const parts = ['api', 'submission-files', 'synthetic-submission'];
+  const response = await route.GET(request(parts, { cookie: 'forma_session=acct_unrelated' }), context(parts));
+  assert.equal(response.status, 403);
+  assert.match(response.headers.get('cache-control'), /no-store/);
+  assert.deepEqual(await response.json(), { detail: 'Student account required.' });
+});

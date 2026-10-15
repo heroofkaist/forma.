@@ -107,7 +107,7 @@ class Submission(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     assignment_id: Mapped[str] = mapped_column(ForeignKey("assignments.id", ondelete="CASCADE"), index=True)
     student_name: Mapped[str] = mapped_column(String(200))
-    anonymous_student_id: Mapped[str] = mapped_column(String(24), default="")
+    anonymous_student_id: Mapped[str] = mapped_column(String(64), default="")
     source_path: Mapped[str] = mapped_column(String(500))
     page_count: Mapped[int] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(24), default="ready")

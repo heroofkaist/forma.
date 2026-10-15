@@ -22,7 +22,12 @@ export async function authenticatedFetch(input: RequestInfo | URL, init: Request
 
 export async function authenticatedResourceUrl(url: string): Promise<string> {
   if (url.startsWith("data:")) return url;
-  const response = await authenticatedFetch(url.startsWith("http") ? url : `${API_URL}${url}`);
+  // Callers may supply a backend-relative path or an already proxied path.
+  // Prefix exactly once so private files reach the intended access policy.
+  const requestUrl = url.startsWith("http") || url === API_URL || url.startsWith(`${API_URL}/`)
+    ? url
+    : `${API_URL}${url}`;
+  const response = await authenticatedFetch(requestUrl);
   if (!response.ok) throw new Error(`Не удалось загрузить файл (${response.status}).`);
   return URL.createObjectURL(await response.blob());
 }

@@ -6,7 +6,9 @@ import threading
 from datetime import timedelta
 from uuid import uuid4
 from sqlalchemy import select, update, or_, func, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
+from botocore.exceptions import ClientError, ConnectionError as StorageConnectionError, HTTPClientError
+from services.processing_diagnostics import set_stage, log_failure
 from processing_models import ProcessingJob, DocumentInterpretation, InterpretationCache, AssignmentBrief
 from document_models import SubmissionDocument
 from persistence import SessionLocal, AcademicSubmission, AcademicAssignment, now_utc, read_blob
@@ -19,6 +21,27 @@ ACTIVE = ('extracting', 'interpreting')
 
 class ProcessingLimitError(ValueError):
     pass
+
+
+def retryable_error(error):
+    from google.genai.errors import APIError
+    import httpx
+    if isinstance(error, FileNotFoundError):
+        return False
+    if isinstance(error, ClientError):
+        response = error.response
+        status = response.get('ResponseMetadata', {}).get('HTTPStatusCode')
+        code = response.get('Error', {}).get('Code')
+        return status in {429, 500, 502, 503, 504} or code in {'SlowDown', 'RequestTimeout', 'InternalError', 'ServiceUnavailable', 'Throttling', 'ThrottlingException'}
+    if isinstance(error, APIError):
+        status = getattr(error, 'code', None)
+        return isinstance(status, int) and (status == 429 or status >= 500)
+    if isinstance(error, OperationalError):
+        # PostgreSQL disconnects, serialization failures/deadlocks are transient;
+        # invalid columns/schema/constraints must not be retried blindly.
+        sqlstate = getattr(error.orig, 'sqlstate', '') or ''
+        return error.connection_invalidated or sqlstate.startswith('08') or sqlstate in {'40001', '40P01', '57P01'}
+    return isinstance(error, (OSError, TimeoutError, httpx.TransportError, StorageConnectionError, HTTPClientError))
 
 
 def enqueue(db, submission, assignment, actor, force=False):
@@ -78,10 +101,16 @@ def claim():
 
 
 def process_one():
-    claimed = claim()
+    set_stage('claim')
+    try:
+        claimed = claim()
+    except Exception as error:
+        log_failure(error)
+        return False
     if not claimed: return False
     job_id, owner = claimed
     try:
+        set_stage('load_job')
         with SessionLocal() as db:
             job = db.get(ProcessingJob, job_id)
             submission = db.get(AcademicSubmission, job.submission_id)
@@ -91,27 +120,36 @@ def process_one():
             context, expected_hash, model = job.context, job.content_hash, job.model
         # Reuse deterministic extraction. Original is fetched only for validation
         # of old records or for bounded PDF page rendering when needed.
+        set_stage('source_read')
         content = read_blob(path)
+        set_stage('source_hash')
         if hashlib.sha256(content).hexdigest() != expected_hash:
             raise ValueError('Document content changed after job scheduling.')
         if structure is None:
+            set_stage('extraction')
             structure = ingest(content, file_name, context['document_type']=='programming')
+            set_stage('extraction_persist')
             with SessionLocal() as db:
                 if not db.get(SubmissionDocument, job.submission_id):
                     db.add(SubmissionDocument(submission_id=job.submission_id, content_hash=expected_hash, structure=structure)); db.commit()
+        set_stage('processing_limits')
         if structure['unit_count'] > limit('FORMA_DOCUMENT_JOB_PAGES',50,50):
             raise ProcessingLimitError('Document exceeds processing page/unit limit.')
+        set_stage('interpret_transition')
         with SessionLocal() as db:
             changed = db.scalar(update(ProcessingJob).where(ProcessingJob.id==job_id, ProcessingJob.lease_owner==owner, ProcessingJob.status=='extracting', ProcessingJob.lease_until>now_utc()).values(status='interpreting', stage='interpreting', updated_at=now_utc()).returning(ProcessingJob.id))
             db.commit()
             if not changed: return True
+        set_stage('cache_lookup')
         with SessionLocal() as db:
             cached = db.get(InterpretationCache, context['cache_key']) if not context.get('bypass_cache') else None
             cached_result = cached.result if cached else None
         if cached_result:
             result, usage = cached_result, {'cache_hit':True, 'ai_called':False, 'visual_pages':0}
         else:
+            set_stage('interpretation')
             result, usage = gemini_interpret(content, file_type, structure, context['questions'], context['document_type'], model, context['visual_pages'])
+        set_stage('analysis_persist')
         with SessionLocal() as db:
             current = db.scalar(select(ProcessingJob).where(ProcessingJob.id==job_id, ProcessingJob.lease_owner==owner, ProcessingJob.status=='interpreting', ProcessingJob.lease_until>now_utc()).with_for_update())
             if current:
@@ -121,28 +159,35 @@ def process_one():
                         with db.begin_nested():
                             db.add(InterpretationCache(input_hash=context['cache_key'],result=result)); db.flush()
                     except IntegrityError:
-                        pass  # Another bounded worker already published the same cache key.
+                        # Suppress only a confirmed cache-key race, not unrelated
+                        # constraints/schema failures that need diagnostics.
+                        if not db.get(InterpretationCache, context['cache_key']):
+                            raise
                 current.status='needs_review'; current.stage='review'; current.usage=usage
                 current.lease_until=None; current.error=''; current.error_class=''; current.updated_at=now_utc()
                 db.commit()
     except Exception as error:
-        from google.genai.errors import APIError
-        import httpx
-        provider_status = getattr(error, 'code', None)
-        retryable = not isinstance(error, FileNotFoundError) and isinstance(error, (OSError, TimeoutError, httpx.TransportError)) or (isinstance(error, APIError) and isinstance(provider_status, int) and (provider_status==429 or provider_status>=500))
-        classification = 'processing_limit' if isinstance(error, ProcessingLimitError) else 'source_missing' if isinstance(error, FileNotFoundError) else 'provider_temporary' if retryable else 'invalid_document_or_model_output' if isinstance(error, ValueError) else 'processing_error'
-        with SessionLocal() as db:
-            current=db.scalar(select(ProcessingJob).where(ProcessingJob.id==job_id, ProcessingJob.lease_owner==owner, ProcessingJob.status.in_(ACTIVE), ProcessingJob.lease_until>now_utc()).with_for_update())
-            if current:
-                current.status='queued' if retryable and current.attempts<MAX_ATTEMPTS else 'failed'
-                current.stage=current.status; current.error_class=classification
-                current.error='Temporary provider/storage failure; bounded retry scheduled.' if current.status=='queued' else 'Document analysis failed. Check processing limits, document validity and provider configuration; request re-analysis after resolving the cause.'
-                if isinstance(error, ProcessingLimitError):
-                    current.error='Document exceeds the configured analysis page/unit limit. Manual review remains available.'
-                if isinstance(error, FileNotFoundError):
-                    current.error='The private original document is unavailable. Restore the source before requesting analysis.'
-                current.available_at=now_utc()+timedelta(seconds=15*2**current.attempts)
-                current.lease_until=None; current.updated_at=now_utc(); db.commit()
+        retryable = retryable_error(error)
+        classification = 'processing_limit' if isinstance(error, ProcessingLimitError) else 'source_missing' if isinstance(error, FileNotFoundError) else 'database_temporary' if retryable and isinstance(error, OperationalError) else 'storage_temporary' if retryable and isinstance(error, (ClientError, StorageConnectionError, HTTPClientError)) else 'provider_temporary' if retryable else 'invalid_document_or_model_output' if isinstance(error, ValueError) else 'processing_error'
+        log_failure(error, job_id=job_id, classification=classification, retryable=retryable)
+        try:
+            set_stage('failure_persist')
+            with SessionLocal() as db:
+                current=db.scalar(select(ProcessingJob).where(ProcessingJob.id==job_id, ProcessingJob.lease_owner==owner, ProcessingJob.status.in_(ACTIVE), ProcessingJob.lease_until>now_utc()).with_for_update())
+                if current:
+                    current.status='queued' if retryable and current.attempts<MAX_ATTEMPTS else 'failed'
+                    current.stage=current.status; current.error_class=classification
+                    current.error='Temporary processing dependency failure; bounded retry scheduled.' if current.status=='queued' else 'Document analysis failed. Check processing limits, document validity and provider configuration; request re-analysis after resolving the cause.'
+                    if isinstance(error, ProcessingLimitError):
+                        current.error='Document exceeds the configured analysis page/unit limit. Manual review remains available.'
+                    if isinstance(error, FileNotFoundError):
+                        current.error='The private original document is unavailable. Restore the source before requesting analysis.'
+                    current.available_at=now_utc()+timedelta(seconds=15*2**current.attempts)
+                    current.lease_until=None; current.updated_at=now_utc(); db.commit()
+        except Exception as persistence_error:
+            # Keep original/attempt intact; the existing lease recovery handles a
+            # database outage. Always log both the original and state-write error.
+            log_failure(persistence_error, job_id=job_id, classification='failure_state_write')
     return True
 
 
@@ -152,7 +197,9 @@ def start_worker():
     def run():
         while not stop.is_set():
             try: worked=process_one()
-            except Exception: worked=False
+            except Exception as error:
+                log_failure(error)
+                worked=False
             stop.wait(.2 if worked else 5)
     thread=threading.Thread(target=run,name='forma-document-worker',daemon=True); thread.start()
     return stop,thread

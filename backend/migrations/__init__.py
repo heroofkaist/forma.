@@ -1,6 +1,6 @@
 """Reviewed additive migrations, run under a PostgreSQL advisory transaction lock."""
 def apply_migrations(bind):
-    from sqlalchemy import select
+    from sqlalchemy import inspect, select
     from sqlalchemy.engine import Connection
     from contextlib import nullcontext
     from account_models import SchemaMigration
@@ -15,9 +15,15 @@ def apply_migrations(bind):
             connection.exec_driver_sql("SELECT pg_advisory_xact_lock(62401701)")
         SchemaMigration.__table__.create(connection, checkfirst=True)
         version = "001_public_accounts_course_ownership"
-        for version, tables in ((version, names), ("002_structured_documents_materials", ("submission_documents", "course_materials")), ("003_document_review_history", ("document_reviews", "published_document_reviews")), ("004_durable_email_outbox", ("email_outbox",)), ("005_institution_roles", ("account_roles", "institutions", "institution_memberships", "course_institutions", "teacher_invitations", "audit_events")), ("006_document_understanding_jobs", ("document_processing_jobs", "document_interpretations", "interpretation_corrections", "document_interpretation_cache", "assignment_briefs"))):
+        for version, tables in ((version, names), ("002_structured_documents_materials", ("submission_documents", "course_materials")), ("003_document_review_history", ("document_reviews", "published_document_reviews")), ("004_durable_email_outbox", ("email_outbox",)), ("005_institution_roles", ("account_roles", "institutions", "institution_memberships", "course_institutions", "teacher_invitations", "audit_events")), ("006_document_understanding_jobs", ("document_processing_jobs", "document_interpretations", "interpretation_corrections", "document_interpretation_cache", "assignment_briefs")), ("007_submission_student_id_width", ())):
             if connection.scalar(select(SchemaMigration.version).where(SchemaMigration.version == version)):
                 continue
             for name in tables:
                 Base.metadata.tables[name].create(connection, checkfirst=True)
+            if version == "007_submission_student_id_width" and connection.dialect.name == "postgresql":
+                column = next(column for column in inspect(connection).get_columns("submissions") if column["name"] == "anonymous_student_id")
+                # Never narrow a manually widened column (including unbounded TEXT).
+                length = getattr(column["type"], "length", None)
+                if length is not None and length < 64:
+                    connection.exec_driver_sql("ALTER TABLE submissions ALTER COLUMN anonymous_student_id TYPE VARCHAR(64)")
             connection.execute(SchemaMigration.__table__.insert().values(version=version))
