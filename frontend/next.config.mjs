@@ -1,4 +1,5 @@
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
+import { securityHeaders } from "./security-headers.mjs";
 
 await initOpenNextCloudflareForDev();
 
@@ -6,7 +7,7 @@ await initOpenNextCloudflareForDev();
 const nextConfig = {
   devIndicators: false,
   async headers() {
-    return [{ source: "/:path*", headers: [{ key: "Referrer-Policy", value: "no-referrer" }, { key: "X-Content-Type-Options", value: "nosniff" }] }];
+    return [{ source: "/:path*", headers: securityHeaders(process.env.NODE_ENV === "development") }];
   },
 };
 

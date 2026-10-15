@@ -227,6 +227,18 @@ class AcademicSubmission(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
 
+class OriginalityAnalysis(Base):
+    """Execution receipt; absence of pairwise matches is not an execution receipt."""
+    __tablename__ = "academic_originality_analyses"
+    submission_id: Mapped[str] = mapped_column(ForeignKey("academic_submissions.id", ondelete="CASCADE"), primary_key=True)
+    status: Mapped[str] = mapped_column(String(32))
+    eligible_token_count: Mapped[int] = mapped_column(Integer, default=0)
+    candidate_count: Mapped[int] = mapped_column(Integer, default=0)
+    report_count: Mapped[int] = mapped_column(Integer, default=0)
+    scope: Mapped[str] = mapped_column(String(32))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class OriginalityReport(Base):
     __tablename__ = "academic_originality_reports"
 
@@ -273,7 +285,7 @@ def init_db(
             if database_bind is engine
             else sessionmaker(bind=database_bind, expire_on_commit=False)
         )
-    identity_tables = {"accounts", "account_sessions", "account_actions", "account_rate_buckets", "course_owners", "offering_policies", "enrollment_states", "assignment_owners", "schema_migrations", "submission_documents", "course_materials", "document_reviews", "published_document_reviews", "email_outbox", "account_roles", "institutions", "institution_memberships", "course_institutions", "teacher_invitations", "audit_events", "document_processing_jobs", "document_interpretations", "interpretation_corrections", "document_interpretation_cache", "assignment_briefs", "ai_budget_periods", "ai_budget_controls", "ai_request_charges", "assessment_rubrics", "assessment_suggestions", "assessment_decisions"}
+    identity_tables = {"academic_originality_analyses", "accounts", "account_sessions", "account_actions", "account_rate_buckets", "course_owners", "offering_policies", "enrollment_states", "assignment_owners", "schema_migrations", "submission_documents", "course_materials", "document_reviews", "published_document_reviews", "email_outbox", "account_roles", "institutions", "institution_memberships", "course_institutions", "teacher_invitations", "audit_events", "document_processing_jobs", "document_interpretations", "interpretation_corrections", "document_interpretation_cache", "assignment_briefs", "ai_budget_periods", "ai_budget_controls", "ai_request_charges", "assessment_rubrics", "assessment_suggestions", "assessment_decisions"}
     Base.metadata.create_all(database_bind, tables=[table for name, table in Base.metadata.tables.items() if name not in identity_tables])
     migrations = {
         "assignments": {

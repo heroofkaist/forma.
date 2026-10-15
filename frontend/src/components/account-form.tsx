@@ -6,6 +6,7 @@ import { useAuth } from "./auth-provider";
 
 import { AuthStudy } from "./auth-study";
 import { FormaMark } from "./forma-mark";
+import { AgeScreen } from "./age-screen";
 
 type Mode = "register" | "forgot-password" | "reset-password" | "verify-email" | "profile" | "security";
 const titles: Record<Mode, string> = { register: "Создать учётную запись", "forgot-password": "Восстановить доступ", "reset-password": "Новый пароль", "verify-email": "Подтвердить email", profile: "Профиль", security: "Безопасность" };
@@ -18,6 +19,7 @@ export function AccountForm({ mode }: { mode: Mode }) {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [registration, setRegistration] = useState<boolean | null>(null);
+  const [ageToken, setAgeToken] = useState("");
   const { user } = useAuth();
   const settings = mode === "profile" || mode === "security";
   useEffect(() => {
@@ -29,7 +31,7 @@ export function AccountForm({ mode }: { mode: Mode }) {
     try {
       const token = new URLSearchParams(window.location.search).get("token") ?? "";
       const path = mode === "profile" ? "profile" : mode === "security" ? "password" : mode;
-      const body = mode === "register" ? { email, display_name: name, password }
+      const body = mode === "register" ? { email, display_name: name, password, age_check_token: ageToken }
         : mode === "forgot-password" ? { email }
         : mode === "profile" ? { display_name: name }
         : mode === "security" ? { current_password: currentPassword, password }
@@ -45,13 +47,16 @@ export function AccountForm({ mode }: { mode: Mode }) {
     <div className="eyebrow">{settings ? "НАСТРОЙКИ" : "УЧЁТНАЯ ЗАПИСЬ"}</div><h1>{titles[mode]}</h1>
     {mode === "register" && <p>Публичная регистрация создаёт учётную запись студента. Преподавателям требуется приглашение и одобрение учреждения.</p>}
     {mode === "register" && registration === false && <div className="notice" role="status">Регистрация пока недоступна. Обратитесь к администратору вашего учреждения.</div>}
-    {settings && !user?.account_id ? <p>Настройки доступны для подтверждённых учётных записей. Вход с прежними реквизитами сохраняется на время перехода.</p> : <form className="auth-form" onSubmit={(event) => void submit(event)}>
+    {mode === "register" && registration === null && <p role="status">Проверяем доступность регистрации…</p>}
+    {mode === "register" && registration === true && !ageToken && <AgeScreen onEligible={setAgeToken} />}
+    {mode === "register" && (registration !== true || !ageToken) ? null : settings && !user?.account_id ? <p>Настройки доступны для подтверждённых учётных записей. Вход с прежними реквизитами сохраняется на время перехода.</p> : <form className="auth-form" onSubmit={(event) => void submit(event)}>
       {["register", "forgot-password", "profile"].includes(mode) && <label>Email<input type="email" autoComplete="email" required maxLength={254} readOnly={mode === "profile"} value={email} onChange={(event) => setEmail(event.target.value)} /></label>}
       {["register", "profile"].includes(mode) && <label>Имя<input autoComplete="name" required maxLength={200} value={name} onChange={(event) => setName(event.target.value)} /></label>}
       {mode === "security" && <label>Текущий пароль<input type="password" autoComplete="current-password" required value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></label>}
       {["register", "reset-password", "security"].includes(mode) && <label>Пароль · не менее 12 символов<input type="password" autoComplete="new-password" required minLength={12} maxLength={256} value={password} onChange={(event) => setPassword(event.target.value)} /></label>}
       {mode === "verify-email" && <p>Подтвердите адрес кнопкой ниже. Ссылка из письма действует один час и используется один раз.</p>}
       <button className="button primary" type="submit" disabled={busy || (mode === "register" && registration !== true)}>{busy ? "Подождите…" : mode === "verify-email" ? "Подтвердить email" : "Продолжить"}</button>
+      {mode === "register" && <button className="quiet-button" type="button" disabled={busy} onClick={() => setAgeToken("")}>Проверить возраст снова</button>}
     </form>}
     {error && <div className="notice error-notice" role="alert">{error}</div>}{message && <div className="notice" role="status">{message}</div>}
     {mode === "verify-email" && <form className="auth-form" onSubmit={(event) => { event.preventDefault(); setBusy(true); setError(""); void platformRequest("/api/accounts/resend-verification", { email }).then(() => setMessage("Если адрес требует подтверждения, письмо отправлено.")).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Не удалось отправить письмо.")).finally(() => setBusy(false)); }}><label>Повторно отправить письмо<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label><button className="button" disabled={busy}>Отправить</button></form>}

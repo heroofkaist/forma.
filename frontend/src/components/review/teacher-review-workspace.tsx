@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, FileCheck } from "lucide-react";
 import { platformRequest } from "../../lib/platform";
-import { publicationReady, completeScores, editorErrors, initialEditor, manualPayload, reviewCriteria, decisionsPayload } from "../../lib/review-workspace";
+import { editorSavedState, publicationReady, completeScores, editorErrors, initialEditor, manualPayload, reviewCriteria, decisionsPayload } from "../../lib/review-workspace";
 import type { AssessmentResponse, EditorValue, ReviewEditor, ReviewResponse } from "../../lib/review-workspace";
 import { RubricReviewPanel } from "../assessment-panel";
 import { DocumentViewer } from "./document-viewer";
@@ -35,7 +35,11 @@ export function TeacherReviewWorkspace({ submissionId }: { submissionId: string 
     const next = ai?.items.find(v => v.id === id) ?? ai?.items[0];
     setData(review); setAssessment(ai); setAssessmentError(ai === null); setSelected(next?.id ?? ""); setEditor(initialEditor(review, next)); setDirty(false); setDirtyKeys(new Set());
   }
-  useEffect(() => { let active = true; setLoading(true); void fetchData().then(({ review, ai }) => { if (active) apply(review, ai); }).catch(() => { if (active) setError("Не удалось загрузить работу. Проверьте доступ и попробуйте снова."); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, [fetchData]);
+  useEffect(() => { let active = true; setLoading(true); void fetchData().then(({ review, ai }) => { if (active) {
+      apply(review, ai);
+      const requestedPage = Number(new URLSearchParams(window.location.search).get('page'));
+      setPage(Number.isSafeInteger(requestedPage) && requestedPage >= 1 && requestedPage <= (review.structure?.pages.length ?? 1) ? requestedPage : 1);
+    } }).catch(() => { if (active) setError("Не удалось загрузить работу. Проверьте доступ и попробуйте снова."); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, [fetchData]);
   const processingActive = assessment?.jobs.some(j => ['queued', 'extracting', 'interpreting'].includes(j.status));
   useEffect(() => {
     if (!processingActive || hasUnsaved) return;
@@ -115,7 +119,7 @@ export function TeacherReviewWorkspace({ submissionId }: { submissionId: string 
           {!version && <p className="rw-muted">Сохранённых предложений нет. Работу можно оценить вручную без запуска модели.</p>}
           {version && <div className="rw-ai-overview"><span>ИИ: {criteria.filter(c => c.suggestion?.finding === 'strength').length} сильных сторон</span><span>{criteria.filter(c => ['concern', 'mixed'].includes(c.suggestion?.finding ?? '')).length} замечаний</span><span>{criteria.filter(c => c.suggestion?.proposed_score == null).length} без балла</span></div>}
         </div>
-        <RubricReviewPanel criteria={criteria} editor={editor} expanded={expanded} onExpand={setExpanded} onChange={edit} onPage={goToPage} busy={busy} dirtyKeys={dirtyKeys}/>
+        <RubricReviewPanel criteria={criteria} editor={editor} expanded={expanded} onExpand={setExpanded} onChange={edit} onPage={goToPage} busy={busy} dirtyKeys={dirtyKeys} savedState={editorSavedState(data, version, editor.mode)}/>
         <details className="rw-overall-feedback"><summary>Общая обратная связь <span>{editor.feedback ? 'есть комментарий' : 'для студента'}</span></summary><label className="rw-sr-only" htmlFor="review-overall-feedback">Общая обратная связь</label><textarea id="review-overall-feedback" rows={4} maxLength={10000} value={editor.feedback} placeholder="Итоговый комментарий к работе…" disabled={busy} onChange={e => { setEditor({ ...editor, feedback: e.target.value }); setDirty(true); }}/><p className="rw-muted">Студент увидит подтверждённую обратную связь после публикации.</p></details>
         <AssessmentDiagnostics submissionId={submissionId} data={data} assessment={assessment} selected={selected} onSelect={choose} dirty={hasUnsaved} onPage={goToPage} onAdvancedDirty={setAdvancedDirty} onRefresh={() => void refresh()}/>
         </div>
@@ -123,7 +127,7 @@ export function TeacherReviewWorkspace({ submissionId }: { submissionId: string 
     </div>
     {changedSincePublication && <p className="rw-publication-note"><FileCheck size={14}/> Есть более новая сохранённая проверка. Студент пока видит ранее опубликованную оценку.</p>}
     {advancedDirty && <p className="rw-publication-note">Сохраните изменения расширенной рубрики в её настройках.</p>}
-    <ReviewActionBar dirty={hasUnsaved} busy={busy} hasSaved={!!(data.reviews.length || version?.decisions.length)} total={total} maximum={data.maximum_score} error={editorErrors(criteria, editor)[0] ?? null} onSave={() => void save(true)} onConfirm={() => void save(false)} onPublish={() => setDialog("publish")} publishable={publicationReady(data, version, editor.mode) && data.published_grade?.review_id !== data.reviews[0]?.id}/>
+    <ReviewActionBar savedState={editorSavedState(data, version, editor.mode)} dirty={hasUnsaved} busy={busy} hasSaved={!!(data.reviews.length || version?.decisions.length)} total={total} maximum={data.maximum_score} error={editorErrors(criteria, editor)[0] ?? null} onSave={() => void save(true)} onConfirm={() => void save(false)} onPublish={() => setDialog("publish")} publishable={publicationReady(data, version, editor.mode) && data.published_grade?.review_id !== data.reviews[0]?.id}/>
     {dialog === "publish" && <ReviewDialog title={data.published_grade ? "Обновить опубликованную оценку?" : "Опубликовать оценку?"} confirmLabel="Опубликовать для студента" onClose={() => setDialog(null)} onConfirm={() => void publish()}><p>Студент увидит последнюю сохранённую ручную проверку, её баллы и обратную связь.</p><p className="rw-publish-total">{data.reviews[0]?.criteria.reduce((sum, c) => sum + (c.points ?? 0), 0)} / {data.maximum_score} <ArrowRight size={17}/> официальная оценка</p></ReviewDialog>}
     {dialog === "discard" && <ReviewDialog title="Есть несохранённые изменения" confirmLabel="Продолжить без сохранения" onClose={() => setDialog(null)} onConfirm={() => { setDialog(null); discardAction.current(); }}><p>Сохраните проверку, чтобы не потерять введённые баллы и комментарии.</p></ReviewDialog>}
   </div>;

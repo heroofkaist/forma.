@@ -55,8 +55,14 @@ def platform(tmp_path, monkeypatch):
     engine.dispose()
 
 
+def registration_age(client):
+    response = client.post('/api/accounts/age-check', json={'age_band': '18_or_over'})
+    assert response.status_code == 200 and response.json()['eligible']
+    return response.json()['age_check_token']
+
+
 def register(client, sent, email):
-    response = client.post("/api/accounts/register", json={"email": email, "display_name": email.split("@")[0], "password": "correct-password-123"})
+    response = client.post("/api/accounts/register", json={"email": email, "display_name": email.split("@")[0], "password": "correct-password-123", "age_check_token": registration_age(client)})
     assert response.status_code == 202, response.text
     return next(token for address, purpose, token in reversed(sent) if address == email and purpose == "verify")
 
@@ -100,7 +106,7 @@ def test_registration_verification_password_reset_session_revocation(platform):
         assert "correct-password-123" not in user.password_hash
         assert user.verified
     before = len(sent)
-    assert client.post("/api/accounts/register", json={"email": email, "display_name": "Attacker", "password": "different-password"}).status_code == 202
+    assert client.post("/api/accounts/register", json={"email": email, "display_name": "Attacker", "password": "different-password", "age_check_token": registration_age(client)}).status_code == 202
     assert len(sent) == before  # Duplicate cannot replace the password or enumerate accounts.
     assert client.get("/api/auth/me", headers=headers).json()["role"] == "student"
     assert client.post("/api/accounts/forgot-password", json={"email": email}).status_code == 202
@@ -118,7 +124,7 @@ def test_registration_verification_password_reset_session_revocation(platform):
 def test_email_dependency_expiry_and_rate_limits(platform, monkeypatch):
     client, factory, sent = platform
     monkeypatch.delenv("FORMA_SMTP_HOST")
-    assert client.post("/api/accounts/register", json={"email": "missing@example.com", "display_name": "Missing", "password": "correct-password-123"}).status_code == 503
+    assert client.post("/api/accounts/register", json={"email": "missing@example.com", "display_name": "Missing", "password": "correct-password-123", "age_check_token": registration_age(client)}).status_code == 503
     assert client.post("/api/accounts/forgot-password", json={"email": "missing@example.com"}).status_code == 503
     assert sent == []
     monkeypatch.setenv("FORMA_SMTP_HOST", "test")
@@ -220,7 +226,7 @@ def test_additive_migration_repeated_and_profile_security(platform):
     engine = factory.kw["bind"]
     apply_migrations(engine); apply_migrations(engine)
     with factory() as db:
-        assert len(db.scalars(select(account_models.SchemaMigration)).all()) == 9
+        assert len(db.scalars(select(account_models.SchemaMigration)).all()) == 10
         assert db.scalar(select(account_models.Account)).display_name == "New Name"
     assert client.post('/api/accounts/password', headers=headers, json={"current_password": "bad", "password": "new-password-123"}).status_code == 400
     assert client.post('/api/accounts/password', headers=headers, json={"current_password": "correct-password-123", "password": "new-password-123"}).status_code == 200

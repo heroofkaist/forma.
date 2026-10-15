@@ -35,3 +35,8 @@ def apply_migrations(bind):
             for name in ('assessment_rubrics', 'assessment_suggestions', 'assessment_decisions'):
                 Base.metadata.tables[name].create(connection, checkfirst=True)
             connection.execute(SchemaMigration.__table__.insert().values(version=version))
+
+        version = "010_originality_execution_receipts"
+        if not connection.scalar(select(SchemaMigration.version).where(SchemaMigration.version == version)):
+            Base.metadata.tables["academic_originality_analyses"].create(connection, checkfirst=True)
+            connection.execute(SchemaMigration.__table__.insert().values(version=version))

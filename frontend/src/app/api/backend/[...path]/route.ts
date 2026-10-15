@@ -3,6 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 export const dynamic = "force-dynamic";
 const COOKIE = "forma_session";
+const AGE_COOKIE = "forma_age_screen";
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 async function proxy(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
@@ -47,6 +48,8 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
   const headers = new Headers();
   const contentType = request.headers.get("content-type");
   if (contentType) headers.set("Content-Type", contentType);
+  const ageCookie = request.cookies.get(AGE_COOKIE)?.value;
+  if (ageCookie && /^[-a-zA-Z0-9_.]+$/.test(ageCookie)) headers.set("Cookie", `${AGE_COOKIE}=${ageCookie}`);
   const token = request.cookies.get(COOKIE)?.value;
   // Existing browser bearer sessions can finish their original lifetime during
   // migration. New credentials are exclusively persisted in HttpOnly cookies.
@@ -82,7 +85,11 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
   }
   const login = path.join("/") === "api/auth/login";
   let result: NextResponse;
-  if (login && response.ok) {
+  if (path.join("/") === "api/accounts/age-check" && response.ok) {
+    const age = await response.json() as { eligible: boolean; age_check_token: string };
+    result = NextResponse.json(age, { headers: outputHeaders });
+    result.cookies.set(AGE_COOKIE, age.age_check_token, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: age.eligible ? 600 : 86400 });
+  } else if (login && response.ok) {
     const body = await response.json() as { access_token: string; expires_in: number };
     result = NextResponse.json({ authenticated: true }, { headers: outputHeaders });
     result.cookies.set(COOKIE, body.access_token, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: body.expires_in });

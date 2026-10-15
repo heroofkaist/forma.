@@ -49,7 +49,7 @@ def validate_auth_settings() -> None:
 async def enforce_api_authentication(request: Request, call_next):
     path = request.url.path
     if path in {"/health", "/api/health", "/api/auth/status", "/api/auth/login",
-                "/api/accounts/status", "/api/accounts/register", "/api/accounts/verify-email",
+                "/api/accounts/status", "/api/accounts/register", "/api/accounts/age-check", "/api/accounts/verify-email",
                 "/api/accounts/forgot-password", "/api/accounts/reset-password",
                 "/api/accounts/resend-verification"}:
         return await call_next(request)

@@ -1,3 +1,4 @@
+import { normalizeReport, normalizeSimilarityResult } from "./similarity";
 import { requestError } from "./presentation";
 import { API_URL, authenticatedFetch } from "./api";
 import type { PublishedGrade } from "./published-result";
@@ -83,7 +84,7 @@ export type SimilarityReport = {
   id: string;
   submission_id: string;
   analysis_status: string;
-  matched_text_ratio: number;
+  matched_text_ratio: number | null;
   analysis_scope: string;
   created_at?: string;
   extracted_text?: string;
@@ -102,6 +103,7 @@ export type SimilarityReport = {
 };
 
 export type ArchiveSubmission = {
+  student_name: string;
   submission_id: string;
   assignment_id: string;
   assignment_title: string;
@@ -184,50 +186,6 @@ function normalizeOffering(raw: Record<string, unknown>, course?: Course): Offer
   };
 }
 
-function normalizeReport(raw: Record<string, unknown>) : SimilarityReport {
-  const evidence = Array.isArray(raw.evidence) ? raw.evidence as Record<string, unknown>[] : [];
-  const reportId = String(raw.id ?? "");
-  const matches: SimilarityMatch[] = evidence.map((item, index) => {
-    const sourceOffsets = item.source_offsets as { start?: number; end?: number } | undefined;
-    const candidateOffsets = item.candidate_offsets as { start?: number; end?: number } | undefined;
-    return {
-      id: `${reportId}-${index}`,
-      report_id: reportId,
-      source_submission_id: String(raw.candidate_submission_id ?? ""),
-      source_title: String(raw.source_title ?? "Архивная работа"),
-      source_course: String(raw.source_course ?? ""),
-      source_assignment: String(raw.source_assignment ?? ""),
-      source_term: String(raw.source_term ?? ""),
-      matched_excerpt: String(item.candidate_excerpt ?? ""),
-      source_excerpt: String(item.source_excerpt ?? ""),
-      review_status: String(raw.review_status ?? "unreviewed"),
-      current_text_start: Number(sourceOffsets?.start ?? 0),
-      current_text_end: Number(sourceOffsets?.end ?? 0),
-      source_text_start: Number(candidateOffsets?.start ?? 0),
-      source_text_end: Number(candidateOffsets?.end ?? 0),
-      similarity_method: "normalized-token-sequence",
-    };
-  });
-  return {
-    ...raw,
-    id: reportId,
-    submission_id: String(raw.submission_id ?? ""),
-    analysis_status: "ready",
-    matched_text_ratio: Number(raw.match_ratio ?? 0),
-    analysis_scope: String(raw.match_scope ?? ""),
-    created_at: typeof raw.created_at === "string" ? raw.created_at : undefined,
-    extracted_text: typeof raw.extracted_text === "string" ? raw.extracted_text : undefined,
-    eligible_token_count: Number(raw.eligible_token_count ?? 0),
-    matches,
-    review_status: String(raw.review_status ?? "unreviewed"),
-    teacher_notes: String(raw.teacher_notes ?? ""),
-    course: String(raw.course_name ?? raw.course_code ?? ""),
-    assignment: String(raw.assignment_title ?? ""),
-    student_id: String(raw.student_id ?? ""),
-    academic_year: String(raw.academic_year ?? ""),
-    document_title: String(raw.document_title ?? raw.file_name ?? ""),
-  };
-}
 
 function json(body: unknown): RequestInit {
   return { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
@@ -286,11 +244,8 @@ export const academicApi = {
   originalityQueue: async () =>
     unwrap(await request<{ items?: Record<string, unknown>[] } | Record<string, unknown>[]>("/academic/teacher/originality")).map(normalizeReport),
   originalityReport: async (submissionId: string) => {
-    const response = await request<{ submission_id: string; items: Record<string, unknown>[] }>(`/academic/submissions/${submissionId}/originality`);
-    const reports = response.items.map(normalizeReport);
-    if (!reports.length) throw new Error("Для этой работы нет отчёта о совпадениях.");
-    const [primary] = reports;
-    return { ...primary, matches: reports.flatMap((report) => report.matches) };
+    const response = await request<{ submission_id: string; analysis: Record<string, unknown>; items: Record<string, unknown>[] }>(`/academic/submissions/${submissionId}/originality`);
+    return normalizeSimilarityResult(response);
   },
   reviewOriginality: (reportId: string, payload: { review_status: string; teacher_notes: string }) =>
     request<SimilarityReport>(`/academic/reports/${reportId}/review`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }),

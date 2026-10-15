@@ -1,6 +1,8 @@
 import io
 import re
 import copy
+import math
+import logging
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -25,6 +27,7 @@ from persistence import (
     CourseEnrollment,
     CourseOffering,
     OriginalityReport,
+    OriginalityAnalysis,
     SessionLocal,
     Submission,
     blob_exists,
@@ -41,6 +44,7 @@ from courses import new_code, join_code
 from services.document_ingestion import ingest, CODE_SUFFIXES
 from document_models import SubmissionDocument, PublishedDocumentReview
 from document_review import published_feedback
+from student_identity import student_display_name
 from starlette.concurrency import run_in_threadpool
 import hashlib
 
@@ -70,7 +74,7 @@ SEED_SUBMISSION_IDS = {
 }
 MAX_UPLOAD_BYTES = 30 * 1024 * 1024
 MIN_MATCH_TOKENS = 8
-TOKEN_RE = re.compile(r"[a-z0-9]+")
+TOKEN_RE = re.compile(r"[^\W_]+")
 ALLOWED_REVIEW_STATUSES = {"unreviewed", "reviewed", "follow_up"}
 
 
@@ -142,6 +146,7 @@ class CourseOfferingResponse(BaseModel):
     section: str
     status: str
     pending_assignments: int
+    enrollment_count: int | None = None
 
 
 class CourseItemResponse(BaseModel):
@@ -193,6 +198,7 @@ class AssignmentItemsResponse(BaseModel):
 
 
 class OfferingDetailResponse(BaseModel):
+    enrollment_count: int | None = None
     id: str
     academic_year: str
     term: str
@@ -213,6 +219,7 @@ class OriginalityEvidenceResponse(BaseModel):
 
 
 class OriginalityReportResponse(BaseModel):
+    analysis_status: str
     id: str
     submission_id: str
     candidate_submission_id: str
@@ -220,7 +227,7 @@ class OriginalityReportResponse(BaseModel):
     candidate_student_id: str | None
     assignment_family_id: str
     match_scope: str
-    match_ratio: float
+    match_ratio: float | None
     eligible_token_count: int
     matched_token_count: int
     ratio_definition: str
@@ -287,9 +294,25 @@ class StudentAssignmentItemsResponse(BaseModel):
     items: list[StudentAssignmentResponse]
 
 
+class OriginalityAnalysisResponse(BaseModel):
+    analysis_status: Literal['missing', 'queued', 'analyzing', 'failed', 'insufficient_text', 'no_sources', 'disabled', 'incomplete', 'completed']
+    submission_id: str
+    document_title: str
+    assignment_title: str
+    course_name: str
+    academic_year: str
+    extracted_text: str
+    eligible_token_count: int | None
+    candidate_count: int | None
+    match_ratio: float | None
+    match_scope: str
+    created_at: str | None
+
+
 class SubmissionOriginalityResponse(BaseModel):
     submission_id: str
     items: list[OriginalityReportResponse]
+    analysis: OriginalityAnalysisResponse
 
 
 class PublishResponse(BaseModel):
@@ -319,6 +342,7 @@ class OfferingCreateResponse(BaseModel):
 
 
 class ArchiveSubmissionResponse(BaseModel):
+    student_name: str
     submission_id: str
     assignment_id: str
     assignment_title: str
@@ -612,6 +636,11 @@ def _student_view(assignment: dict) -> dict:
     return result
 
 
+def _active_enrollment_count(db, offering_id):
+    rows = db.scalars(select(CourseEnrollment).where(CourseEnrollment.offering_id == offering_id)).all()
+    return len({row.student_id for row in rows if enrollment_active(db, row)})
+
+
 def _course_dict(db: Session, course: AcademicCourse, role: str, student_id: str) -> dict:
     offerings = db.scalars(
         select(CourseOffering)
@@ -645,6 +674,7 @@ def _course_dict(db: Session, course: AcademicCourse, role: str, student_id: str
                 section=offering.section,
                 status=offering.status,
                 pending_assignments=pending,
+                enrollment_count=_active_enrollment_count(db, offering.id) if role == "teacher" else None,
             ).model_dump()
         )
     return {
@@ -807,8 +837,8 @@ def _new_academic_assignment(
 
 
 def _tokens(text: str) -> tuple[list[str], list[tuple[int, int]]]:
-    matches = list(TOKEN_RE.finditer(text.casefold()))
-    return [match.group(0) for match in matches], [(match.start(), match.end()) for match in matches]
+    matches = list(TOKEN_RE.finditer(text))
+    return [match.group(0).casefold() for match in matches], [(match.start(), match.end()) for match in matches]
 
 
 def _match_evidence(source_text: str, candidate_text: str) -> tuple[int, int, list[dict]]:
@@ -843,7 +873,7 @@ def _match_evidence(source_text: str, candidate_text: str) -> tuple[int, int, li
     return min(matched, eligible), eligible, evidence
 
 
-def _compare_submission(
+def _compare_submission_pairs(
     db: Session, submission: AcademicSubmission
 ) -> list[OriginalityReport]:
     if not submission.extracted_text.strip():
@@ -866,10 +896,17 @@ def _compare_submission(
     ).all()
     family_matches: list[tuple[AcademicSubmission, int, int, list[dict]]] = []
     course_matches: list[tuple[AcademicSubmission, int, int, list[dict]]] = []
+    compared_family = compared_course = 0
     for candidate in candidate_rows:
         candidate_assignment = db.get(AcademicAssignment, candidate.assignment_id)
         if candidate_assignment is None:
             continue
+        if len(_tokens(candidate.extracted_text)[0]) < MIN_MATCH_TOKENS:
+            continue
+        if candidate_assignment.family_id == family.id:
+            compared_family += 1
+        else:
+            compared_course += 1
         match = _match_evidence(submission.extracted_text, candidate.extracted_text)
         matched, eligible, evidence = match
         if matched < MIN_MATCH_TOKENS:
@@ -889,6 +926,11 @@ def _compare_submission(
     scope = "assignment_family" if matches and matches[0][0].assignment_id in {
         row[0].assignment_id for row in family_matches
     } else "course"
+    receipt = db.get(OriginalityAnalysis, submission.id)
+    receipt.candidate_count = (compared_family if assignment.originality_scope == "family" else
+                              compared_family + compared_course if assignment.originality_scope == "course" else
+                              compared_family if family_matches else compared_family + compared_course)
+    receipt.status = "completed" if receipt.candidate_count > 0 else "no_sources"
     reports = []
     for candidate, matched, eligible, evidence in matches:
         report = OriginalityReport(
@@ -903,8 +945,76 @@ def _compare_submission(
         )
         db.add(report)
         reports.append(report)
+    receipt.report_count = len(reports)
     db.flush()
     return reports
+
+
+def _compare_submission(db: Session, submission: AcademicSubmission) -> list[OriginalityReport]:
+    assignment = db.get(AcademicAssignment, submission.assignment_id)
+    existing = db.get(OriginalityAnalysis, submission.id)
+    if existing:
+        return list(db.scalars(select(OriginalityReport).where(OriginalityReport.submission_id == submission.id)))
+    tokens = len(_tokens(submission.extracted_text)[0])
+    receipt = OriginalityAnalysis(submission_id=submission.id, status="analyzing",
+                                 eligible_token_count=tokens, candidate_count=0,
+                                 scope=assignment.originality_scope if assignment else "")
+    db.add(receipt)
+    db.flush()
+    if not assignment or not assignment.originality_enabled:
+        receipt.status = "disabled"
+    elif tokens < MIN_MATCH_TOKENS:
+        receipt.status = "insufficient_text"
+    else:
+        try:
+            with db.begin_nested():
+                reports = _compare_submission_pairs(db, submission)
+            receipt.completed_at = now_utc()
+            return reports
+        except Exception:
+            logging.getLogger(__name__).error("Deterministic similarity failed for submission %s", submission.id)
+            receipt.status = "failed"
+    receipt.completed_at = now_utc()
+    db.flush()
+    return []
+
+
+def _valid_similarity_report(report, submission, candidate):
+    if (not submission or not candidate or submission.student_id == candidate.student_id or
+            len(_tokens(candidate.extracted_text)[0]) < MIN_MATCH_TOKENS):
+        return False
+    eligible, matched, ratio = report.eligible_token_count, report.matched_token_count, report.match_ratio
+    if (eligible < MIN_MATCH_TOKENS or eligible != len(_tokens(submission.extracted_text)[0]) or
+            not 0 <= matched <= eligible or not math.isfinite(ratio) or
+            not 0 <= ratio <= 1 or abs(ratio - matched / eligible) > 0.000001):
+        return False
+    evidence = report.evidence or []
+    if not isinstance(evidence, list):
+        return False
+    if matched == 0:
+        return not evidence
+    if not evidence:
+        return False
+    last_source_end = -1
+    for item in evidence:
+        if not isinstance(item, dict) or not isinstance(item.get('matched_tokens'), int) or item['matched_tokens'] < MIN_MATCH_TOKENS:
+            return False
+        for key, text, excerpt in (("source_offsets", submission.extracted_text, "source_excerpt"),
+                                   ("candidate_offsets", candidate.extracted_text, "candidate_excerpt")):
+            offsets = item.get(key)
+            if not isinstance(offsets, dict):
+                return False
+            start, end = offsets.get("start"), offsets.get("end")
+            if (not isinstance(start, int) or not isinstance(end, int) or
+                    not 0 <= start < end <= len(text) or text[start:end] != item.get(excerpt)):
+                return False
+            if len(_tokens(text[start:end])[0]) != item['matched_tokens']:
+                return False
+            if key == 'source_offsets':
+                if start < last_source_end:
+                    return False
+                last_source_end = end
+    return sum(e['matched_tokens'] for e in evidence) == matched
 
 
 def _report_json(db: Session, report: OriginalityReport) -> dict:
@@ -916,7 +1026,9 @@ def _report_json(db: Session, report: OriginalityReport) -> dict:
     candidate_offering = db.get(CourseOffering, candidate_assignment.offering_id) if candidate_assignment else None
     course = db.get(AcademicCourse, offering.course_id) if offering else None
     candidate_course = db.get(AcademicCourse, candidate_offering.course_id) if candidate_offering else None
+    valid = _valid_similarity_report(report, submission, candidate)
     return {
+        "analysis_status": "completed" if valid else "incomplete",
         "id": report.id,
         "submission_id": report.submission_id,
         "candidate_submission_id": report.candidate_submission_id,
@@ -924,13 +1036,13 @@ def _report_json(db: Session, report: OriginalityReport) -> dict:
         "candidate_student_id": candidate.student_id if candidate else None,
         "assignment_family_id": report.assignment_family_id,
         "match_scope": report.match_scope,
-        "match_ratio": report.match_ratio,
+        "match_ratio": report.match_ratio if valid else None,
         "eligible_token_count": report.eligible_token_count,
         "matched_token_count": report.matched_token_count,
         "ratio_definition": "matched normalized tokens / eligible normalized tokens in the submitted text",
         "offset_unit": "Unicode code points, half-open [start, end)",
         "minimum_passage_tokens": MIN_MATCH_TOKENS,
-        "evidence": report.evidence or [],
+        "evidence": (report.evidence or []) if valid else [],
         "review_status": report.review_status,
         "teacher_notes": report.teacher_notes,
         "created_at": _timestamp(report.created_at),
@@ -1023,6 +1135,7 @@ def get_offering(
             "section": offering.section,
             "status": offering.status,
             "class_code": offering.class_code if student_id is None else "",
+            "enrollment_count": _active_enrollment_count(db, offering.id) if student_id is None else None,
             "course": {
                 "id": course.id,
                 "code": (db.get(CourseOwner, course.id).public_code if db.get(CourseOwner, course.id) else course.code),
@@ -1534,14 +1647,39 @@ def teacher_originality(
 def submission_originality(submission_id: str) -> dict:
     ensure_academic_seed()
     with SessionLocal() as db:
-        if db.get(AcademicSubmission, submission_id) is None:
+        submission = db.get(AcademicSubmission, submission_id)
+        if submission is None:
             raise HTTPException(status_code=404, detail="Submission not found.")
         reports = db.scalars(
             select(OriginalityReport)
             .where(OriginalityReport.submission_id == submission_id)
             .order_by(OriginalityReport.match_ratio.desc())
         ).all()
-        return {"submission_id": submission_id, "items": [_report_json(db, r) for r in reports]}
+        items = [_report_json(db, r) for r in reports]
+        receipt = db.get(OriginalityAnalysis, submission_id)
+        status = receipt.status if receipt else "missing"
+        # Valid legacy positive evidence remains usable; absence is never a zero result.
+        if items and not receipt:
+            status = "completed" if all(r["analysis_status"] == "completed" for r in items) else "incomplete"
+        if any(r["analysis_status"] != "completed" for r in items):
+            status = "incomplete"
+        eligible = receipt.eligible_token_count if receipt else (reports[0].eligible_token_count if reports else None)
+        if status == "completed" and (not eligible or eligible < MIN_MATCH_TOKENS or
+                                      (receipt and (receipt.candidate_count < 1 or not receipt.completed_at or receipt.report_count != len(reports))) or
+                                      eligible != len(_tokens(submission.extracted_text)[0])):
+            status = "incomplete"
+        assignment = db.get(AcademicAssignment, submission.assignment_id)
+        offering = db.get(CourseOffering, assignment.offering_id)
+        course = db.get(AcademicCourse, offering.course_id)
+        return {"submission_id": submission_id, "items": items, "analysis": {
+            "analysis_status": status, "submission_id": submission_id, "document_title": submission.file_name,
+            "assignment_title": assignment.title, "course_name": course.name, "academic_year": offering.academic_year,
+            "extracted_text": submission.extracted_text, "eligible_token_count": eligible,
+            "candidate_count": receipt.candidate_count if receipt else None,
+            "match_ratio": max((r.match_ratio for r in reports), default=0) if status == "completed" else None,
+            "match_scope": receipt.scope if receipt else (reports[0].match_scope if reports else assignment.originality_scope),
+            "created_at": _timestamp(receipt.completed_at) if receipt else (_timestamp(reports[0].created_at) if reports else None),
+        }}
 
 
 @router.patch(
@@ -1555,6 +1693,9 @@ def review_originality_report(report_id: str, payload: ReviewUpdate) -> dict:
         report = db.get(OriginalityReport, report_id)
         if report is None:
             raise HTTPException(status_code=404, detail="Originality report not found.")
+        if not _valid_similarity_report(report, db.get(AcademicSubmission, report.submission_id),
+                                        db.get(AcademicSubmission, report.candidate_submission_id)):
+            raise HTTPException(409, "Similarity evidence is incomplete; a review cannot be attached.")
         report.review_status = payload.review_status
         report.teacher_notes = payload.teacher_notes
         report.reviewed_at = now_utc()
@@ -1568,7 +1709,7 @@ def review_originality_report(report_id: str, payload: ReviewUpdate) -> dict:
     response_model=ArchiveItemsResponse,
     summary="[DEMO/LOCAL ONLY] View historical assignment submissions",
 )
-def assignment_archive(assignment_id: str) -> dict:
+def assignment_archive(assignment_id: str, request: Request) -> dict:
     ensure_academic_seed()
     with SessionLocal() as db:
         assignment = db.get(AcademicAssignment, assignment_id)
@@ -1582,6 +1723,8 @@ def assignment_archive(assignment_id: str) -> dict:
         results = []
         for family_assignment in family_assignments:
             offering = db.get(CourseOffering, family_assignment.offering_id)
+            if auth_required() and not can_teach(db, request_user(request), offering.course_id):
+                continue
             for submission in db.scalars(
                 select(AcademicSubmission).where(
                     AcademicSubmission.assignment_id == family_assignment.id
@@ -1595,6 +1738,7 @@ def assignment_archive(assignment_id: str) -> dict:
                         "academic_year": offering.academic_year,
                         "term": offering.term,
                         "student_id": submission.student_id,
+                        "student_name": student_display_name(db, submission.student_id, submission.student_name),
                         "file_name": submission.file_name,
                         "file_type": submission.file_type,
                         "submitted_at": _timestamp(submission.created_at),

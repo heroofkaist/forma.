@@ -9,7 +9,7 @@ export type AssessmentVersion = { id: string; rubric: { id: string; spec: Rubric
 export type AssessmentResponse = { items: AssessmentVersion[]; jobs: { id: string; status: string; error: string }[]; supported: boolean };
 export type Score = { question_id: string; criterion_id: string; points: number | null; comment: string; confirmed?: boolean };
 export type ManualReview = { id: string; criteria: Score[]; feedback: string; created_at: string; reviewer: string };
-export type ReviewResponse = { submission_id: string; assignment_id: string; title: string; assignment_type?: string; instructions?: string; submitted_at?: string; student_name: string; file_name: string; file_type: string; maximum_score: number; questions: { id: string; title: string; statement?: string; criteria: { criterion_id: string; description: string; maximum_points: number }[] }[]; structure: { pages: { number: number; unit: string; text: string }[]; warnings: string[] } | null; reviews: ManualReview[]; published_grade: { points: number; published_at: string; review_id?: string | null } | null };
+export type ReviewResponse = { submission_id: string; assignment_id: string; title: string; assignment_type?: string; instructions?: string; submitted_at?: string; student_name: string; file_name: string; file_type: string; maximum_score: number; questions: { id: string; title: string; statement?: string; criteria: { criterion_id: string; description: string; maximum_points: number }[] }[]; structure: { pages: { number: number; unit: string; text: string }[]; warnings: string[] } | null; reviews: ManualReview[]; published_grade: { points: number; maximum_score?: number; published_at: string; review_id?: string | null } | null };
 export type CriterionView = Criterion & { key: string; suggestion: Suggestion | null; saved: Decision | null };
 export type EditorValue = { action: Decision["action"] | "unreviewed"; points: string; feedback: string; finding: Finding };
 export type ReviewEditor = { criteria: Record<string, EditorValue>; feedback: string; mode: "assisted" | "manual" };
@@ -81,3 +81,16 @@ export function shortSummary(suggestion: Suggestion | null): string {
   if (!text) return findingLabels[suggestion.finding] + ". Сверьте с оригиналом.";
   return text.length > 155 ? text.slice(0, 152) + "…" : text;
 }
+
+export type SavedReviewState = "unreviewed" | "draft" | "confirmed" | "published";
+export function editorSavedState(data: ReviewResponse, version: AssessmentVersion | undefined, mode: ReviewEditor['mode']): SavedReviewState {
+  const decision = version?.decisions[0];
+  const manual = mode === 'manual' ? data.reviews[0] : data.reviews.find(r => r.id === decision?.review_id);
+  if (manual && manual.id === data.published_grade?.review_id) return 'published';
+  if (mode === 'assisted' && decision) return decision.decisions.some(d => d.confirmed === false) ? 'draft' : 'confirmed';
+  if (manual) return manual.criteria.some(c => c.confirmed === false || c.points === null) ? 'draft' : 'confirmed';
+  return 'unreviewed';
+}
+export const savedReviewLabels: Record<SavedReviewState, string> = {
+  unreviewed: 'Не оценено', draft: 'Сохранённый черновик', confirmed: 'Подтверждено', published: 'Опубликовано',
+};

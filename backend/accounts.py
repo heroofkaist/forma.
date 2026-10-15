@@ -6,12 +6,14 @@ import secrets
 import smtplib
 import ssl
 from datetime import timedelta
+from typing import Literal
 from email.message import EmailMessage
 from urllib.parse import urlencode
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError, InvalidHashError
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -20,6 +22,7 @@ from account_models import Account, AccountAction, AccountSession, RateBucket
 from persistence import SessionLocal, now_utc
 from auth import AuthUser, auth_required, request_user
 from email_delivery import enqueue_action
+import age_screen
 
 router = APIRouter(prefix="/api/accounts", tags=["Accounts"])
 # OWASP minimum Argon2id memory profile, suitable for the existing small host.
@@ -78,6 +81,8 @@ def rate_limit(request: Request, action: str, identity: str = "", limit: int = 1
 
 
 def send_action(email: str, purpose: str, token: str):
+    from email_delivery import require_transactional_purpose
+    require_transactional_purpose(purpose)
     require_email()
     origin = os.environ["FRONTEND_ORIGIN"].rstrip("/")
     if not origin.startswith("https://") and not origin.startswith("http://localhost:"):
@@ -118,6 +123,7 @@ class EmailPayload(BaseModel):
 
 
 class RegisterPayload(EmailPayload):
+    age_check_token: str = Field(min_length=20, max_length=200)
     display_name: str = Field(min_length=1, max_length=200)
     password: str = Field(min_length=12, max_length=256)
 
@@ -205,6 +211,8 @@ def status():
 
 @router.post("/register", status_code=202)
 def register(payload: RegisterPayload, request: Request):
+    # Reject an absent/failed screen before storing even an email rate-limit hash.
+    age_screen.require_eligible(payload.age_check_token, request.cookies.get(age_screen.COOKIE))
     rate_limit(request, "register", payload.email, 5)
     if not registration_enabled():
         raise HTTPException(503, "Public registration is disabled or transactional email is not configured.")
@@ -227,6 +235,27 @@ def register(payload: RegisterPayload, request: Request):
             issue_action(db, account, "verify")
             db.commit()
     return {"message": "If this address is eligible, a verification email has been queued for delivery."}
+
+
+class AgeCheckPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    age_band: Literal["under_13", "13_to_17", "18_or_over"]
+
+
+@router.post("/age-check")
+def check_age(payload: AgeCheckPayload, request: Request):
+    rate_limit(request, "age-check", limit=30)
+    # A known under-age visitor cannot immediately retry with a different date.
+    blocked = age_screen.proof_state(request.cookies.get(age_screen.COOKIE)) == "blocked"
+    # Kazakhstan school rollout: minors need a separately approved legal-
+    # representative/institution process, not an unchecked consent checkbox.
+    # This self-service path is for adults; it is not COPPA consent verification.
+    eligible = not blocked and payload.age_band == "18_or_over"
+    token = request.cookies[age_screen.COOKIE] if blocked else age_screen.issue_proof(eligible)
+    response = JSONResponse({"eligible": eligible, "age_check_token": token}, headers={"Cache-Control": "private, no-store"})
+    response.set_cookie(age_screen.COOKIE, token, httponly=True, secure=request.url.scheme == "https",
+        samesite="lax", path="/", max_age=age_screen.ELIGIBLE_SECONDS if eligible else age_screen.BLOCKED_SECONDS)
+    return response
 
 
 @router.post("/verify-email")

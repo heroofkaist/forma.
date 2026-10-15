@@ -35,6 +35,7 @@ export function submissionAvailability(assignment: { available_at?: string | nul
 }
 export function requestError(status: number, detail?: unknown) {
   const known: Record<string, string> = {
+    'Complete the age check before registration.': 'Пройдите проверку возраста снова, чтобы продолжить регистрацию.',
     'Resubmission is not allowed.': 'Работа уже отправлена. Повторная отправка не разрешена.',
     'The submission deadline has passed.': 'Срок сдачи завершён. Отправка закрыта.',
     'Assignment is not available yet.': 'Задание ещё не открыто.',

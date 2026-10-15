@@ -171,20 +171,15 @@ def _assignment_json(db: Session, assignment: Assignment) -> dict[str, Any]:
         and all(a.review_status in {'reviewed', 'approved'} and a.human_score is not None
                 for a in by_submission.get(row.id, [])) for row in submissions)
     from persistence import AcademicAssignment, AcademicSubmission
-    from document_models import DocumentReview
     academic = db.scalar(select(AcademicAssignment).where(AcademicAssignment.legacy_assignment_id == assignment.id))
     submission_count = len(submissions)
     if academic:
         identifiers = set(db.scalars(select(AcademicSubmission.id).where(AcademicSubmission.assignment_id == academic.id)))
         submission_count = len(identifiers)
-        latest = {}
-        for review in db.scalars(select(DocumentReview).where(DocumentReview.submission_id.in_(identifiers)).order_by(DocumentReview.created_at.desc())):
-            if all(c.get('confirmed') is not False and c.get('points') is not None for c in review.criteria):
-                latest.setdefault(review.submission_id, review)
-        expected = {(q['id'], c['criterion_id']) for q in academic.questions for c in q['criteria']}
-        reviewed = sum(bool(expected) and expected == {(c['question_id'], c['criterion_id']) for c in r.criteria}
-                       and all(c.get('confirmed') is not False and c.get('points') is not None for c in r.criteria)
-                       for r in latest.values())
+        from review_status import review_summaries
+        summaries = review_summaries(db, academic, identifiers)
+        reviewed = sum(item['review_status'] in {'confirmed', 'published'} for item in summaries.values())
+
     return {
         "id": assignment.id,
         "title": assignment.title,

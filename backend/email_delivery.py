@@ -8,12 +8,20 @@ from sqlalchemy import or_, select, update
 from account_models import Account, AccountAction, EmailOutbox
 from persistence import SessionLocal, now_utc
 
+TRANSACTIONAL_PURPOSES = frozenset({"verify", "reset", "teacher_invite"})
+
+
+def require_transactional_purpose(purpose):
+    if purpose not in TRANSACTIONAL_PURPOSES:
+        raise ValueError("Only account-action mail is supported. Marketing email is disabled.")
+
 
 def cipher():
     return Fernet(os.environ["FORMA_EMAIL_TOKEN_KEY"].encode())
 
 
 def enqueue_action(db, account, purpose, token):
+    require_transactional_purpose(purpose)
     db.add(EmailOutbox(account_id=account.id, purpose=purpose, encrypted_token=cipher().encrypt(token.encode()).decode(), expires_at=now_utc() + timedelta(hours=1)))
 
 

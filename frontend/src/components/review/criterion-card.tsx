@@ -2,8 +2,8 @@
 import { useId } from "react";
 import { Check, ChevronDown, FileText, Pencil, Pause, X } from "lucide-react";
 import katex from "katex";
-import type { CriterionView, EditorValue, Evidence, Finding } from "../../lib/review-workspace";
-import { decisionLabels, findingLabels, scoreError, shortSummary } from "../../lib/review-workspace";
+import type { CriterionView, EditorValue, Evidence, Finding, SavedReviewState } from "../../lib/review-workspace";
+import { decisionLabels, savedReviewLabels, findingLabels, scoreError, shortSummary } from "../../lib/review-workspace";
 
 /** Render only explicit math delimiters. KaTeX never trusts submitted HTML/commands. */
 export function AcademicText({ text }: { text: string }) {
@@ -32,13 +32,13 @@ export function TeacherDecisionEditor({ criterion, value, onChange, manual, busy
     {!manual && <details className="rw-small-details"><summary>Уточнить тип наблюдения</summary><label className="rw-sr-only" htmlFor={`${id}-finding`}>Тип наблюдения преподавателя</label><select id={`${id}-finding`} value={value.finding} onChange={e => onChange({ finding: e.target.value as Finding })}>{Object.entries(findingLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></details>}
   </div>;
 }
-export function RubricCriterionCard({ criterion, index, value, open, onOpen, onChange, onPage, manual, busy, dirty }: { criterion: CriterionView; index: number; value: EditorValue; open: boolean; onOpen: () => void; onChange: (patch: Partial<EditorValue>) => void; onPage: (page: number) => void; manual: boolean; busy: boolean; dirty: boolean }) {
+export function RubricCriterionCard({ criterion, index, value, open, onOpen, onChange, onPage, manual, busy, dirty, savedState }: { criterion: CriterionView; index: number; value: EditorValue; open: boolean; onOpen: () => void; onChange: (patch: Partial<EditorValue>) => void; onPage: (page: number) => void; manual: boolean; busy: boolean; dirty: boolean; savedState: SavedReviewState }) {
   const id = useId(); const suggestion = criterion.suggestion;
-  const status = dirty ? "Есть изменения" : manual ? value.points === "" ? "Не оценено" : "Черновик оценки" : criterion.saved?.confirmed === false ? "Сохранённый черновик" : decisionLabels[value.action];
+  const status = dirty ? "Есть изменения" : manual ? value.points === "" ? "Не оценено" : savedReviewLabels[savedState] : criterion.saved?.confirmed === false ? "Сохранённый черновик" : decisionLabels[value.action];
   return <article className={`rw-criterion ${open ? "is-open" : ""}`}>
     <button className="rw-criterion-heading" aria-expanded={open} aria-controls={`${id}-body`} onClick={onOpen}>
       <span className="rw-criterion-number">{String(index + 1).padStart(2, "0")}</span><span className="rw-criterion-main"><span className="rw-criterion-title">{criterion.description}</span><span className="rw-criterion-summary">{shortSummary(suggestion)}</span><span className="rw-criterion-meta"><span>Макс. {criterion.maximum_points}</span><span>ИИ: {suggestion?.proposed_score != null ? `${suggestion.proposed_score} / ${criterion.maximum_points}` : "Нет предложения"}</span></span></span>
-      <span className="rw-criterion-end"><span className={`rw-status ${value.action === "accepted" && !dirty && criterion.saved?.confirmed !== false && !manual ? "is-reviewed" : ""}`}>{status}</span><ChevronDown size={15}/></span>
+      <span className="rw-criterion-end"><span className={`rw-status ${!dirty && ["confirmed", "published"].includes(savedState) ? "is-reviewed" : ""}`}>{status}</span><ChevronDown size={15}/></span>
     </button>
     {open && <div className="rw-criterion-body" id={`${id}-body`}>
       {suggestion ? <section className="rw-ai-suggestion" aria-label="Предложение ИИ"><div className="rw-section-eyebrow">ПРЕДЛОЖЕНИЕ ИИ · НЕ ОФИЦИАЛЬНАЯ ОЦЕНКА</div><p className="rw-finding"><span className={`rw-finding-dot ${suggestion.finding}`}/>{findingLabels[suggestion.finding]}</p>

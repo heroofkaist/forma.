@@ -2,6 +2,7 @@
 import { statusLabel } from "../../lib/presentation";
 import { useState } from "react";
 import Link from "next/link";
+import { TeachingInsights } from "./teaching-insights";
 import { DocumentAnalysis } from "../document-analysis";
 import { platformRequest } from "../../lib/platform";
 import type { AssessmentResponse, ReviewResponse, Rubric } from "../../lib/review-workspace";
@@ -22,9 +23,9 @@ function RubricSettings({ assignmentId, onDirty }: { assignmentId: string; onDir
   </>}{status && <p role="status">{status}</p>}</div>;
 }
 export function AssessmentDiagnostics({ submissionId, data, assessment, selected, onSelect, dirty, onPage, onAdvancedDirty, onRefresh }: { submissionId: string; data: ReviewResponse; assessment: AssessmentResponse | null; selected: string; onSelect: (id: string) => void; dirty: boolean; onPage: (page: number) => void; onAdvancedDirty: (dirty: boolean) => void; onRefresh: () => void }) {
-  const [open, setOpen] = useState(false); const [history, setHistory] = useState<unknown>(null); const [message, setMessage] = useState("");
+  const [open, setOpen] = useState(false); const [message, setMessage] = useState("");
   async function repeat() { try { await platformRequest(`/api/assessment/${submissionId}`, { reanalyze: true }); setMessage("Повторная оценка запрошена. Она появится после обработки."); onRefresh(); } catch { setMessage("Не удалось запросить оценку. Проверьте конфигурацию в диагностике или продолжите вручную."); } }
-  async function loadInsights() { try { setHistory(await platformRequest(`/api/assessment/${submissionId}/insights`)); } catch { setMessage("Не удалось загрузить историю наблюдений."); } }
+
   return <details className="rw-diagnostics" onToggle={e => setOpen(e.currentTarget.open)}><summary>История и расширенные инструменты</summary>{open && <div className="rw-diagnostics-content">
     <details><summary>Версии предложений и решений</summary>{dirty && <p>Сохраните изменения перед переключением версии.</p>}{assessment?.items.map((version, i) => <div className="rw-history-row" key={version.id}><button className="rw-text-button" disabled={dirty || version.id === selected} onClick={() => onSelect(version.id)}>Версия {assessment.items.length - i}{version.id === selected ? " · выбрана" : ""}</button><span>{version.decisions.length} сохранений</span><details><summary>Решения преподавателя</summary>{version.decisions.map((review, n) => <p key={review.id}>Сохранение {version.decisions.length - n} · {new Date(review.created_at).toLocaleString("ru-RU")} · {review.decisions.every(d => d.confirmed === false) ? "черновик" : "проверено"}</p>)}</details></div>) ?? <p>Сохранённых предложений пока нет.</p>}</details>
     <details><summary>Ручные проверки и публикация</summary>{data.reviews.length ? data.reviews.map((r, i) => <p key={r.id}>Проверка {data.reviews.length - i} · {new Date(r.created_at).toLocaleString("ru-RU")} · {r.criteria.some(c => c.points === null) ? "не все критерии оценены" : `${r.criteria.reduce((n, c) => n + (c.points ?? 0), 0)} / ${data.maximum_score}`}{data.published_grade?.review_id === r.id ? " · опубликована" : ""}</p>) : <p>Ручных проверок пока нет.</p>}</details>
@@ -32,7 +33,7 @@ export function AssessmentDiagnostics({ submissionId, data, assessment, selected
     <details><summary>Извлечённый текст и предупреждения</summary>{data.structure?.pages.map(p => <details key={p.number}><summary>Раздел {p.number}</summary><pre className="document-text">{p.text || "Встроенный текст отсутствует."}</pre></details>)}{data.structure?.warnings.map((warning, i) => <p key={i}>{warning}</p>)}</details>
     <details><summary>Транскрипция, LaTeX, интерпретации и обработка</summary><DocumentAnalysis submissionId={submissionId} questions={data.questions} onPage={page => onPage(page + 1)}/></details>
     <details><summary>Повторная оценка и состояние модели</summary><p>Повторная оценка запускает отдельную обработку. Для проверки сохранённых предложений она не нужна.</p><button className="rw-button" disabled={dirty || !assessment?.supported || assessment.jobs.some(j => ['queued', 'extracting', 'interpreting'].includes(j.status))} onClick={() => void repeat()}>Запросить повторную оценку</button>{assessment?.jobs.map(j => <details key={j.id}><summary>Задача обработки</summary><p>{statusLabel(j.status)}</p><p>{j.error}</p></details>)}</details>
-    <details><summary>Подтверждённые наблюдения по курсу</summary><button className="rw-button" onClick={() => void loadInsights()}>Загрузить историю</button>{history !== null && <pre className="document-text">{JSON.stringify(history, null, 2)}</pre>}</details>
+    <details><summary>Подтверждённые наблюдения по курсу</summary><TeachingInsights key={submissionId} submissionId={submissionId}/></details>
     <Link className="rw-text-button" href={`/teacher/submissions/${submissionId}/originality`}>Отчёт о сходстве →</Link>{message && <p role="status">{message}</p>}
   </div>}</details>;
 }
