@@ -9,6 +9,7 @@ const { renderToStaticMarkup } = require('react-dom/server');
 
 function load(file, imports = {}) {
   const filename = path.resolve(file), compiled = new Module(filename, module);
+  compiled.filename = filename;
   compiled.paths = Module._nodeModulePaths(path.dirname(filename));
   const original = compiled.require.bind(compiled);
   compiled.require = (name) => imports[name] ?? original(name);

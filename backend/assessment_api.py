@@ -120,6 +120,8 @@ def assessment(submission_id: str, request: Request):
 class AssessRequest(Strict):
     reanalyze: bool = False
     prepare: bool = False
+    base_suggestion_id: str | None = Field(default=None, max_length=36)
+    target_criteria: list[tuple[str, str]] = Field(default_factory=list, max_length=1)
 
 
 @router.post('/assessment/{submission_id}', status_code=202)
@@ -127,6 +129,8 @@ def request_assessment(submission_id: str, payload: AssessRequest, request: Requ
     with SessionLocal() as db:
         submission, assignment = get_submission(db, submission_id, request, teacher=True)
         user = request_user(request)
+        if bool(payload.base_suggestion_id) != bool(payload.target_criteria):
+            raise HTTPException(422, 'Choose a saved assessment and one criterion to recheck.')
         rate_limit(request, 'assessment', user.account_id or user.username, 10)
         # Serialize approval + both enqueue stages together, including first-click races.
         from sqlalchemy import text, update
@@ -146,6 +150,7 @@ def request_assessment(submission_id: str, payload: AssessRequest, request: Requ
         existing = next((j for j in pending if j.context.get('task') == 'assessment'), None)
         if existing: return {'id': existing.id, 'status': existing.status}
         source = db.scalar(select(DocumentInterpretation).where(DocumentInterpretation.submission_id == submission_id).order_by(DocumentInterpretation.created_at.desc()).limit(1))
+        if payload.target_criteria and not source: raise HTTPException(409, 'Saved assessment cannot be reused. Reassess the whole work.')
         if not source and not payload.prepare: raise HTTPException(409, 'Run document understanding and review its observations first.')
         from services.ai_providers.engine import assessment_configuration
         try: config = assessment_configuration()
@@ -154,6 +159,23 @@ def request_assessment(submission_id: str, payload: AssessRequest, request: Requ
         if source:
             try: context = {'task': 'assessment', 'assessment': snapshot(db, submission, assignment, approved, source)}
             except ValueError as error: raise HTTPException(409, str(error)) from error
+            if payload.target_criteria:
+                baseline = db.get(AssessmentSuggestion, payload.base_suggestion_id)
+                if not baseline or baseline.submission_id != submission_id:
+                    raise HTTPException(404, 'Saved assessment not found.')
+                prior = db.get(ProcessingJob, baseline.job_id)
+                previous_snapshot = {k: v for k, v in prior.context.get('assessment', {}).items()
+                    if k not in {'target_criteria', 'reuse_criteria', 'base_suggestion_id'}}
+                if previous_snapshot != context['assessment']:
+                    raise HTTPException(409, 'Requirements, teaching guide or source changed. Reassess the whole work.')
+                keys = {(c['question_id'], c['criterion_id']) for c in approved.spec['criteria']}
+                selected = set(payload.target_criteria)
+                if not selected <= keys: raise HTTPException(422, 'Choose a current criterion.')
+                from services.assessment import validate_assessment
+                try: saved_result = validate_assessment(baseline.result, approved.spec, context['assessment']['source'], context['assessment']['assignment_context'].get('answer_groups', []))
+                except ValueError as error: raise HTTPException(409, 'Saved assessment cannot be reused. Reassess the whole work.') from error
+                context['assessment'].update(target_criteria=[list(key) for key in payload.target_criteria], base_suggestion_id=baseline.id,
+                    reuse_criteria=[c for c in saved_result['criteria'] if (c['question_id'], c['criterion_id']) not in selected])
             if not payload.reanalyze:
                 from dataclasses import asdict
                 previous = db.scalars(select(AssessmentSuggestion).where(AssessmentSuggestion.submission_id == submission_id,

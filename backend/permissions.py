@@ -63,6 +63,10 @@ def legacy_access(db, user, assignment_id):
 async def authorize_request(request, user):
     path = request.url.path
     method = request.method
+    if path.startswith('/api/teaching/'):
+        own_revision = method == 'GET' and re.fullmatch(r'/api/teaching/submissions/[^/]+/revision', path)
+        if user.role == 'student' and not own_revision: raise HTTPException(403, 'Teacher permission required.')
+        return  # Every handler checks the concrete course; revision also checks student ownership.
     if path.startswith(('/api/assignment-comparison/', '/api/document-integrity/', '/api/course-archive/')):
         if user.role == 'student':
             raise HTTPException(403, 'Teacher permission required.')

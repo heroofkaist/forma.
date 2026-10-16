@@ -54,7 +54,7 @@ def configuration(name=None):
         endpoint = os.getenv('FORMA_OPENROUTER_ENDPOINT', '')
         if model != MODEL or not re.fullmatch(r'[a-z0-9_-]+/[a-z0-9_.-]+', endpoint):
             raise ValueError('OpenRouter requires the exact Qwen model and one explicit approved endpoint slug.')
-        return ProviderConfig(name, model, 'qwen-cloud-v3-task-groups', {
+        return ProviderConfig(name, model, 'qwen-cloud-v4-readable-feedback', {
             'endpoint': endpoint, 'pages': limit('FORMA_OPENROUTER_MAX_PAGES', 3, 3),
             'batch_pages': limit('FORMA_OPENROUTER_BATCH_PAGES', 3, 3),
             'image_edge': limit('FORMA_OPENROUTER_IMAGE_EDGE', 1120, 1400),
@@ -64,7 +64,7 @@ def configuration(name=None):
             'completion_price_cap': os.getenv('FORMA_OPENROUTER_MAX_COMPLETION_USD_PER_MILLION', '0.75')})
     if name == 'ollama':
         from .ollama import local_base_url
-        return ProviderConfig(name, os.getenv('FORMA_OLLAMA_MODEL', 'qwen3-vl:8b-instruct'), 'qwen-document-v3-task-groups', {
+        return ProviderConfig(name, os.getenv('FORMA_OLLAMA_MODEL', 'qwen3-vl:8b-instruct'), 'qwen-document-v4-readable-feedback', {
             'base_url': local_base_url(os.getenv('FORMA_OLLAMA_BASE_URL', 'http://127.0.0.1:11434')),
             'pages': limit('FORMA_OLLAMA_MAX_PAGES', 3, 6),
             'batch_pages': limit('FORMA_OLLAMA_BATCH_PAGES', 1, 2),

@@ -79,6 +79,7 @@ async def enforce_api_authentication(request: Request, call_next):
         path in {"/api/auth/me", "/api/auth/logout"}
         or path.startswith(("/api/accounts/", "/api/institutions", "/api/enrollment/"))
         or (path.startswith("/api/document-analysis/") and path.endswith("/status") and request.method == "GET")
+        or (re.fullmatch(r"/api/teaching/submissions/[^/]+/revision", path) is not None and request.method == "GET")
         or (path.startswith(("/api/course-materials/", "/api/materials/", "/api/submission-documents/", "/api/submission-files/")) and request.method == "GET")
         or (path == "/academic/courses" and request.method == "GET")
         or (path == "/academic/enroll" and request.method == "POST")
@@ -307,3 +308,6 @@ app.include_router(assignment_briefs_router)
 
 from course_archive import router as course_archive_router
 app.include_router(course_archive_router)
+
+from teaching_workflow import router as teaching_router
+app.include_router(teaching_router)

@@ -15,7 +15,8 @@ def snapshot(db, submission, assignment, approved, source):
     correction = db.scalar(select(InterpretationCorrection).where(InterpretationCorrection.interpretation_id == source.id)
         .order_by(InterpretationCorrection.created_at.desc()).limit(1))
     observed = correction.result if correction else source.result
-    return {'rubric_id': approved.id, 'rubric': approved.spec, 'interpretation_id': source.id,
+    from services.teaching_guidance import guide_snapshot
+    return {'teaching_guide': guide_snapshot(db, assignment, exclude_sid=submission.id), 'rubric_id': approved.id, 'rubric': approved.spec, 'interpretation_id': source.id,
         'correction_id': correction.id if correction else None, 'title': assignment.title,
         'source': {'sections': [{k: s.get(k, [] if k == 'criterion_ids' else None)
             for k in ('id', 'page_number', 'question_id', 'criterion_ids', 'kind', 'transcription', 'readability', 'evidence_kind')}

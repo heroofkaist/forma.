@@ -54,6 +54,51 @@ def review_json(review):
     return {"id": review.id, "criteria": review.criteria, "feedback": review.feedback, "created_at": utc(review.created_at), "reviewer": review.reviewer}
 
 
+class EvidenceLocation(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    suggestion_id: str = Field(max_length=36)
+    question_id: str = Field(max_length=80)
+    criterion_id: str = Field(max_length=80)
+    evidence_index: int = Field(ge=0, le=5)
+
+
+@router.post('/document-review/{submission_id}/evidence-location')
+def evidence_location(submission_id: str, payload: EvidenceLocation, request: Request, response: Response):
+    """Locate an existing validated citation in this original; never invent a box."""
+    import re
+    from assessment_models import AssessmentSuggestion
+    from processing_models import ProcessingJob
+    response.headers['Cache-Control'] = 'private, no-store'
+    with SessionLocal() as db:
+        submission, _ = get_submission(db, submission_id, request, teacher=True)
+        suggestion = db.get(AssessmentSuggestion, payload.suggestion_id)
+        if not suggestion or suggestion.submission_id != submission_id: raise HTTPException(404, 'Assessment not found.')
+        c = next((c for c in suggestion.result['criteria'] if (c['question_id'], c['criterion_id']) == (payload.question_id, payload.criterion_id)), None)
+        if not c or payload.evidence_index >= len(c['evidence']): raise HTTPException(404, 'Evidence not found.')
+        citation = c['evidence'][payload.evidence_index]
+        document = db.get(SubmissionDocument, submission_id)
+        job = db.get(ProcessingJob, suggestion.job_id)
+        import hashlib
+        content = read_blob(submission.file_path)
+        if not document or document.content_hash != job.content_hash or hashlib.sha256(content).hexdigest() != document.content_hash:
+            raise HTTPException(409, 'An original document changed. Reload the submission before comparing.')
+        result = {'page_number': citation['page_number'], 'quote': citation['quote'], 'rectangles': []}
+        if submission.file_type != 'pdf': return result
+        with pymupdf.open(stream=content, filetype='pdf') as pdf:
+            if not 1 <= citation['page_number'] <= pdf.page_count: return result
+            page = pdf[citation['page_number'] - 1]
+            normalized = lambda text: re.sub(r'\s+', ' ', text).strip()
+            quote = normalized(citation['quote'])
+            if not quote or normalized(page.get_text()).count(quote) != 1: return result
+            boxes = page.search_for(quote)
+            for box in boxes[:30]:
+                box = (box * page.rotation_matrix) & page.rect
+                if not box.is_empty:
+                    result['rectangles'].append({'x': box.x0 / page.rect.width, 'y': box.y0 / page.rect.height,
+                        'width': box.width / page.rect.width, 'height': box.height / page.rect.height})
+        return result
+
+
 @router.get("/assignment-submissions/{assignment_id}")
 def list_submissions(assignment_id: str, request: Request, response: Response):
     response.headers["Cache-Control"] = "private, no-store"
@@ -79,6 +124,7 @@ def list_submissions(assignment_id: str, request: Request, response: Response):
         course = db.get(AcademicCourse, offering.course_id)
         roster = {e.student_id: {'student_id': e.student_id, 'student_name': student_display_name(db, e.student_id, e.student_name), 'active': True}
                   for e in db.scalars(select(CourseEnrollment).where(CourseEnrollment.offering_id == offering.id)) if enrollment_active(db, e)}
+        from teaching_workflow import attention_for
         items = []
         for row in rows:
             roster.setdefault(row.student_id, {'student_id': row.student_id, 'student_name': student_display_name(db, row.student_id, row.student_name), 'active': False})
@@ -86,7 +132,7 @@ def list_submissions(assignment_id: str, request: Request, response: Response):
                 'student_name': roster[row.student_id]['student_name'], 'file_name': row.file_name, 'file_type': row.file_type,
                 'status': row.status, 'processing_status': latest[row.id].status if row.id in latest else 'not_scheduled',
                 'processing_error': latest[row.id].error if row.id in latest else '', 'submitted_at': utc(row.created_at),
-                'similarity': similarities[row.id], 'integrity': integrity[row.id]})
+                'similarity': similarities[row.id], 'integrity': integrity[row.id], 'attention': attention_for(db, row.id)})
         from assignment_comparison import fingerprint
         latest_sources = {}
         for row in rows:
@@ -225,7 +271,7 @@ def published_feedback(db, grade):
     public_rubric = [{"id": q.get("id"), "title": q.get("title", ""), "criteria": [
         {key: c.get(key) for key in ("criterion_id", "description", "maximum_points")}
         for c in q.get("criteria", [])]} for q in rubric]
-    return {"criteria": criteria, "feedback": review.feedback, "rubric": public_rubric}
+    return {"review_id": review.id, "criteria": criteria, "feedback": review.feedback, "rubric": public_rubric}
 
 
 @router.get("/teacher-overview")

@@ -1,6 +1,6 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),Module=require('node:module'),ts=require('typescript'),React=require('react');
 const {renderToStaticMarkup:render}=require('react-dom/server');
-function load(file,imports={}){const name=path.resolve(file),m=new Module(name,module);m.paths=Module._nodeModulePaths(path.dirname(name));const req=m.require.bind(m);m.require=key=>imports[key]??req(key);m._compile(ts.transpileModule(fs.readFileSync(name,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText,name);return m.exports;}
+function load(file,imports={}){const name=path.resolve(file),m=new Module(name,module);m.filename=name;m.paths=Module._nodeModulePaths(path.dirname(name));const req=m.require.bind(m);m.require=key=>imports[key]??req(key);m._compile(ts.transpileModule(fs.readFileSync(name,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText,name);return m.exports;}
 const preflight=load('src/lib/assignment-preflight.ts'),review=load('src/lib/review-workspace.ts'),pilot=load('src/lib/review-pilot.ts');
 function find(node,predicate){if(!React.isValidElement(node))return; if(predicate(node))return node;for(const child of React.Children.toArray(node.props.children)){const hit=find(child,predicate);if(hit)return hit;}}
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
@@ -9,7 +9,7 @@ test('question queue offers direct mapping for missing and stale pages while kee
  const base={student_name:'Synthetic student',file_name:'Synthetic.pdf',file_type:'pdf',page_count:3,review_status:'unreviewed',mapping:null};
  const data={questions:[{id:'q2',title:'Second'}],items:[{...base,id:'missing'},{...base,id:'stale',mapping:{id:'map',question_id:'q2',pages:[3],stale:true}},{...base,id:'ready',mapping:{id:'map',question_id:'q2',pages:[2],stale:false}},{...base,id:'unavailable',page_count:0},{...base,id:'docx',file_type:'docx',page_count:0}]};
  const html=render(React.createElement(QuestionReviewQueue,{data,question:'q2'}));
- assert.match(html,/Требуют разметки: 2/);
+ assert.match(html,/Для 2 работ страницы вопроса пока не найдены/);
  for(const id of ['missing','stale'])assert.ok(html.includes(pilot.questionMappingUrl(id,'q2').replaceAll('&','&amp;')));
  assert.ok(html.includes(pilot.questionReviewUrl('ready','q2',[2]).replaceAll('&','&amp;')));
  for(const id of ['ready','unavailable','docx'])assert.ok(!html.includes(pilot.questionMappingUrl(id,'q2').replaceAll('&','&amp;')));

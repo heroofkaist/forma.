@@ -35,6 +35,13 @@ export function submissionAvailability(assignment: { available_at?: string | nul
 }
 export function requestError(status: number, detail?: unknown) {
   const known: Record<string, string> = {
+    'Teaching guide changed. Reload before saving.': 'Правила уже изменены в другой вкладке. Скопируйте свои правки и перезагрузите настройки.',
+    'Only confirmed current reviews can be reference examples.': 'Один из примеров не соответствует действующим критериям. Уберите его из списка и сохраните правила.',
+    'Requirements, teaching guide or source changed. Reassess the whole work.': 'После этой оценки изменились условия, правила ИИ или распознавание. Запустите оценивание всей работы — прежние баллы нельзя использовать с новыми требованиями.',
+    'Saved assessment cannot be reused. Reassess the whole work.': 'Прежнюю оценку нельзя безопасно дополнить. Запустите оценивание всей работы.',
+    'Revision must refer to published feedback.': 'Опубликованный отзыв обновился. Обновите страницу и выберите замечания заново.',
+    'Check the revision response.': 'Проверьте выбранные замечания и пояснение к пересдаче.',
+    'Select criteria from the published review.': 'Выберите критерии из опубликованного отзыва.',
     'Paid allowance is not available; reconcile billing or use manual review.': 'Доступный лимит AI-проверки пока не позволяет продолжить. Можно выставить баллы вручную.',
     'Daily document processing limit (20 jobs) reached.': 'Сегодня уже запущено 20 этапов AI-анализа. Сохранённые результаты доступны; новые запросы можно отправить завтра.',
     'Maximum three analysis versions per submission per day.': 'Сегодня уже запрошены 3 версии этого анализа. Используйте сохранённый результат или повторите завтра.',

@@ -4,6 +4,7 @@ import "./fonts.css";
 import "./globals.css";
 import "./identity.css";
 import "./review-studio.css";
+import "./teaching-workflow.css";
 import "./document-integrity.css";
 import { AuthProvider } from "../components/auth-provider";
 

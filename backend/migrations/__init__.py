@@ -13,6 +13,7 @@ def apply_migrations(bind):
     import comparison_models
     import integrity_models
     import course_archive_models
+    import teaching_models
     from persistence import Base
     names = ("accounts", "account_sessions", "account_actions", "account_rate_buckets",
              "course_owners", "offering_policies", "enrollment_states", "assignment_owners")
@@ -69,5 +70,11 @@ def apply_migrations(bind):
         version = "015_shared_course_archive"
         if not connection.scalar(select(SchemaMigration.version).where(SchemaMigration.version == version)):
             for name in ("course_archive_links", "originality_corpus_snapshots"):
+                Base.metadata.tables[name].create(connection, checkfirst=True)
+            connection.execute(SchemaMigration.__table__.insert().values(version=version))
+
+        version = "016_teaching_workflow"
+        if not connection.scalar(select(SchemaMigration.version).where(SchemaMigration.version == version)):
+            for name in ("assessment_teaching_guides", "student_revision_responses"):
                 Base.metadata.tables[name].create(connection, checkfirst=True)
             connection.execute(SchemaMigration.__table__.insert().values(version=version))

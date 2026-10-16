@@ -17,6 +17,7 @@ import email_delivery
 import institutions
 import document_processing
 import course_archive
+import teaching_workflow
 from main import app
 from migrations import apply_migrations
 from persistence import Base, now_utc
@@ -29,7 +30,7 @@ def platform(tmp_path, monkeypatch):
         connection.execute("PRAGMA foreign_keys=ON")
     Base.metadata.create_all(engine)
     factory = sessionmaker(engine, expire_on_commit=False)
-    for module in (persistence, accounts, ai_budget, courses, permissions, academic_api, assignment_api, email_delivery, institutions, document_processing, course_archive):
+    for module in (persistence, accounts, ai_budget, courses, permissions, academic_api, assignment_api, email_delivery, institutions, document_processing, course_archive, teaching_workflow):
         monkeypatch.setattr(module, "SessionLocal", factory)
     monkeypatch.setattr(persistence, "engine", engine)
     monkeypatch.setenv("FORMA_AUTH_REQUIRED", "true")
@@ -227,7 +228,7 @@ def test_additive_migration_repeated_and_profile_security(platform):
     engine = factory.kw["bind"]
     apply_migrations(engine); apply_migrations(engine)
     with factory() as db:
-        assert len(db.scalars(select(account_models.SchemaMigration)).all()) == 15
+        assert len(db.scalars(select(account_models.SchemaMigration)).all()) == 16
         assert db.scalar(select(account_models.Account)).display_name == "New Name"
     assert client.post('/api/accounts/password', headers=headers, json={"current_password": "bad", "password": "new-password-123"}).status_code == 400
     assert client.post('/api/accounts/password', headers=headers, json={"current_password": "correct-password-123", "password": "new-password-123"}).status_code == 200

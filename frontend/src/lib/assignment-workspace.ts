@@ -1,10 +1,10 @@
 import type { IntegritySummary } from './document-integrity';
 import type { SubmissionSummary } from './submission-status';
 export type TextSimilarity = {analysis_status:string;match_ratio:number|null;candidate_count:number|null};
-export type AssignmentWork = SubmissionSummary & {id:string;student_id:string;student_name:string;file_name:string;file_type:string;submitted_at:string;similarity:TextSimilarity;integrity?:IntegritySummary};
+export type AssignmentWork = SubmissionSummary & {id:string;student_id:string;student_name:string;file_name:string;file_type:string;attention?:{kind:string;label:string;count:number;question_id?:string;criterion_id?:string};submitted_at:string;similarity:TextSimilarity;integrity?:IntegritySummary};
 export type AssignmentWorkspace = {comparison_revision:string;id:string;title:string;description:string;assignment_type:string;offering_id:string;course_name:string;course_code:string;maximum_score:number;due_at:string|null;originality_enabled:boolean;students:{student_id:string;student_name:string;active:boolean}[];items:AssignmentWork[]};
 export type StudentWork = AssignmentWorkspace['students'][number] & {attempts:AssignmentWork[];latest:AssignmentWork|null};
-export type WorkFilter='all'|'missing'|'unreviewed'|'reviewed';
+export type WorkFilter='all'|'missing'|'unreviewed'|'reviewed'|'attention'|'ready';
 export function studentWorks(data:AssignmentWorkspace):StudentWork[]{
   const items=Array.isArray(data.items)?data.items:[];
   // Older API responses contain submissions but no enrollment roster.
@@ -14,7 +14,7 @@ export function studentWorks(data:AssignmentWorkspace):StudentWork[]{
 export function filterStudentWorks(rows:StudentWork[],query:string,filter:WorkFilter){
   const text=query.trim().toLocaleLowerCase('ru');
   return rows.filter(row=>(!text||[row.student_name,row.student_id,...row.attempts.map(w=>w.file_name)].some(s=>s.toLocaleLowerCase('ru').includes(text)))&&
-    (filter==='all'||filter==='missing'&&!row.latest||filter==='unreviewed'&&row.latest&&!['confirmed','published'].includes(row.latest.review_status)||filter==='reviewed'&&row.latest&&['confirmed','published'].includes(row.latest.review_status)));
+    (filter==='all'||filter==='attention'&&row.latest&&['processing','evidence','draft','outdated'].includes(row.latest.attention?.kind??'')||filter==='ready'&&row.latest?.attention?.kind==='ready'||filter==='missing'&&!row.latest||filter==='unreviewed'&&row.latest&&!['confirmed','published'].includes(row.latest.review_status)||filter==='reviewed'&&row.latest&&['confirmed','published'].includes(row.latest.review_status)));
 }
 export function textSimilarityLabel(value?:TextSimilarity){
   if(value?.analysis_status==='completed'&&typeof value.match_ratio==='number'&&Number.isFinite(value.match_ratio)&&value.match_ratio>=0&&value.match_ratio<=1)return `${Math.round(value.match_ratio*100)}%`;

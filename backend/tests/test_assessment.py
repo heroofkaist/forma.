@@ -286,7 +286,7 @@ def test_migration_009_upgrades_old_schema_without_rewriting_sources(assessed):
     with factory() as db:
         assert db.get(AcademicSubmission, sid).file_name == 'synthetic.pdf'
         assert db.scalar(select(func.count()).select_from(DocumentInterpretation)) == 1
-        assert db.scalar(select(func.count()).select_from(SchemaMigration)) == 15
+        assert db.scalar(select(func.count()).select_from(SchemaMigration)) == 16
 
 
 def test_single_click_durable_read_then_grade_deduplicates_and_never_publishes(platform, monkeypatch):

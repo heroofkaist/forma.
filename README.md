@@ -172,8 +172,8 @@ Programming assignments additionally accept restricted UTF-8 sources/ZIPs for
 static review. PPTX extraction has no visual rendering, and DOCX extraction has no
 reliable page boundaries. Course assignment rows link to submitted documents and
 a rubric review workspace. Review versions are retained; grades are visible to
-students only after explicit teacher publication. Full-document AI interpretation
-and evidence-based automatic grading remain planned phases.
+students only after explicit teacher publication. Document interpretation and
+rubric-based AI score suggestions are saved as reviewable versions.
 
 Additional checks:
 
@@ -201,3 +201,6 @@ grades. The same-origin Cloudflare proxy retains `redirect: "manual"`.
 Problem sets, essays and lab reports share rubric evaluation and explicit teacher confirmation. Assessment defaults to local Ollama; explicitly configured OpenRouter reuses the strict budget ledger. See the [local cloud pilot and approval-gated smoke test](docs/CLOUD_QWEN_PILOT.md) and separate [staging plan](docs/CLOUD_QWEN_STAGING_PLAN.md). See [Phase 4 implementation, real examples, file support and rollout](docs/UNIVERSAL_ASSESSMENT_PHASE4.md). Suggestions never publish grades; unsupported formats/categories remain available for manual review.
 
 The [Teacher Review Workspace guide](docs/TEACHER_REVIEW_WORKSPACE.md) covers the redesigned document/criteria interface, persisted drafts, explicit publication, verification and exact local commands using saved data without inference.
+
+See [teacher rules, criterion rechecks, evidence navigation and cohort feedback](docs/TEACHING_WORKFLOW.md)
+for the current teaching workflow, saved-result behavior and its limits.

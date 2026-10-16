@@ -235,10 +235,11 @@ export const academicApi = {
     if (!assignment) throw new Error("Задание не найдено среди курсов студента.");
     return assignment;
   },
-  submit: (assignmentId: string, file: File, requestId?: string) => {
+  submit: (assignmentId: string, file: File, requestId?: string, revision?:{source_review_id:string;criterion_keys:[string,string][];explanation:string}) => {
     const data = new FormData();
     data.append("file", file);
     if (requestId) data.append("request_id", requestId);
+    if (revision) data.append("revision_response",JSON.stringify(revision));
     return request<Record<string, unknown>>(`/academic/assignments/${assignmentId}/submissions`, { method: "POST", body: data });
   },
   studentGrades: async () =>

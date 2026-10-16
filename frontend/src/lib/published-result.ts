@@ -1,5 +1,6 @@
 export type PublishedGrade = {
   id: string;
+  review_id?:string;
   assignment_id: string;
   assignment_title: string;
   submission_id: string;

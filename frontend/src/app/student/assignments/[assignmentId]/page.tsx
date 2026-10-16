@@ -34,6 +34,8 @@ export default function StudentAssignmentPage() {
   const [complete, setComplete] = useState(false);
   const requestId = useRef("");
   const sending = useRef(false);
+  const [revisionKeys,setRevisionKeys]=useState<string[]>([]),[revisionText,setRevisionText]=useState("");
+  const [revisionEnabled,setRevisionEnabled]=useState(false);
   const isHandwritten = assignment?.assignment_type === "problem_set";
   useEffect(() => {
     if (!file || file.type !== "application/pdf") { setPreviewUrl(""); return; }
@@ -75,9 +77,10 @@ export default function StudentAssignmentPage() {
 
   async function submit() {
     if (!file || uploadBlocked || busy || sending.current || !readable || !complete || templateRequired === null || (templateRequired && !templateConfirmed)) return;
+    if(revisionEnabled&&(!published?.review_id||!revisionKeys.length||revisionText.trim().length<5)){setError("Выберите замечания и коротко объясните, что исправили.");return;}
     if (file.size > MAX_FILE_BYTES) { setError("Максимальный размер файла — 30 МБ."); return; }
     sending.current = true; setBusy(true); setError("");
-    try { if (!requestId.current) requestId.current=crypto.randomUUID(); const receipt=await academicApi.submit(assignmentId, file, requestId.current); setSubmitted(receipt); setFile(null);
+    try { if (!requestId.current) requestId.current=crypto.randomUUID(); const receipt=await academicApi.submit(assignmentId, file, requestId.current,revisionEnabled&&published?.review_id?{source_review_id:published.review_id,criterion_keys:revisionKeys.map(key=>JSON.parse(key) as [string,string]),explanation:revisionText.trim()}:undefined); setSubmitted(receipt); setFile(null);
       setAssignment(current => current ? { ...current, latest_submission: receipt } : current);
       try {setAssignment(await academicApi.assignment(assignmentId));}catch{setError("Работа сохранена. Обновить статус не удалось; квитанция показана ниже. Обновите страницу перед новой попыткой.");} }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Не удалось отправить работу."); }
@@ -106,6 +109,7 @@ export default function StudentAssignmentPage() {
           <label className="student-file-picker"><input type="file" accept={accepted} disabled={busy} onChange={(event) => { setError(""); setFile(event.target.files?.[0] ?? null); setReadable(false); setComplete(false); setTemplateConfirmed(false); requestId.current=""; }} /><FileUp size={20} /><strong>{file?.name ?? "Выберите файл"}</strong><span>{file ? `${(file.size / 1024 / 1024).toFixed(2)} МБ` : `${formats} · до 30 МБ`}</span></label>
           {previewUrl && <object className="student-pdf-preview" data={previewUrl} type="application/pdf" aria-label="Предпросмотр PDF">Предпросмотр недоступен</object>}
           {file && <fieldset className="submission-checklist"><legend>Перед отправкой</legend><label><input type="checkbox" checked={readable} disabled={busy} onChange={event=>setReadable(event.target.checked)}/>Я открыл(а) файл: страницы читаются и идут по порядку.</label><label><input type="checkbox" checked={complete} disabled={busy} onChange={event=>setComplete(event.target.checked)}/>Я проверил(а) все части, требуемые в условии задания.</label>{templateRequired && <label><input type="checkbox" checked={templateConfirmed} disabled={busy} onChange={event=>setTemplateConfirmed(event.target.checked)}/>Я выполнил(а) работу в обязательном шаблоне преподавателя.</label>}<p className="muted">Это ваша проверка комплектности; содержание оценит преподаватель.</p></fieldset>}
+          {latest&&assignment?.allow_resubmission&&published?.review_id&&<fieldset className="submission-checklist revision-response" disabled={busy}><legend>Исправления по обратной связи</legend><label><input type="checkbox" checked={revisionEnabled} onChange={e=>{setRevisionEnabled(e.target.checked);requestId.current='';}}/>Добавить пояснение к пересдаче</label>{revisionEnabled&&<><p>Какие замечания вы учли?</p>{published.criteria.map((c,index)=>{const key=JSON.stringify([c.question_id,c.criterion_id]);return <label key={key}><input type="checkbox" checked={revisionKeys.includes(key)} onChange={e=>{setRevisionKeys(keys=>e.target.checked?[...keys,key]:keys.filter(v=>v!==key));requestId.current='';}}/><span>{c.description||`Критерий ${index+1}`}{c.comment&&<small>{c.comment}</small>}</span></label>;})}<label>Что вы изменили<textarea rows={3} maxLength={2000} value={revisionText} onChange={e=>{setRevisionText(e.target.value);requestId.current='';}} placeholder="Например: исправил расчёт погрешности и объяснил выбор метода."/></label></>}</fieldset>}
           {templateRequired === null && <p role="status" className="muted">Перед отправкой дождитесь загрузки требований к шаблону. Если произошла ошибка, нажмите «Повторить» выше.</p>}
           <button className="button primary full-button" disabled={!file || !readable || !complete || templateRequired === null || (templateRequired && !templateConfirmed) || busy || (Boolean(latest) && !assignment?.allow_resubmission)} onClick={() => void submit()}>{busy ? "Отправляем…" : <><Upload size={14} />{latest ? "Отправить повторно" : "Подтвердить отправку"}</>}</button>
           {latest && !assignment?.allow_resubmission && <small className="muted">Повторная отправка не разрешена в настройках задания.</small>}

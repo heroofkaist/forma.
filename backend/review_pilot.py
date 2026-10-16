@@ -209,10 +209,29 @@ def question_queue(aid: str, request: Request, question_id: str | None = Query(d
         items = []
         for row in rows:
             mapping = latest_mapping(db, row.id, question_id) if question_id else None
+            # Navigation may use observed pages without requiring manual mapping.
+            # It does not confirm OCR or change grading evidence.
+            inferred = []
+            from processing_models import DocumentInterpretation, InterpretationCorrection, ProcessingJob
+            source = db.scalar(select(DocumentInterpretation).where(DocumentInterpretation.submission_id == row.id)
+                .order_by(DocumentInterpretation.created_at.desc()).limit(1)) if question_id else None
+            document = db.get(SubmissionDocument, row.id)
+            job = db.get(ProcessingJob, source.job_id) if source else None
+            if source and document and job and document.content_hash == job.content_hash and job.context.get('questions') == assignment.questions:
+                correction = db.scalar(select(InterpretationCorrection).where(InterpretationCorrection.interpretation_id == source.id)
+                    .order_by(InterpretationCorrection.created_at.desc()).limit(1))
+                observed = correction.result if correction else source.result
+                inferred = sorted({s['page_number'] for s in observed['sections'] if s.get('question_id') == question_id
+                    and s['readability'] not in {'missing', 'unreadable'} and 1 <= s['page_number'] <= page_count(db, row)})
+            effective = mapping_json(mapping, assignment) if mapping else None
+            if not mapping and inferred:
+                effective = {'id': None, 'question_id': question_id, 'pages': inferred, 'stale': False, 'inferred': True}
+            if not mapping and not inferred and len(assignment.questions) == 1 and page_count(db, row):
+                effective = {'id': None, 'question_id': question_id, 'pages': list(range(1, page_count(db, row)+1)), 'stale': False, 'whole_work': True}
             items.append({'id': row.id, 'student_name': student_display_name(db, row.student_id, row.student_name), 'file_name': row.file_name,
-                          'file_type': row.file_type, 'page_count': page_count(db, row), 'mapping': mapping_json(mapping, assignment) if mapping else None, **summaries[row.id]})
+                          'file_type': row.file_type, 'page_count': page_count(db, row), 'mapping': effective, **summaries[row.id]})
         return {'title': assignment.title, 'questions': [{'id': q['id'], 'title': q['title']} for q in assignment.questions], 'items': items,
-                'scope': 'Latest immutable attempt per student; pages are teacher-mapped, never inferred.'}
+                'scope': 'Последняя попытка каждого студента. Ручная разметка имеет приоритет; найденные распознаванием страницы служат только для навигации.'}
 
 
 def safe_csv(value):

@@ -1,0 +1,12 @@
+"use client";
+import Link from 'next/link';
+import {useEffect,useState} from 'react';
+import {platformRequest} from '../../lib/platform';
+type Revision={source_submission_id:string;explanation:string;criterion_keys:[string,string][];source_feedback:string;source_criteria:{question_id:string;criterion_id:string;comment:string}[];text_diff:string;text_comparison_available:boolean};
+export function RevisionContext({submissionId,criteria}:{submissionId:string;criteria:{question_id:string;criterion_id:string;description:string}[]}) {
+  const [revision,setRevision]=useState<Revision|null>(null),[error,setError]=useState(''),[open,setOpen]=useState(false),[retry,setRetry]=useState(0);
+  useEffect(()=>{let active=true;void platformRequest<{revision:Revision|null}>(`/api/teaching/submissions/${submissionId}/revision`).then(value=>{if(active){setRevision(value.revision);setError('');}}).catch(()=>{if(active)setError('Не удалось проверить, есть ли пояснение к пересдаче.');});return()=>{active=false;};},[submissionId,retry]);
+  if(error)return <p className="rw-input-hint">{error} <button className="rw-text-button" onClick={()=>setRetry(v=>v+1)}>Повторить</button></p>;
+  if(!revision)return null;
+  return <section className="rw-revision-context"><strong>Пересдача с учётом ваших замечаний</strong><p>{revision.explanation}</p>{revision.criterion_keys.map(([qid,cid])=><div key={`${qid}/${cid}`}><h4>{criteria.find(c=>c.question_id===qid&&c.criterion_id===cid)?.description??'Критерий прежней проверки'}</h4><p>{revision.source_criteria.find(c=>c.question_id===qid&&c.criterion_id===cid)?.comment||'Отдельного комментария не было.'}</p></div>)}<Link href={`/teacher/submissions/${revision.source_submission_id}/review`} target="_blank" rel="noopener noreferrer">Предыдущая работа и опубликованный отзыв ↗</Link><button className="rw-text-button" type="button" aria-expanded={open} onClick={()=>setOpen(v=>!v)}>{open?'Скрыть изменения':'Показать изменения текста'}</button>{open&&<>{revision.text_comparison_available?<><p className="rw-input-hint">Сравнение извлечённого текста: до 20 000 символов на файл, до 250 строк. Оно не показывает все изменения формул и изображений.</p><pre>{revision.text_diff||'В доступном фрагменте текста изменений нет.'}</pre></>:<p>Для одного из файлов нет извлечённого текста. Сравните оригиналы; текстовое сравнение не отражает изменения на сканах.</p>}</>}</section>;
+}

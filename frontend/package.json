@@ -11,7 +11,7 @@
     "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "cf:upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
     "cf:typegen": "wrangler types",
-    "test": "node --test tests/*.test.cjs"
+    "test": "node --require ./tests/register-ts.cjs --test tests/*.test.cjs"
   },
   "dependencies": {
     "katex": "^0.19.0",

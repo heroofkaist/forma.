@@ -1,6 +1,6 @@
 export type CardUse = {card_id: string; evidence: {page_number: number; observation: string}};
 export type DecisionCard = {id: string; title: string; kind: 'decision'|'reference'; rule: string; feedback: string; points: number; source_submission_id: string; review_id: string; evidence: CardUse['evidence']; created_by: string; created_at: string};
-export type PageMapping = {id: string; question_id: string; pages: number[]; stale: boolean};
+export type PageMapping = {id: string|null; question_id: string; pages: number[]; stale: boolean;inferred?:boolean;whole_work?:boolean};
 export type QuestionQueue = {title: string; questions: {id: string; title: string}[]; items: {id: string; student_name: string; file_name: string; file_type: string; page_count: number; mapping: PageMapping|null; review_status: string}[]};
 export function appendCardExplanation(current: string, explanation: string) {
   const next = explanation.trim();

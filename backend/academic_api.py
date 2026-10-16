@@ -269,6 +269,7 @@ class SubmissionResponse(BaseModel):
 
 
 class AcademicStudentGradeResponse(BaseModel):
+    review_id: str | None = None
     id: str
     assignment_id: str
     assignment_title: str
@@ -1509,7 +1510,7 @@ async def _read_submission_file(file: UploadFile, allow_code: bool = False) -> t
     summary="[DEMO/LOCAL ONLY] Submit PDF or DOCX",
 )
 async def create_submission(
-    assignment_id: str, request: Request, file: UploadFile = File(...), request_id: UUID | None = Form(default=None)
+    assignment_id: str, request: Request, file: UploadFile = File(...), request_id: UUID | None = Form(default=None), revision_response: str | None = Form(default=None, max_length=8000)
 ) -> dict:
     ensure_academic_seed()
     student_id, student_name = _student_identity(request)
@@ -1538,14 +1539,23 @@ async def create_submission(
         if not enrollment_active(db, enrolled):
             raise HTTPException(status_code=403, detail="Student is not actively enrolled in this offering.")
         from review_pilot_models import SubmissionUploadReceipt
+        from teaching_workflow import RevisionDraft, validate_revision
+        from teaching_models import RevisionResponse
+        revision = None
+        if revision_response:
+            from pydantic import ValidationError
+            try: revision = RevisionDraft.model_validate_json(revision_response)
+            except ValidationError as error: raise HTTPException(422, 'Check the revision response.') from error
+        revision_hash = hashlib.sha256(revision.model_dump_json().encode()).hexdigest() if revision else None
         content_hash = hashlib.sha256(content).hexdigest()
         if request_id is not None:
             receipt = db.scalar(select(SubmissionUploadReceipt).where(SubmissionUploadReceipt.assignment_id == assignment_id,
                 SubmissionUploadReceipt.student_id == student_id, SubmissionUploadReceipt.request_id == str(request_id)))
             if receipt:
-                if receipt.content_hash != content_hash or receipt.response['file_name'] != Path(file.filename or '').name[:255]:
+                if receipt.response.get('revision_response_hash') != revision_hash or receipt.content_hash != content_hash or receipt.response['file_name'] != Path(file.filename or '').name[:255]:
                     raise HTTPException(409, 'Upload request ID was already used for a different file.')
                 return receipt.response
+        if revision: validate_revision(db, assignment, student_id, revision)
         now = now_utc()
         available_at = _as_utc(assignment.available_at)
         due_at = _as_utc(assignment.due_at)
@@ -1602,6 +1612,9 @@ async def create_submission(
         db.add(submission)
         db.flush()
         db.add(SubmissionDocument(submission_id=submission.id, content_hash=hashlib.sha256(content).hexdigest(), structure=file._forma_structure))
+        if revision:
+            db.add(RevisionResponse(submission_id=submission.id, source_review_id=revision.source_review_id,
+                content=revision.model_dump(exclude={'source_review_id'})))
         reports = _compare_submission(db, submission)
         if auth_required():
             from document_processing import enqueue
@@ -1626,6 +1639,7 @@ async def create_submission(
                 else [_report_json(db, report) for report in reports]
             ),
         }
+        if revision_hash: result['revision_response_hash'] = revision_hash
         if request_id is not None:
             db.add(SubmissionUploadReceipt(assignment_id=assignment_id, student_id=student_id, request_id=str(request_id),
                                            content_hash=content_hash, response=result))

@@ -1,10 +1,11 @@
+import {scoreLabel} from "./teacher-display";
 export type SubmissionSummary = {
   review_status: "unreviewed" | "draft" | "confirmed" | "published";
   review_points: number | null; review_maximum: number; has_draft: boolean;
   processing_status: string; processing_error: string;
 };
 export function humanReviewLabel(item: SubmissionSummary): string {
-  const score = item.review_points === null ? "" : ` · ${item.review_points} / ${item.review_maximum}`;
+  const score = item.review_points === null ? "" : ` · ${scoreLabel(item.review_points,item.review_maximum)} / ${scoreLabel(item.review_maximum)}`;
   if (item.review_status === "published") return `Опубликована студенту${score}`;
   if (item.review_status === "confirmed") return `Проверка подтверждена${score} · не опубликована`;
   if (item.review_status === "draft") return "Сохранён черновик · не подтверждён";
