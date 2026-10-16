@@ -949,3 +949,44 @@ textarea { line-height: 1.6; }
 @media(max-width:600px) {
  .assignment-register tr { grid-template-columns:minmax(0,1fr); }
 }
+
+/* Quiet section headers keep the action separate from the teaching content. */
+details > summary { list-style: none; cursor: pointer; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::marker { content: ""; }
+details > summary { display: flex; align-items: center; gap: 12px; min-height: 40px; }
+details > summary::after, .rw-disclosure-action {
+  content: "Показать";
+  margin-left: auto;
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--secondary);
+  background: var(--surface);
+  font: 500 11px/1.4 var(--sans, sans-serif);
+  letter-spacing: 0;
+  white-space: nowrap;
+  transition: color 160ms, border-color 160ms, background-color 160ms;
+}
+details[open] > summary::after { content: "Скрыть"; color: var(--blue); background: var(--accent-wash); border-color: transparent; }
+details > summary:hover::after, .rw-criterion-heading:hover .rw-disclosure-action { color: var(--blue); border-color: var(--blue); background: var(--accent-wash); }
+.bureau-faq summary > svg { display: none; }
+.app-frame details > summary { text-align: left; }
+.rw-rubric-intro details[open] > summary { color: var(--ink); }
+.rw-rubric-intro details[open] > p { padding: 12px 14px; border-left: 2px solid var(--blue); background: var(--accent-wash); }
+.rw-criterion.is-open .rw-disclosure-action { color: var(--blue); background: var(--accent-wash); border-color: transparent; }
+@media(max-width:600px) {
+  details > summary { gap: 8px; }
+  details > summary::after, .rw-disclosure-action { padding: 5px 7px; font-size: 10px; }
+}
+.assignment-create-fields { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 18px; }
+.assignment-template-picker { margin: 0; padding: 18px; border: 1px solid var(--border); min-width: 0; }
+.assignment-template-picker legend { padding: 0 8px; font-weight: 600; font-size: 13px; }
+.assignment-template-picker label { display: grid; gap: 10px; font-size: 13px; }
+.assignment-template-picker .academic-check { display: flex; margin-top: 14px; }
+.assignment-template-picker p { font-size: 13px; line-height: 1.6; }
+.assignment-template-card { border: 1px solid var(--border); padding: 18px; margin: 18px 0; }
+.assignment-template-card > div { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.assignment-template-card p { font-size: 13px; line-height: 1.6; }
+.assignment-template-card .button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }

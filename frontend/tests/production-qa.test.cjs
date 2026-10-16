@@ -111,17 +111,17 @@ test('teaching insights load, fail, retry and refresh without preserving stale m
 test('review history heading identifies student scope rather than course-wide analytics',()=>{
   let hook=0;
   const {AssessmentDiagnostics}=load('src/components/review/assessment-diagnostics.tsx',{
-    react:{...React,useState:init=>[hook++===0?true:init,()=>{}]},
+    react:React,
     'next/link':{default:({children,...props})=>React.createElement('a',props,children)},
     '../../lib/presentation':load('src/lib/presentation.ts'),
     './teaching-insights':{TeachingInsights:()=>null},'../document-analysis':{DocumentAnalysis:()=>null},'../../lib/platform':{},
   });
-  const html=render(React.createElement(AssessmentDiagnostics,{submissionId:'s',data:{assignment_id:'a',reviews:[]},assessment:null,selected:'',dirty:false}));
-  assert.match(html,/<summary>Подтверждённые наблюдения о студенте в курсе<\/summary>/);
+  const html=render(React.createElement(AssessmentDiagnostics,{submissionId:'s',data:{assignment_id:'a',reviews:[]},assessment:null,selected:'',dirty:false,section:'student'}));
+  assert.match(html,/<h4>Подтверждённые наблюдения о студенте в курсе<\/h4>/);
   assert.doesNotMatch(html,/Подтверждённые наблюдения по курсу/);
 });
 test('shared assignment form exposes type, dates, resubmission and teacher rubric with existing styles',()=>{
-  const {AssignmentCreateForm}=load('src/components/assignment-create-form.tsx',{'../lib/academic':{}, '../lib/assignment-preflight':load('src/lib/assignment-preflight.ts')});
+  const {AssignmentCreateForm}=load('src/components/assignment-create-form.tsx',{'../lib/assignment-template':{},'../lib/academic':{}, '../lib/assignment-preflight':load('src/lib/assignment-preflight.ts')});
   const html=render(React.createElement(AssignmentCreateForm,{offeringId:'synthetic',onCreated:()=>{}}));
   for(const label of ['Тип','Доступно с','Срок сдачи','Макс. балл','Разрешить повторную отправку','Критерии оценивания']) assert.ok(html.includes(label),label);
   assert.match(html,/academic-create-form/);

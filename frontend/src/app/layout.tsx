@@ -3,6 +3,7 @@ import "katex/dist/katex.min.css";
 import "./fonts.css";
 import "./globals.css";
 import "./identity.css";
+import "./review-studio.css";
 import { AuthProvider } from "../components/auth-provider";
 
 export const metadata: Metadata = {

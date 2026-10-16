@@ -15,7 +15,7 @@ test('assignment roster groups immutable attempts without hiding students who ha
 test('assignment register renders identity, original, prior published zero and explicit missing report with working filters',()=>{
  const slots=[];let cursor,tree;
  const hooks={...React,useState:init=>{const i=cursor++;if(!(i in slots))slots[i]=init;return[slots[i],v=>{slots[i]=v;}];}};
- const {AssignmentRegister}=load('src/components/assignment/assignment-workspace.tsx',{react:hooks,'next/link':link,'../assignment-briefs':{},'./comparison-panel':{},'../../lib/api':{},'../../lib/platform':{},'../../lib/submission-status':status,'../../lib/assignment-workspace':lib});
+ const {AssignmentRegister}=load('src/components/assignment/assignment-workspace.tsx',{react:hooks,'next/link':link,'../assignment-template':{},'../assignment-briefs':{},'./comparison-panel':{},'../../lib/api':{},'../../lib/platform':{},'../../lib/submission-status':status,'../../lib/assignment-workspace':lib});
  const view=()=>render(React.createElement(()=>{cursor=0;tree=AssignmentRegister({data});return tree;}));
  let html=view();for(const text of ['student-1','student-2','Revision.pdf','Работа не отправлена','Не сравнивалось','Опубликована студенту · 0 / 10'])assert.ok(html.includes(text),text);
  assert.match(html,/review\?panel=assessment/);assert.match(html,/review\?panel=document/);assert.match(html,/originality/);
@@ -31,4 +31,8 @@ test('local comparison loads saved results without POST, serializes run clicks a
  view();assert.equal(calls.length,0);start();await tick();assert.match(view(),/Новый анализ ещё не запускался/);assert.equal(calls.length,1);
  find(tree,n=>n.type==='textarea').props.onChange({target:{value:'Allowed common template'}});view();const run=find(tree,n=>n.type==='button');run.props.onClick();run.props.onClick();assert.equal(calls.length,2);assert.deepEqual(calls[1][1],{context:'Allowed common template'});
  finish.reject(Error('Synthetic timeout'));await tick();assert.match(view(),/Synthetic timeout/);assert.equal(find(tree,n=>n.type==='textarea').props.value,'Allowed common template');
+});
+test('older API responses without a roster still show submitted work',()=>{
+ const rows=lib.studentWorks({items:[work]});assert.equal(rows.length,1);assert.equal(rows[0].student_id,work.student_id);assert.equal(rows[0].latest.id,work.id);
+ assert.deepEqual(lib.studentWorks({items:[]}),[]);
 });

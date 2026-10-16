@@ -5,7 +5,10 @@ export type AssignmentWorkspace = {comparison_revision:string;id:string;title:st
 export type StudentWork = AssignmentWorkspace['students'][number] & {attempts:AssignmentWork[];latest:AssignmentWork|null};
 export type WorkFilter='all'|'missing'|'unreviewed'|'reviewed';
 export function studentWorks(data:AssignmentWorkspace):StudentWork[]{
-  return data.students.map(s=>{const attempts=data.items.filter(w=>w.student_id===s.student_id).sort((a,b)=>new Date(b.submitted_at).getTime()-new Date(a.submitted_at).getTime()||b.id.localeCompare(a.id));return{...s,attempts,latest:attempts[0]??null};});
+  const items=Array.isArray(data.items)?data.items:[];
+  // Older API responses contain submissions but no enrollment roster.
+  const roster=Array.isArray(data.students)?data.students:Array.from(new Map(items.map(w=>[w.student_id,{student_id:w.student_id,student_name:w.student_name||w.student_id,active:true}])).values());
+  return roster.map(s=>{const attempts=items.filter(w=>w.student_id===s.student_id).sort((a,b)=>new Date(b.submitted_at).getTime()-new Date(a.submitted_at).getTime()||b.id.localeCompare(a.id));return{...s,attempts,latest:attempts[0]??null};});
 }
 export function filterStudentWorks(rows:StudentWork[],query:string,filter:WorkFilter){
   const text=query.trim().toLocaleLowerCase('ru');

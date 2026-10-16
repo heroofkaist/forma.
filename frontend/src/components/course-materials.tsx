@@ -6,7 +6,7 @@ import { platformRequest } from "../lib/platform";
 type Material = { id: string; title: string; visibility: string; file_name: string; status: string; created_at: string; warnings: string[]; tags: string };
 export function CourseMaterials({ offeringId, teacher = false }: { offeringId: string; teacher?: boolean }) {
   const [items, setItems] = useState<Material[]>([]); const [error, setError] = useState(""); const [busy, setBusy] = useState(false); const [loading, setLoading] = useState(true);
-  const load = useCallback(async () => { try { const data = await platformRequest<{ items: Material[] }>(`/api/course-materials/${offeringId}`); setItems(data.items); } catch (cause) { setError(cause instanceof Error ? cause.message : "Не удалось загрузить материалы."); } finally { setLoading(false); } }, [offeringId]);
+  const load = useCallback(async () => { try { const data = await platformRequest<{ items: Material[] }>(`/api/course-materials/${offeringId}`); setItems(data.items.filter(item => !item.tags?.startsWith("forma:assignment-template:"))); } catch (cause) { setError(cause instanceof Error ? cause.message : "Не удалось загрузить материалы."); } finally { setLoading(false); } }, [offeringId]);
   useEffect(() => { void load(); }, [load]);
   async function upload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const form = event.currentTarget; const data = new FormData(form); const file = data.get("file");

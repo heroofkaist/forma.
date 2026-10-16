@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { AlertTriangle, Check, FileUp, Upload } from "lucide-react";
+import { AssignmentTemplate } from "../../../../components/assignment-template";
 import { SubmissionGate } from "../../../../components/submission-gate";
 import { StudentShell } from "../../../../components/student-shell";
 import { PublishedResult } from "../../../../components/published-result";
@@ -20,6 +21,9 @@ export default function StudentAssignmentPage() {
   const [processing, setProcessing] = useState("");
   const [processingError, setProcessingError] = useState("");
   const [assignment, setAssignment] = useState<AcademicAssignment | null>(null);
+  const [templateRequired, setTemplateRequired] = useState<boolean | null>(null);
+  const [templateConfirmed, setTemplateConfirmed] = useState(false);
+  const onTemplateRequirement = useCallback((required: boolean | null) => { setTemplateRequired(required); setTemplateConfirmed(false); }, []);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [submitted, setSubmitted] = useState<Record<string, unknown> | null>(null);
@@ -70,7 +74,7 @@ export default function StudentAssignmentPage() {
   const uploadBlocked = assignment ? submissionAvailability(assignment) : "Загружаем условия задания…";
 
   async function submit() {
-    if (!file || uploadBlocked || busy || sending.current || !readable || !complete) return;
+    if (!file || uploadBlocked || busy || sending.current || !readable || !complete || templateRequired === null || (templateRequired && !templateConfirmed)) return;
     if (file.size > MAX_FILE_BYTES) { setError("Максимальный размер файла — 30 МБ."); return; }
     sending.current = true; setBusy(true); setError("");
     try { if (!requestId.current) requestId.current=crypto.randomUUID(); const receipt=await academicApi.submit(assignmentId, file, requestId.current); setSubmitted(receipt); setFile(null);
@@ -87,7 +91,8 @@ export default function StudentAssignmentPage() {
         <div className="eyebrow">{assignmentTypes[assignment?.assignment_type ?? ""] ?? "ЗАДАНИЕ"}</div><h1>{assignment?.title ?? "Задание"}</h1>
         <p className="student-assignment-course">{assignment?.description}</p>
         <div className="student-detail-table"><div><span>Открывается</span><strong>{assignment?.available_at ? new Date(assignment.available_at).toLocaleString("ru-RU") : "Сейчас"}</strong></div><div><span>Срок сдачи</span><strong>{due ? due.toLocaleString("ru-RU") : "Без срока"}</strong></div><div><span>Максимальный балл</span><strong>{assignment?.maximum_score ?? "—"}</strong></div><div><span>Форматы</span><strong>{formats}</strong></div></div>
-        {isHandwritten && <div className="student-instructions"><strong>Работа от руки</strong><p>Загрузите многостраничный PDF со своим решением. Фиксированный бланк не требуется для отправки. Преподаватель проверит читаемость и содержание.</p></div>}
+        {assignment && <AssignmentTemplate key={assignmentId} offeringId={assignment.offering_id} assignmentId={assignmentId} onRequirement={onTemplateRequirement}/>}
+        {isHandwritten && <div className="student-instructions"><strong>Работа от руки</strong><p>Загрузите многостраничный PDF со своим решением. Если преподаватель прикрепил обязательный шаблон, используйте его. Преподаватель проверит читаемость и содержание.</p></div>}
         {programming && <p>Код рассматривается статически. Запуск и автоматическая проверка выполнения недоступны.</p>}{assignment?.questions?.map((question, index) => <article className="student-problem" key={String(question.id ?? index)}><strong>{String(question.title ?? `Задача ${index + 1}`)}</strong><p>{String(question.statement ?? "")}</p></article>)}
         {published && <PublishedResult grade={published} id="result" />}
       </main>
@@ -98,10 +103,11 @@ export default function StudentAssignmentPage() {
         {submitted && <div className="success-notice"><Check size={15} />Работа успешно отправлена. Сохраните подтверждение. Квитанция: {String(submitted.id)}</div>}
         {error && <div className="notice error-notice"><AlertTriangle size={14} />{error}</div>}
         <SubmissionGate reason={uploadBlocked}>
-          <label className="student-file-picker"><input type="file" accept={accepted} disabled={busy} onChange={(event) => { setError(""); setFile(event.target.files?.[0] ?? null); setReadable(false); setComplete(false); requestId.current=""; }} /><FileUp size={20} /><strong>{file?.name ?? "Выберите файл"}</strong><span>{file ? `${(file.size / 1024 / 1024).toFixed(2)} МБ` : `${formats} · до 30 МБ`}</span></label>
+          <label className="student-file-picker"><input type="file" accept={accepted} disabled={busy} onChange={(event) => { setError(""); setFile(event.target.files?.[0] ?? null); setReadable(false); setComplete(false); setTemplateConfirmed(false); requestId.current=""; }} /><FileUp size={20} /><strong>{file?.name ?? "Выберите файл"}</strong><span>{file ? `${(file.size / 1024 / 1024).toFixed(2)} МБ` : `${formats} · до 30 МБ`}</span></label>
           {previewUrl && <object className="student-pdf-preview" data={previewUrl} type="application/pdf" aria-label="Предпросмотр PDF">Предпросмотр недоступен</object>}
-          {file && <fieldset className="submission-checklist"><legend>Перед отправкой</legend><label><input type="checkbox" checked={readable} disabled={busy} onChange={event=>setReadable(event.target.checked)}/>Я открыл(а) файл: страницы читаются и идут по порядку.</label><label><input type="checkbox" checked={complete} disabled={busy} onChange={event=>setComplete(event.target.checked)}/>Я проверил(а) все части, требуемые в условии задания.</label><p className="muted">Это ваша проверка комплектности; содержание оценит преподаватель.</p></fieldset>}
-          <button className="button primary full-button" disabled={!file || !readable || !complete || busy || (Boolean(latest) && !assignment?.allow_resubmission)} onClick={() => void submit()}>{busy ? "Отправляем…" : <><Upload size={14} />{latest ? "Отправить повторно" : "Подтвердить отправку"}</>}</button>
+          {file && <fieldset className="submission-checklist"><legend>Перед отправкой</legend><label><input type="checkbox" checked={readable} disabled={busy} onChange={event=>setReadable(event.target.checked)}/>Я открыл(а) файл: страницы читаются и идут по порядку.</label><label><input type="checkbox" checked={complete} disabled={busy} onChange={event=>setComplete(event.target.checked)}/>Я проверил(а) все части, требуемые в условии задания.</label>{templateRequired && <label><input type="checkbox" checked={templateConfirmed} disabled={busy} onChange={event=>setTemplateConfirmed(event.target.checked)}/>Я выполнил(а) работу в обязательном шаблоне преподавателя.</label>}<p className="muted">Это ваша проверка комплектности; содержание оценит преподаватель.</p></fieldset>}
+          {templateRequired === null && <p role="status" className="muted">Перед отправкой дождитесь загрузки требований к шаблону. Если произошла ошибка, нажмите «Повторить» выше.</p>}
+          <button className="button primary full-button" disabled={!file || !readable || !complete || templateRequired === null || (templateRequired && !templateConfirmed) || busy || (Boolean(latest) && !assignment?.allow_resubmission)} onClick={() => void submit()}>{busy ? "Отправляем…" : <><Upload size={14} />{latest ? "Отправить повторно" : "Подтвердить отправку"}</>}</button>
           {latest && !assignment?.allow_resubmission && <small className="muted">Повторная отправка не разрешена в настройках задания.</small>}
         </SubmissionGate>
       </aside>

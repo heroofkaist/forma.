@@ -54,7 +54,7 @@ export function AccountForm({ mode }: { mode: Mode }) {
     {mode === "register" && registration === false && <div className="notice" role="status">Регистрация пока недоступна. Обратитесь к администратору вашего учреждения.</div>}
     {mode === "register" && registration === null && <p role="status">Проверяем доступность регистрации…</p>}
     {mode === "register" && registration === true && !ageToken && <AgeScreen onEligible={setAgeToken} guardianEnabled={guardianEnabled}/>}
-    {mode === "register" && (registration !== true || !ageToken) ? null : settings && !user?.account_id ? <p>Настройки доступны для подтверждённых учётных записей. Вход с прежними реквизитами сохраняется на время перехода.</p> : <form className="auth-form" onSubmit={(event) => void submit(event)}>
+    {mode === "register" && (registration !== true || !ageToken) ? null : settings && !user?.account_id ? <p>Для изменения настроек войдите в подтверждённую учётную запись через email.</p> : <form className="auth-form" onSubmit={(event) => void submit(event)}>
       {["register", "forgot-password", "profile"].includes(mode) && <label>Email<input type="email" autoComplete="email" required maxLength={254} readOnly={mode === "profile"} value={email} onChange={(event) => setEmail(event.target.value)} /></label>}
       {["register", "profile"].includes(mode) && <label>Имя<input autoComplete="name" required maxLength={200} value={name} onChange={(event) => setName(event.target.value)} /></label>}
       {mode === "security" && <label>Текущий пароль<input type="password" autoComplete="current-password" required value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></label>}

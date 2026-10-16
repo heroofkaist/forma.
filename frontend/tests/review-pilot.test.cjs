@@ -93,14 +93,16 @@ test('student upload requires both checks, serializes clicks, reuses retry key a
   react:hooks,'next/navigation':{useParams:()=>({assignmentId:'a'})},'next/link':{default:({children,...props})=>React.createElement('a',props,children)},
   '../../../../components/student-shell':{StudentShell:({children})=>React.createElement('main',null,children)},
   '../../../../components/submission-gate':load('src/components/submission-gate.tsx'),
+  '../../../../components/assignment-template':{AssignmentTemplate:()=>null},
   '../../../../components/published-result':{PublishedResult:()=>null},
   '../../../../lib/platform':{},'../../../../lib/presentation':load('src/lib/presentation.ts'),
   '../../../../lib/academic':{academicApi:{assignment:async()=>{if(++reads>1)throw Error('refresh outage');return{id:'a',offering_id:'o',title:'Synthetic task',assignment_type:'essay',maximum_score:10,questions:[],allow_resubmission:false};},offering:async()=>({code:'SYNTH'}),submit:async(...args)=>{calls.push(args);return await new Promise((resolve,reject)=>{finish={resolve,reject};});}}},
  });
  const view=()=>render(React.createElement(()=>{cursor=0;tree=Page();return tree;}));
  const upload=()=>find(tree,n=>n.type==='button'&&n.props.className==='button primary full-button');
- view();start();await tick();view();const file={name:'Synthetic.docx',size:100,type:'application/octet-stream'};
+ view();start();await tick();view();find(tree,n=>typeof n.props.onRequirement==='function').props.onRequirement(true);view();const file={name:'Synthetic.docx',size:100,type:'application/octet-stream'};
  find(tree,n=>n.type==='input'&&n.props.type==='file').props.onChange({target:{files:[file]}});view();assert.equal(upload().props.disabled,true);
+ find(tree,n=>n.type==='input'&&n.props.type==='checkbox'&&!n.props.checked).props.onChange({target:{checked:true}});view();assert.equal(upload().props.disabled,true);
  find(tree,n=>n.type==='input'&&n.props.type==='checkbox'&&!n.props.checked).props.onChange({target:{checked:true}});view();assert.equal(upload().props.disabled,true);
  find(tree,n=>n.type==='input'&&n.props.type==='checkbox'&&!n.props.checked).props.onChange({target:{checked:true}});view();assert.equal(upload().props.disabled,false);
  upload().props.onClick();upload().props.onClick();view();assert.equal(calls.length,1);assert.equal(find(tree,n=>n.type==='input'&&n.props.type==='file').props.disabled,true);
