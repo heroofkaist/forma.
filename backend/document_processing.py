@@ -69,18 +69,21 @@ def enqueue(db, submission, assignment, actor, force=False, *, task_context=None
     if existing and not force:
         return existing
     pending = db.scalar(select(ProcessingJob).where(ProcessingJob.submission_id == submission.id, ProcessingJob.status.in_(('queued', *ACTIVE))))
-    if pending:
+    if pending and pending.id != context.get('depends_on'):
         if pending.context.get('task', 'understanding') != context.get('task', 'understanding'):
             raise ValueError('Another document task is active; wait for it to finish.')
         return pending
     midnight = now_utc().replace(hour=0, minute=0, second=0, microsecond=0)
-    if db.scalar(select(func.count()).select_from(ProcessingJob).where(ProcessingJob.requested_by == actor, ProcessingJob.created_at >= midnight)) >= 20:
+    # Local text checks do not consume the document-model request allowance.
+    model_jobs = func.coalesce(ProcessingJob.context['task'].as_string(), 'understanding') != 'integrity'
+    if ai.name != 'local' and db.scalar(select(func.count()).select_from(ProcessingJob).where(ProcessingJob.requested_by == actor, ProcessingJob.created_at >= midnight, model_jobs)) >= 20:
         raise ValueError('Daily document processing limit (20 jobs) reached.')
-    if db.scalar(select(func.count()).select_from(ProcessingJob).where(ProcessingJob.submission_id == submission.id, ProcessingJob.created_at >= midnight)) >= 3:
+    if ai.name != 'local' and db.scalar(select(func.count()).select_from(ProcessingJob).where(ProcessingJob.submission_id == submission.id, ProcessingJob.created_at >= midnight, func.coalesce(ProcessingJob.context['task'].as_string(), 'understanding') == context.get('task', 'understanding'))) >= 3:
         raise ValueError('Maximum three analysis versions per submission per day.')
     if force: context['bypass_cache'] = True
     if force: signature = hashlib.sha256((signature + str(uuid4())).encode()).hexdigest()
     job = ProcessingJob(submission_id=submission.id, requested_by=actor, input_hash=signature, content_hash=content_hash, context=context, model=ai.model, prompt_version=ai.version)
+    if context.get('depends_on'): job.status = job.stage = 'awaiting_source'
     try:
         with db.begin_nested():
             db.add(job); db.flush()
@@ -97,6 +100,8 @@ def claim():
             db.execute(text('SELECT pg_advisory_xact_lock(62401703)'))
         else:
             db.execute(update(ProcessingJob).where(ProcessingJob.status == 'queued').values(stage=ProcessingJob.stage))
+        from services.assessment_pipeline import activate_waiting
+        activate_waiting(db)
         db.execute(update(ProcessingJob).where(ProcessingJob.status.in_(ACTIVE), ProcessingJob.lease_until < now, ProcessingJob.attempts >= MAX_ATTEMPTS).values(status='failed', stage='failed', error_class='lease_exhausted', error='Worker lease expired after maximum attempts.', updated_at=now))
         busy = db.scalar(select(func.count()).select_from(ProcessingJob).where(ProcessingJob.status.in_(ACTIVE), ProcessingJob.lease_until > now))
         local_active = db.scalars(select(ProcessingJob).where(ProcessingJob.status.in_(ACTIVE), ProcessingJob.lease_until > now)).all()
@@ -175,10 +180,11 @@ def process_one():
             result, usage = evaluate(context['assessment'], ai, progress=assessment_heartbeat, job_id=job_id,
                 checkpoints=context.get('assessment_checkpoints'), checkpoint=assessment_checkpoint)
         elif context.get('task') == 'integrity':
-            if cached_result:
+            # Old queued Qwen detector requests are deliberately handled locally too.
+            from services.document_integrity import evaluate, VERSION as INTEGRITY_VERSION
+            if cached_result and cached_result.get('version') == INTEGRITY_VERSION:
                 result, usage = cached_result, {'cache_hit': True, 'ai_called': False}
             else:
-                from services.document_integrity import evaluate
                 def integrity_heartbeat():
                     with SessionLocal() as lease_db:
                         renewed = lease_db.scalar(update(ProcessingJob).where(ProcessingJob.id == job_id,
@@ -220,7 +226,7 @@ def process_one():
                     db.add(DocumentIntegrityReport(submission_id=current.submission_id, job_id=job_id, content_hash=current.content_hash, result=result))
                 else:
                     db.add(DocumentInterpretation(submission_id=current.submission_id, job_id=job_id, result=result))
-                if context.get('task') != 'assessment' and usage.get('ai_called') and not usage.get('partial') and not db.get(InterpretationCache, context['cache_key']):
+                if context.get('task') != 'assessment' and (usage.get('ai_called') or usage.get('local_analysis')) and not usage.get('partial') and not db.get(InterpretationCache, context['cache_key']):
                     try:
                         with db.begin_nested():
                             db.add(InterpretationCache(input_hash=context['cache_key'],result=result)); db.flush()

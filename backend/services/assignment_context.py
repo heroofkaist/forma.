@@ -4,7 +4,7 @@ import json
 import re
 from sqlalchemy import select
 
-VERSION = 'assignment-guided-v1'
+VERSION = 'assignment-guided-v2'
 
 
 def answer_groups(questions, category):
@@ -14,9 +14,13 @@ def answer_groups(questions, category):
         # Historic forms stored several problem-specific criteria under one question.
         numbered = {}
         for c in criteria:
-            match = re.search(r'(?:задач[аеиу]?|вопрос|задани[ея]|problem|question|task)\s*(?:№\s*)?(\d+|[IVX]{1,8}|[A-Za-zА-Яа-я])\b', c['description'], re.I)
-            if match: numbered.setdefault(match[1], []).append(c)
-        split = category in {'problem_set', 'homework'} and len(questions) == 1 and len(numbered) > 1 and sum(map(len, numbered.values())) == len(criteria)
+            label = r'(?:задач[аеиу]?|вопрос|задани[ея]|problem|question|task)'
+            match = re.search(r'\b' + label + r'\b\s*(?:№\s*)?(\d+|[IVX]{1,8}|[A-Za-zА-Яа-я])\b', c['description'], re.I)
+            before = re.search(r'^\s*(?:№\s*)?(\d+|[IVX]{1,8})\s*[-.)]?\s*' + label + r'\b', c['description'], re.I)
+            if match or before: numbered.setdefault((match or before)[1].upper(), []).append(c)
+        # Explicit task-specific criteria take priority over a historic genre selection.
+        # Ordinary essay criteria (argument, structure, etc.) remain one coherent work.
+        split = len(questions) == 1 and len(numbered) > 1 and sum(map(len, numbered.values())) == len(criteria)
         sets = [(f'{q["id"]}-task-{n}', f'Задача {n}', cs) for n, cs in numbered.items()] if split else [(q['id'], q['title'], criteria)]
         for identifier, title, members in sets:
             groups.append({'id': identifier, 'question_id': q['id'], 'title': title, 'statement': q.get('statement', ''),

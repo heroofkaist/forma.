@@ -10,12 +10,29 @@ provider override. Uploading and viewing task files never starts inference.
 The creation form supports a whole-work rubric (essay/report/project) and separate
 problems with their own statements, maxima and subcriteria. Historical single-question
 rubrics whose criteria explicitly identify numbered problems are grouped by those
-problems. Essay criteria are different views of the same work. Reading instructions
+problems, including labels such as «1 задача», regardless of a historic genre selection.
+Ordinary essay criteria are different views of the same work. Reading instructions
 avoid splitting every paragraph/equation into a separate answer. The interface
 shows one task card and one row per source page; transcription correction and
 fragment split/merge controls are inside the page's editing details.
 
 Assessment uses existing teacher criteria without requiring them to be entered again.
+The main grading tab has one explicit action, «Оценить по критериям». It shows a
+proposed AI score beside each criterion and the AI total only when all criteria
+have numeric scores. Missing scores stay empty, while a real zero remains zero.
+Accepting/copying a proposal is an explicit teacher action; publishing remains a
+separate confirmation. Polling new AI results preserves unsaved teacher values.
+
+`POST /api/assessment/{id}` with `prepare: true` queues reading when needed, plus a
+durable dependent assessment job in `awaiting_source`. The worker activates stage
+two only after complete, hash-matching observations exist. It survives page closure,
+serializes first-click races, reuses completed results on retries and exposes budget
+pauses from either stage. The main action can resume within the existing allowance.
+The daily limit remains 20 model stages per requester and three versions per task
+kind/submission; reading and grading have distinct version counters. Local detector
+jobs do not consume that model-job allowance. Every stage still uses the existing
+hard dollar caps. Partial/failed reading never produces invented scores.
+
 Strategies cover problem sets, essays, lab/research reports, slides, programming,
 homework and general documents. Slide assessment cannot judge oral delivery and
 code is never executed. Different question batches receive their own observed answers;

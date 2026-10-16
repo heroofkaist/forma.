@@ -61,15 +61,16 @@ def resume(submission_id: str, request: Request):
         else:
             from sqlalchemy import update
             db.execute(update(ProcessingJob).where(ProcessingJob.submission_id == submission_id).values(updated_at=ProcessingJob.updated_at))
-        job = db.scalar(select(ProcessingJob).where(ProcessingJob.submission_id == submission_id).order_by(ProcessingJob.created_at.desc()).limit(1).with_for_update())
+        task = func.coalesce(ProcessingJob.context['task'].as_string(), 'understanding')
+        job = db.scalar(select(ProcessingJob).where(ProcessingJob.submission_id == submission_id, task == 'understanding').order_by(ProcessingJob.created_at.desc()).limit(1).with_for_update())
         if not job or job.status != 'awaiting_budget' or job.attempts >= MAX_ATTEMPTS:
             raise HTTPException(409, 'No paused job with remaining attempts can be resumed.')
         if job.context.get('ai', {}).get('name') != 'openrouter' or not ai_budget.can_resume(job.id, db=db):
             raise HTTPException(409, 'Paid allowance is not available; reconcile billing or use manual review.')
         active = db.scalar(select(ProcessingJob.id).where(ProcessingJob.submission_id == submission_id, ProcessingJob.status.in_(('queued', *ACTIVE))))
         midnight = now_utc().replace(hour=0, minute=0, second=0, microsecond=0)
-        requester_jobs = db.scalar(select(func.count()).select_from(ProcessingJob).where(ProcessingJob.requested_by == job.requested_by, ProcessingJob.created_at >= midnight))
-        versions = db.scalar(select(func.count()).select_from(ProcessingJob).where(ProcessingJob.submission_id == submission_id, ProcessingJob.created_at >= midnight))
+        requester_jobs = db.scalar(select(func.count()).select_from(ProcessingJob).where(ProcessingJob.requested_by == job.requested_by, ProcessingJob.created_at >= midnight, task != 'integrity'))
+        versions = db.scalar(select(func.count()).select_from(ProcessingJob).where(ProcessingJob.submission_id == submission_id, ProcessingJob.created_at >= midnight, task == 'understanding'))
         if active or requester_jobs > 20 or versions > 3:
             raise HTTPException(429, 'Existing job/version limits prevent resuming this analysis.')
         # Attempt history and the safe pause reason are retained until success.

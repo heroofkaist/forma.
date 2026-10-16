@@ -287,3 +287,95 @@ def test_migration_009_upgrades_old_schema_without_rewriting_sources(assessed):
         assert db.get(AcademicSubmission, sid).file_name == 'synthetic.pdf'
         assert db.scalar(select(func.count()).select_from(DocumentInterpretation)) == 1
         assert db.scalar(select(func.count()).select_from(SchemaMigration)) == 15
+
+
+def test_single_click_durable_read_then_grade_deduplicates_and_never_publishes(platform, monkeypatch):
+    values = setup_submission(platform, monkeypatch)
+    client, factory, teacher, student, sid, structure, assignment, content = values
+    monkeypatch.setattr(assessment_api, 'SessionLocal', factory)
+    with factory() as db:
+        row = db.get(AcademicAssignment, assignment['id'])
+        row.description = 'Solve each question and show your method.'
+        row.questions = [{**q, 'criteria': [{**c, 'description': 'Show the physical reasoning and calculations'} for c in q['criteria']]} for q in row.questions]
+        db.commit()
+    import services.assessment as service
+    monkeypatch.setattr(service, 'evaluate', lambda snap, *args, **kwargs: (suggestion(snap['rubric'], snap['source']), {'ai_called': True}))
+    path = '/api/assessment/' + sid
+    assert client.post(path, headers=student, json={'prepare': True}).status_code == 403
+    first = client.post(path, headers=teacher, json={'prepare': True})
+    assert first.status_code == 202, first.text
+    assert first.json()['status'] == 'awaiting_source'
+    assert client.post(path, headers=teacher, json={'prepare': True}).json()['id'] == first.json()['id']
+    with factory() as db:
+        assert db.scalar(select(func.count()).select_from(ProcessingJob)) == 2
+        assert db.scalar(select(func.count()).select_from(AssessmentSuggestion)) == 0
+    assert document_processing.process_one()  # reading only
+    assert client.get(path, headers=teacher).json()['items'] == []
+    assert document_processing.process_one()  # worker activates durable dependency, then grades
+    body = client.get(path, headers=teacher).json()
+    assert len(body['items']) == 1
+    assert body['items'][0]['job_id'] == first.json()['id']
+    assert [c['proposed_score'] for c in body['items'][0]['result']['criteria']] == [1, 1]
+    # A lost response retried after completion still reuses the original pipeline.
+    assert client.post(path, headers=teacher, json={'prepare': True}).json()['id'] == first.json()['id']
+    with factory() as db:
+        assert db.scalar(select(func.count()).select_from(ProcessingJob)) == 2
+        assert db.scalar(select(func.count()).select_from(DocumentInterpretation)) == 1
+        assert db.scalar(select(func.count()).select_from(AcademicGrade)) == 0
+        assert db.scalar(select(func.count()).select_from(AssessmentDecision)) == 0
+
+
+@pytest.mark.parametrize('failure', ['partial', 'failed'])
+def test_pipeline_refuses_partial_read_and_failed_parent(platform, monkeypatch, failure):
+    values = setup_submission(platform, monkeypatch)
+    client, factory, teacher, student, sid, structure, assignment, content = values
+    monkeypatch.setattr(assessment_api, 'SessionLocal', factory)
+    with factory() as db:
+        row = db.get(AcademicAssignment, assignment['id'])
+        row.description = 'Solve each question and show your method.'
+        row.questions = [{**q, 'criteria': [{**c, 'description': 'Show the physical reasoning and calculations'} for c in q['criteria']]} for q in row.questions]
+        db.commit()
+    response = client.post('/api/assessment/' + sid, headers=teacher, json={'prepare': True})
+    assert response.status_code == 202, response.text
+    assert document_processing.process_one()
+    from services.assessment_pipeline import activate_waiting
+    with factory() as db:
+        child = db.get(ProcessingJob, response.json()['id'])
+        parent = db.get(ProcessingJob, child.context['depends_on'])
+        if failure == 'partial': parent.usage = {**parent.usage, 'partial': True}
+        else: parent.status = 'failed'
+        db.commit()
+        activate_waiting(db); db.commit()
+        assert child.status == 'failed'
+        assert ('Partial document coverage' in child.error) if failure == 'partial' else ('Распознавание не завершено' in child.error)
+        assert db.scalar(select(func.count()).select_from(AssessmentSuggestion)) == 0
+
+
+def test_pipeline_exposes_paused_reading_and_resumes_only_with_available_budget(platform, monkeypatch):
+    client, factory, teacher, student, sid, structure, assignment, content = setup_submission(platform, monkeypatch)
+    monkeypatch.setattr(assessment_api, 'SessionLocal', factory)
+    with factory() as db:
+        row = db.get(AcademicAssignment, assignment['id'])
+        row.description = 'Solve and explain your physical reasoning.'
+        row.questions = [{**q, 'criteria': [{**c, 'description': 'Explain the method and show calculations'} for c in q['criteria']]} for q in row.questions]
+        db.commit()
+    path = '/api/assessment/' + sid
+    response = client.post(path, headers=teacher, json={'prepare': True})
+    assert response.status_code == 202, response.text
+    with factory() as db:
+        child = db.get(ProcessingJob, response.json()['id'])
+        parent = db.get(ProcessingJob, child.context['depends_on'])
+        parent.context = {**parent.context, 'ai': {**parent.context['ai'], 'name': 'openrouter'}}
+        parent.status = 'awaiting_budget'; parent.attempts = 1; parent.error = 'Allowance paused.'; db.commit()
+    assert client.get(path, headers=teacher).json()['jobs'][0]['status'] == 'awaiting_budget'
+    monkeypatch.setattr('ai_budget.can_resume', lambda *args, **kwargs: False)
+    assert client.post(path + '/resume', headers=student).status_code == 403
+    assert client.post(path + '/resume', headers=teacher).status_code == 409
+    monkeypatch.setattr('ai_budget.can_resume', lambda *args, **kwargs: True)
+    resumed = client.post(path + '/resume', headers=teacher)
+    assert resumed.status_code == 202 and resumed.json()['id'] == response.json()['id']
+    with factory() as db:
+        assert db.get(ProcessingJob, child.id).status == 'awaiting_source'
+        assert db.get(ProcessingJob, parent.id).status == 'queued'
+        assert db.scalar(select(func.count()).select_from(AssessmentSuggestion)) == 0
+        assert db.scalar(select(func.count()).select_from(AcademicGrade)) == 0

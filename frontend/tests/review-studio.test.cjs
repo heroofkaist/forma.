@@ -7,7 +7,7 @@ const data={submission_id:'s',assignment_id:'a',title:'Synthetic task',student_n
 test('grading fields are visible immediately without expanding a criterion or exposing tool controls',()=>{
  const {RubricCriterionCard}=load('src/components/review/criterion-card.tsx',{'../../lib/review-workspace':lib});
  const html=render(React.createElement(RubricCriterionCard,{criterion:lib.reviewCriteria(data)[0],index:0,value:{points:'',feedback:'',action:'unreviewed'},manual:true,busy:false,dirty:false,savedState:'unreviewed'}));
- assert.match(html,/>Балл<\/label>/);assert.match(html,/type="number"/);assert.match(html,/<textarea/);assert.doesNotMatch(html,/<details|<summary|aria-expanded|Нет предложения|Сохранённых предложений/);
+ assert.match(html,/>Ваш балл<\/label>/);assert.match(html,/type="number"/);assert.match(html,/<textarea/);assert.doesNotMatch(html,/<details|<summary|aria-expanded|Нет предложения|Сохранённых предложений/);
 });
 test('action bar provides one next action and keeps saving separate from publishing',()=>{
  const {ReviewActionBar}=load('src/components/review/review-action-bar.tsx',{'../../lib/review-workspace':lib});
@@ -36,4 +36,25 @@ test('tabs keep an entered zero; saving serializes clicks and publication requir
   find(tree,n=>n.type===Action).props.onPublish();view();assert.equal(calls.filter(c=>c[0].endsWith('/publish')).length,0);
   const dialog=find(tree,n=>n.props.confirmLabel==='Опубликовать для студента');assert.ok(dialog);dialog.props.onConfirm();await tick();assert.equal(calls.filter(c=>c[0].endsWith('/publish')).length,1);
  } finally {global.window=previousWindow;global.document=previousDocument;}
+});
+
+test('criterion shows AI score beside its name, preserves zero and copies it only on teacher action',()=>{
+ const suggestion={proposed_score:0,rationale:'Вычисление содержит ошибку.',finding:'concern',interpretation:'Сравните уравнение.',evidence:[],suggested_improvement:'Проверьте знак.',missing_evidence:[],uncertainty:[]};
+ const criterion={...lib.reviewCriteria(data)[0],suggestion};
+ const {RubricCriterionCard,TeacherDecisionEditor}=load('src/components/review/criterion-card.tsx',{'../../lib/review-workspace':lib});
+ let copied=null;const props={criterion,index:0,value:{points:'',feedback:'Мой комментарий',action:'unreviewed'},onChange:patch=>copied=patch,manual:true,busy:false,dirty:false,savedState:'unreviewed'};
+ const html=render(React.createElement(RubricCriterionCard,props));
+ assert.match(html,/<header[^]*Балл ИИ: 0[^]*<strong>0/);assert.match(html,/Ваш балл/);assert.match(html,/value=""/);
+ assert.ok(html.indexOf('Вычисление содержит ошибку.')<html.indexOf('Ваш балл'));
+ assert.equal(copied,null);
+ // Call with a hook stub to exercise the exact action from the rendered card.
+ const card=load('src/components/review/criterion-card.tsx',{react:{...React,useState:init=>[init,()=>{}]},'../../lib/review-workspace':lib}).RubricCriterionCard;
+ find(card(props),n=>n.type==='button'&&String(n.props.children).startsWith('Использовать')).props.onClick();
+ assert.equal(copied.points,'0');assert.equal(copied.action,'accepted');assert.equal(copied.feedback,undefined);
+ copied=null;
+ const editor=load('src/components/review/criterion-card.tsx',{react:{...React,useId:()=> 'score'},'../../lib/review-workspace':lib}).TeacherDecisionEditor;
+ find(editor({...props,manual:false}),n=>n.type==='button'&&n.props['aria-pressed']===false).props.onClick();
+ assert.equal(copied.points,'0');
+ const missing=render(React.createElement(RubricCriterionCard,{...props,criterion:{...criterion,suggestion:{...suggestion,proposed_score:null,missing_evidence:['Ответ на задачу 4 отсутствует.']}}}));
+ assert.match(missing,/Балл ИИ: не выставлен/);assert.match(missing,/Ответ на задачу 4 отсутствует/);assert.doesNotMatch(missing,/Использовать 0/);
 });

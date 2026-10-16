@@ -30,6 +30,7 @@ export function TeacherReviewWorkspace({ submissionId }: { submissionId: string 
   const [error, setError] = useState(""); const [message, setMessage] = useState(""); const [assessmentError, setAssessmentError] = useState(false);
   const [dialog, setDialog] = useState<"publish" | "discard" | null>(null); const discardAction = useRef<() => void>(() => {});
   const writing = useRef(false);
+  const requestedAssessment = useRef(""); const aiSending = useRef(false); const [aiBusy, setAiBusy] = useState(false);
   const [focusQuestion, setFocusQuestion] = useState("");
   const [mappingTarget, setMappingTarget] = useState("");
   const [mappingDirty, setMappingDirty] = useState(false);
@@ -57,17 +58,23 @@ export function TeacherReviewWorkspace({ submissionId }: { submissionId: string 
       const requestedPage = Number(new URLSearchParams(window.location.search).get('page'));
       setPage(Number.isSafeInteger(requestedPage) && requestedPage >= 1 && requestedPage <= (review.structure?.pages.length ?? 1) ? requestedPage : 1);
     } }).catch(() => { if (active) setError("Не удалось загрузить работу. Проверьте доступ и попробуйте снова."); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, [fetchData]);
-  const processingActive = assessment?.jobs.some(j => ['queued', 'extracting', 'interpreting'].includes(j.status));
+  const processingActive = assessment?.jobs.some(j => ['awaiting_source', 'queued', 'extracting', 'interpreting'].includes(j.status));
+  const activeAssessmentId = assessment?.jobs.find(j => ['awaiting_source', 'queued', 'extracting', 'interpreting'].includes(j.status))?.id ?? '';
   useEffect(() => {
-    if (!processingActive || hasUnsaved) return;
+    if (!processingActive) return;
     let cancelled = false;
     const timer = window.setInterval(() => { void fetchData().then(r => {
-      if (cancelled || unsavedRef.current) return;
-      apply(r.review, r.ai, selected);
-      if (selected && r.ai?.items[0] && r.ai.items[0].id !== selected) setMessage('Новая версия предложений доступна в истории проверок.');
+      if (cancelled) return;
+      const completed = r.ai?.items.find(v => v.job_id === (requestedAssessment.current || activeAssessmentId));
+      const next = completed?.id ?? (selected || r.ai?.items[0]?.id);
+      if (unsavedRef.current) {
+        setAssessment(r.ai); setAssessmentError(r.ai === null);
+        if (completed || !selected) setSelected(next ?? '');
+      } else apply(r.review, r.ai, next);
+      if (completed) { requestedAssessment.current = ''; setMessage('Баллы ИИ готовы и показаны рядом с критериями. Ваши изменения сохранены на экране.'); }
     }).catch(() => setMessage('Состояние обработки не обновилось. Сохранённая проверка остаётся доступна.')); }, 5000);
     return () => { cancelled = true; window.clearInterval(timer); };
-  }, [processingActive, hasUnsaved, fetchData, selected]);
+  }, [processingActive, activeAssessmentId, hasUnsaved, fetchData, selected]);
   useEffect(() => {
     if (!hasUnsaved) return;
     const unload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
@@ -92,6 +99,25 @@ export function TeacherReviewWorkspace({ submissionId }: { submissionId: string 
   function choose(id: string) { if (!data) return; const next = assessment?.items.find(v => v.id === id); if (!next) return; discardOr(() => { setSelected(id); setEditor(initialEditor(data, next)); setDirty(false); setDirtyKeys(new Set()); }); }
   function mode(next: ReviewEditor["mode"]) { if (!data || !editor || next === editor.mode) return; discardOr(() => { const values = initialEditor(data, next === 'assisted' ? version : undefined); setEditor({ ...values, mode: next }); setDirty(false); setDirtyKeys(new Set()); }); }
   async function refresh() { if (hasUnsaved) { setMessage("Сначала сохраните изменения, затем обновите предложения."); return; } try { const result = await fetchData(); if (unsavedRef.current) { setMessage('Данные обновились; введённые изменения сохранены на экране.'); return; } apply(result.review, result.ai, selected); setError(""); } catch { setError("Не удалось обновить данные. Введённые значения сохранены на экране."); } }
+  async function assess() {
+    if (aiSending.current || processingActive || writing.current) return;
+    aiSending.current = true; setAiBusy(true); setError("");
+    try {
+      const job = await platformRequest<{id: string; status: string}>(`/api/assessment/${submissionId}${assessment?.jobs[0]?.status === 'awaiting_budget' ? '/resume' : ''}`, assessment?.jobs[0]?.status === 'awaiting_budget' ? {} : { prepare: true, reanalyze: Boolean(version) });
+      requestedAssessment.current = job.id;
+      setAssessment(previous => previous ? {...previous, jobs: [{...job, error: ''}, ...previous.jobs.filter(j => j.id !== job.id)]} : {items: [], jobs: [{...job, error: ''}], supported: true});
+      const result = await fetchData();
+      const completed = result.ai?.items.find(v => v.job_id === job.id);
+      setAssessment(result.ai); setAssessmentError(result.ai === null);
+      if (completed) {
+        if (unsavedRef.current) setSelected(completed.id);
+        else apply(result.review, result.ai, completed.id);
+        requestedAssessment.current = '';
+      }
+      setMessage(completed ? 'Сохранённые баллы ИИ показаны рядом с критериями.' : 'Проверка запущена. Баллы появятся рядом с критериями; можно продолжать работу.');
+    } catch (e) { setError(e instanceof Error ? e.message : 'Не удалось запустить проверку ИИ.'); }
+    finally { aiSending.current = false; setAiBusy(false); }
+  }
   async function save(asDraft: boolean) {
     if (!data || !editor || writing.current) return;
     const errors = editorErrors(criteria, editor); if (errors.length) { setError(errors[0]); return; }
@@ -141,7 +167,13 @@ export function TeacherReviewWorkspace({ submissionId }: { submissionId: string 
         </div>
         <div className="rw-assessment-scroll">
           <div id="review-view-grade" className="rw-studio-view" role="tabpanel" aria-labelledby="review-tab-grade" hidden={reviewTab !== 'grade'}>
-            {version && <div className="rw-mode-choice"><span>Как оцениваем</span><div role="group" aria-label="Режим проверки"><button type="button" aria-pressed={editor.mode === 'manual'} disabled={busy || advancedDirty} onClick={() => mode('manual')}>Самостоятельно</button><button type="button" aria-pressed={editor.mode === 'assisted'} disabled={busy || advancedDirty} onClick={() => mode('assisted')}>С подсказками ИИ</button></div></div>}
+            <section className={`rw-ai-summary ${version ? 'has-results' : ''}`} aria-label="Оценивание ИИ">
+              <div><span className="rw-ai-eyebrow">Проверка по вашим критериям</span><h3>{criteria.length > 0 && criteria.every(c => c.suggestion?.proposed_score != null) ? `ИИ: ${criteria.reduce((sum, c) => sum + (c.suggestion?.proposed_score ?? 0), 0)} / ${data.maximum_score}` : version ? `ИИ оценил ${criteria.filter(c => c.suggestion?.proposed_score != null).length} из ${criteria.length} критериев` : 'Получить оценку ИИ'}</h3><p>{processingActive ? 'Сначала читаем документ, затем оцениваем каждый критерий. Результат появится здесь.' : 'ИИ учитывает условия задания, приложенные файлы и максимальные баллы. Вы подтверждаете итог.'}</p></div>
+              <button type="button" className="rw-button rw-primary" disabled={aiBusy || Boolean(processingActive) || busy || advancedDirty || !assessment?.supported} onClick={() => void assess()}>{aiBusy ? 'Запускаем…' : processingActive ? 'Проверяем…' : assessment?.jobs[0]?.status === 'awaiting_budget' ? 'Продолжить проверку' : version ? 'Оценить заново' : 'Оценить по критериям'}</button>
+              {assessment?.jobs[0]?.status === 'failed' && <p className="rw-field-error" role="status">Не удалось завершить оценивание. Проверьте состояние документа в помощи ИИ и повторите запрос.</p>}
+              {assessment?.jobs[0]?.status === 'awaiting_budget' && <p className="rw-field-error" role="status">Проверка приостановлена из-за лимита бюджета. Продолжить можно, когда лимит позволит.</p>}
+            </section>
+            {version && <div className="rw-mode-choice"><span>Как оцениваем</span><div role="group" aria-label="Режим проверки"><button type="button" aria-pressed={editor.mode === 'manual'} disabled={busy || advancedDirty} onClick={() => mode('manual')}>Самостоятельно</button><button type="button" aria-pressed={editor.mode === 'assisted'} disabled={busy || advancedDirty} onClick={() => mode('assisted')}>С оценкой ИИ</button></div></div>}
             {data.questions.length > 1 && <QuestionReviewNavigation data={data} question={focusQuestion} onQuestion={setFocusQuestion}/>}
             <RubricReviewPanel criteria={focusQuestion ? criteria.filter(c => c.question_id === focusQuestion) : criteria} editor={editor} onChange={edit} onPage={goToPage} busy={busy} dirtyKeys={dirtyKeys} savedState={editorSavedState(data, version, editor.mode)}/>
             <section className="rw-overall-feedback rw-feedback-visible"><label htmlFor="review-overall-feedback">Итоговый комментарий</label><p>Что студенту стоит учесть в следующей работе?</p><textarea id="review-overall-feedback" rows={3} maxLength={10000} value={editor.feedback} placeholder="Короткий отзыв о работе в целом…" disabled={busy} onChange={e => { setEditor({ ...editor, feedback: e.target.value }); setDirty(true); }}/><span className="rw-feedback-note">Студент увидит комментарии после публикации оценки.</span></section>

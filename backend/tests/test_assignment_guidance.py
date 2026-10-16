@@ -23,7 +23,9 @@ def test_grouping_distinguishes_whole_work_problem_criteria_and_subcriteria():
     questions=[{'id':'q1','title':'Midterm','maximum_points':20,'criteria':criteria}]
     assert len(answer_groups(questions,'problem_set'))==4
     assert all(len(g['criterion_ids'])==1 and g['question_id']=='q1' for g in answer_groups(questions,'problem_set'))
-    assert len(answer_groups(questions,'essay'))==1
+    assert len(answer_groups(questions,'lab_report'))==4
+    for c in questions[0]['criteria']: c['description']=c['description'].replace('Задача ', '').split(':')[0]+' задача'
+    assert [g['title'] for g in answer_groups(questions,'lab_report')]==['Задача 1','Задача 2','Задача 3','Задача 4']
     questions[0]['criteria']=[{'criterion_id':f'c{i}','description':title,'maximum_points':5} for i,title in enumerate(['Метод решения','Вычисления','Единицы измерения','Обоснование'])]
     assert len(answer_groups(questions,'problem_set'))==1
     explicit=[{**questions[0],'id':f'q{i}','title':f'Problem {i}'} for i in range(4)]

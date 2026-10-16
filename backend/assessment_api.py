@@ -4,17 +4,17 @@ import httpx
 from typing import Literal
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import Field
-from sqlalchemy import select, func
+from sqlalchemy import select
 from accounts import utc, rate_limit
 from auth import request_user
 from permissions import require_teacher
 from institutions import audit
 from persistence import SessionLocal, AcademicAssignment, AcademicSubmission, CourseOffering
-from processing_models import DocumentInterpretation, InterpretationCorrection, ProcessingJob
-from document_models import DocumentReview, SubmissionDocument
+from processing_models import DocumentInterpretation, ProcessingJob
+from document_models import DocumentReview
 from document_review import get_submission
 from assessment_models import AssessmentRubric, AssessmentSuggestion, AssessmentDecision
-from services.assessment import Strict, RubricSpec, rubric_for_assignment, STRATEGIES, ENGINE_VERSION
+from services.assessment import Strict, RubricSpec, rubric_for_assignment, STRATEGIES
 from review_pilot_contracts import CardUse
 from services.ai_providers.engine import configuration
 from document_processing import enqueue
@@ -112,12 +112,14 @@ def assessment(submission_id: str, request: Request):
                 'correction_id': row.correction_id, 'source': db.get(ProcessingJob, row.job_id).context['assessment']['source'],
                 'decisions': [{'id': r.id, 'reviewer': r.reviewer, 'decisions': r.decisions, 'review_id': r.review_id, 'created_at': utc(r.created_at)} for r in reviews]})
         jobs = db.scalars(select(ProcessingJob).where(ProcessingJob.submission_id == submission_id).order_by(ProcessingJob.created_at.desc())).all()
-        return {'items': items, 'jobs': [{'id': j.id, 'status': j.status, 'error': j.error} for j in jobs if j.context.get('task') == 'assessment'],
+        from services.assessment_pipeline import job_state
+        return {'items': items, 'jobs': [job_state(db, j) for j in jobs if j.context.get('task') == 'assessment'],
             'supported': assignment.assignment_type in STRATEGIES}
 
 
 class AssessRequest(Strict):
     reanalyze: bool = False
+    prepare: bool = False
 
 
 @router.post('/assessment/{submission_id}', status_code=202)
@@ -126,6 +128,10 @@ def request_assessment(submission_id: str, payload: AssessRequest, request: Requ
         submission, assignment = get_submission(db, submission_id, request, teacher=True)
         user = request_user(request)
         rate_limit(request, 'assessment', user.account_id or user.username, 10)
+        # Serialize approval + both enqueue stages together, including first-click races.
+        from sqlalchemy import text, update
+        if db.bind.dialect.name == 'postgresql': db.execute(text('SELECT pg_advisory_xact_lock(62401704)'))
+        else: db.execute(update(ProcessingJob).where(ProcessingJob.status == 'queued').values(stage=ProcessingJob.stage))
         approved = latest_rubric(db, assignment.id)
         if not approved:
             # Requesting assessment confirms the criteria already supplied by this teacher.
@@ -135,33 +141,64 @@ def request_assessment(submission_id: str, payload: AssessRequest, request: Requ
             db.add(approved); db.flush()
         try: rubric_for_assignment(approved.spec, assignment)
         except ValueError as error: raise HTTPException(409, 'The approved rubric no longer matches the assignment.') from error
+        pending = db.scalars(select(ProcessingJob).where(ProcessingJob.submission_id == submission_id,
+            ProcessingJob.status.in_(['awaiting_source', 'queued', 'extracting', 'interpreting']))).all()
+        existing = next((j for j in pending if j.context.get('task') == 'assessment'), None)
+        if existing: return {'id': existing.id, 'status': existing.status}
         source = db.scalar(select(DocumentInterpretation).where(DocumentInterpretation.submission_id == submission_id).order_by(DocumentInterpretation.created_at.desc()).limit(1))
-        if not source: raise HTTPException(409, 'Run document understanding and review its observations first.')
-        source_job = db.get(ProcessingJob, source.job_id)
-        document = db.get(SubmissionDocument, submission_id)
-        if not document or document.content_hash != source_job.content_hash:
-            raise HTTPException(409, 'Source observations do not match the current original document. Reanalyze before assessment.')
-        if source_job.usage.get('partial'):
-            raise HTTPException(409, 'Partial document coverage cannot justify assessment scores. Review manually or analyze the complete bounded document.')
-        correction = db.scalar(select(InterpretationCorrection).where(InterpretationCorrection.interpretation_id == source.id).order_by(InterpretationCorrection.created_at.desc()).limit(1))
-        observed = correction.result if correction else source.result
-        snapshot = {'rubric_id': approved.id, 'rubric': approved.spec, 'interpretation_id': source.id,
-            'correction_id': correction.id if correction else None, 'title': assignment.title,
-            'source': {'sections': [{k: s.get(k, [] if k=='criterion_ids' else None) for k in ('id', 'page_number', 'question_id', 'criterion_ids', 'kind', 'transcription', 'readability', 'evidence_kind')}
-                for s in observed['sections']]},
-            'source_limitations': {'warnings': observed['warnings'], 'teacher_confirmed': bool(correction and correction.confirmed),
-                'visual_transcription_unverified': not bool(correction and correction.confirmed), 'external_facts_verified': False, 'code_executed': False}}
-        from services.assignment_context import assignment_snapshot
-        snapshot['assignment_context'] = assignment_snapshot(db, assignment)
-        snapshot['source_limitations']['assignment_reading_incomplete'] = bool(source_job.usage.get('assignment_context_shortened'))
+        if not source and not payload.prepare: raise HTTPException(409, 'Run document understanding and review its observations first.')
         from services.ai_providers.engine import assessment_configuration
         try: config = assessment_configuration()
         except ValueError as error: raise HTTPException(409, str(error)) from error
-        try: job = enqueue(db, submission, assignment, user.account_id or user.username, payload.reanalyze,
-                          task_context={'task': 'assessment', 'assessment': snapshot}, provider_config=config)
+        from services.assessment_pipeline import snapshot
+        if source:
+            try: context = {'task': 'assessment', 'assessment': snapshot(db, submission, assignment, approved, source)}
+            except ValueError as error: raise HTTPException(409, str(error)) from error
+            if not payload.reanalyze:
+                from dataclasses import asdict
+                previous = db.scalars(select(AssessmentSuggestion).where(AssessmentSuggestion.submission_id == submission_id,
+                    AssessmentSuggestion.interpretation_id == source.id, AssessmentSuggestion.rubric_id == approved.id)).all()
+                for saved in previous:
+                    prior = db.get(ProcessingJob, saved.job_id)
+                    if prior.context.get('assessment') == context['assessment'] and prior.context.get('ai') == asdict(config):
+                        return {'id': prior.id, 'status': prior.status}
+        try:
+            if not source:
+                reading = enqueue(db, submission, assignment, user.account_id or user.username)
+                if reading.status == 'failed':
+                    reading = enqueue(db, submission, assignment, user.account_id or user.username, force=True)
+                context = {'task': 'assessment', 'depends_on': reading.id, 'rubric_id': approved.id}
+            job = enqueue(db, submission, assignment, user.account_id or user.username, payload.reanalyze,
+                          task_context=context, provider_config=config)
         except ValueError as error: raise HTTPException(429, str(error)) from error
         audit(db, user, 'assessment.request', job.id, {'submission_id': submission_id, 'rubric_id': approved.id})
         db.commit(); return {'id': job.id, 'status': job.status}
+
+
+@router.post('/assessment/{submission_id}/resume', status_code=202)
+def resume_assessment(submission_id: str, request: Request):
+    import ai_budget
+    from persistence import now_utc
+    from document_processing import ACTIVE, MAX_ATTEMPTS
+    from sqlalchemy import text, update
+    with SessionLocal() as db:
+        get_submission(db, submission_id, request, teacher=True)
+        user = request_user(request)
+        rate_limit(request, 'assessment-resume', user.account_id or user.username, 10)
+        if db.bind.dialect.name == 'postgresql': db.execute(text('SELECT pg_advisory_xact_lock(62401704)'))
+        else: db.execute(update(ProcessingJob).where(ProcessingJob.submission_id == submission_id).values(stage=ProcessingJob.stage))
+        jobs = db.scalars(select(ProcessingJob).where(ProcessingJob.submission_id == submission_id).order_by(ProcessingJob.created_at.desc())).all()
+        child = next((j for j in jobs if j.context.get('task') == 'assessment'), None)
+        job = db.get(ProcessingJob, child.context['depends_on']) if child and child.status == 'awaiting_source' else child
+        if (not job or job.status != 'awaiting_budget' or job.attempts >= MAX_ATTEMPTS or
+            job.context.get('ai', {}).get('name') != 'openrouter' or not ai_budget.can_resume(job.id, db=db)):
+            raise HTTPException(409, 'Paid allowance is not available; reconcile billing or use manual review.')
+        if any(j.status in ('queued', *ACTIVE) for j in jobs):
+            raise HTTPException(409, 'Another document task is active; wait for it to finish.')
+        job.status = job.stage = 'queued'; job.available_at = now_utc()
+        audit(db, user, 'assessment.resume', job.id, {'submission_id': submission_id})
+        db.commit()
+        return {'id': child.id, 'status': 'awaiting_source' if child.id != job.id else 'queued'}
 
 
 class Decision(Strict):

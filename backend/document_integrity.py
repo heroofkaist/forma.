@@ -1,5 +1,4 @@
-"""Teacher-only, explicitly requested Qwen analysis using the existing $4 ledger."""
-import os
+"""Teacher-only local document checks. No paid model or authorship probability."""
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
@@ -43,15 +42,9 @@ def summaries(db, ids):
 
 
 def enqueue_one(db, submission, assignment, actor, force=False):
-    from dataclasses import replace
     from document_processing import enqueue
-    from services.ai_providers.engine import configuration
-    name = os.getenv('FORMA_INTEGRITY_PROVIDER') or os.getenv('FORMA_ASSESSMENT_PROVIDER') or os.getenv('FORMA_AI_PROVIDER', 'ollama')
-    if name not in {'ollama', 'openrouter'}: name = 'ollama'
-    config = replace(configuration(name), version=VERSION)
-    if name == 'openrouter':
-        import ai_budget
-        ai_budget.paid_enabled()
+    from services.ai_providers.engine import ProviderConfig
+    config = ProviderConfig(name='local', model=VERSION, version=VERSION, options={})
     return enqueue(db, submission, assignment, actor, force=force, task_context={'task': 'integrity'}, provider_config=config)
 
 
@@ -87,7 +80,7 @@ def start_report(sid: str, payload:RestartRequest, request: Request):
         try: job = enqueue_one(db, row, assignment, request_user(request).username, force=payload.force)
         except (ValueError, RuntimeError) as error: raise HTTPException(409, str(error)) from error
         db.commit()
-        return {'id': job.id, 'status': job.status, 'maximum_cost_usd': '0.02', 'monthly_limit_usd': '4.00'}
+        return {'id': job.id, 'status': job.status, 'maximum_cost_usd': '0.00', 'provider': 'local'}
 
 
 @router.post('/assignments/{aid}', status_code=202)
@@ -99,7 +92,7 @@ def start_assignment(aid: str, request: Request):
         require_teacher(db, request_user(request), assignment.offering_id)
         rows = current_sources(db, assignment)
         current = summaries(db, [r.id for r in rows])
-        eligible = [r for r in rows if current[r.id]['status'] in {'not_analyzed', 'stale'}]
+        eligible = [r for r in rows if current[r.id]['status'] in {'not_analyzed', 'stale', 'awaiting_budget'}]
         jobs = []
         try:
             for row in eligible[:20]: jobs.append(enqueue_one(db, row, assignment, request_user(request).username))
@@ -107,18 +100,15 @@ def start_assignment(aid: str, request: Request):
             if not jobs: raise HTTPException(409, str(error)) from error
         db.commit()
         return {'scheduled': len(jobs), 'remaining': max(0, len(eligible) - len(jobs)),
-                'maximum_cost_usd': f'{len(jobs) * .02:.2f}', 'monthly_limit_usd': '4.00'}
+                'maximum_cost_usd': '0.00', 'provider': 'local'}
 
 
 @router.post('/{sid}/resume', status_code=202)
 def resume_report(sid: str, request: Request):
-    import ai_budget
-    from persistence import now_utc
+    # Compatibility for old clients: a paused Qwen detector becomes a local job.
     with SessionLocal() as db:
-        authorized(db, sid, request)
-        jobs=db.scalars(select(ProcessingJob).where(ProcessingJob.submission_id==sid).order_by(ProcessingJob.created_at.desc())).all()
-        job=next((j for j in jobs if j.context.get('task')=='integrity'),None)
-        if not job or job.status!='awaiting_budget' or job.attempts>=3 or not ai_budget.can_resume(job.id, db=db):
-            raise HTTPException(409,'The current budget does not allow resuming this analysis.')
-        job.status='queued';job.available_at=now_utc();job.error='';db.commit()
-        return {'id':job.id,'status':'queued'}
+        row, assignment = authorized(db, sid, request)
+        try: job = enqueue_one(db, row, assignment, request_user(request).username)
+        except ValueError as error: raise HTTPException(409, str(error)) from error
+        db.commit()
+        return {'id': job.id, 'status': job.status, 'maximum_cost_usd': '0.00', 'provider': 'local'}

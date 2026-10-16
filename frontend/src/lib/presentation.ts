@@ -6,7 +6,7 @@ const labels: Record<string, string> = {
   draft: 'Черновик', confirmed: 'Подтверждено', active: 'Активен', archived: 'В архиве',
   closed: 'Закрыто', open: 'Открыто', not_started: 'Не отправлено', graded: 'Оценка опубликована',
   overdue: 'Срок истёк', queued: 'В очереди на обработку', extracting: 'Подготовка документа',
-  interpreting: 'Анализируется', needs_review: 'Ожидает проверки преподавателя',
+  interpreting: 'Анализируется', awaiting_source: 'Читаем документ перед оцениванием', needs_review: 'Ожидает проверки преподавателя',
   completed: 'Проверка завершена', awaiting_budget: 'Автоматический анализ приостановлен',
   not_scheduled: 'Ожидает проверки преподавателя', unreviewed: 'Не проверено', reviewed: 'Проверено',
   suspended: 'Доступ приостановлен', removed: 'Доступ закрыт', rejected: 'Отклонено',
@@ -35,6 +35,13 @@ export function submissionAvailability(assignment: { available_at?: string | nul
 }
 export function requestError(status: number, detail?: unknown) {
   const known: Record<string, string> = {
+    'Paid allowance is not available; reconcile billing or use manual review.': 'Доступный лимит AI-проверки пока не позволяет продолжить. Можно выставить баллы вручную.',
+    'Daily document processing limit (20 jobs) reached.': 'Сегодня уже запущено 20 этапов AI-анализа. Сохранённые результаты доступны; новые запросы можно отправить завтра.',
+    'Maximum three analysis versions per submission per day.': 'Сегодня уже запрошены 3 версии этого анализа. Используйте сохранённый результат или повторите завтра.',
+    'Another document task is active; wait for it to finish.': 'Документ уже обрабатывается. Дождитесь завершения текущего анализа.',
+    'Partial document coverage cannot justify assessment scores. Review manually or analyze the complete bounded document.': 'Распознаны не все страницы. ИИ не выставит баллы по неполному документу: проверьте покрытие в помощи ИИ или оцените работу вручную.',
+    'Source observations do not match the current original document. Reanalyze before assessment.': 'Файл изменился после распознавания. Повторите распознавание в помощи ИИ, затем запустите оценивание.',
+    'Clarify criterion descriptions before requesting AI scores.': 'Уточните критерии задания, чтобы ИИ понимал, за что выставлять баллы.',
     'Local comparison requires 2–40 students with submissions.': 'Для локального сравнения нужны работы от 2 до 40 разных студентов.',
     'A submission has no extracted structure. Prepare the original before comparing.': 'У одной из работ нет сохранённой структуры документа. Откройте работу и проверьте извлечение перед сравнением.',
     'An original document is unavailable.': 'Один из оригиналов недоступен. Проверьте наличие файла работы.',

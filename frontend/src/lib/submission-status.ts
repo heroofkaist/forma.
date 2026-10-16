@@ -12,7 +12,7 @@ export function humanReviewLabel(item: SubmissionSummary): string {
 }
 export function aiProcessingLabel(status: string): string {
   if (["complete", "completed", "cached"].includes(status)) return "ИИ: анализ завершён";
-  if (["queued", "extracting", "interpreting", "processing"].includes(status)) return "ИИ: анализ выполняется";
+  if (["awaiting_source", "queued", "extracting", "interpreting", "processing"].includes(status)) return "ИИ: анализ выполняется";
   if (status === "needs_review") return "ИИ: материалы анализа требуют проверки";
   if (status === "awaiting_budget") return "ИИ: анализ приостановлен";
   if (["failed", "cancelled"].includes(status)) return "ИИ: анализ не выполнен";

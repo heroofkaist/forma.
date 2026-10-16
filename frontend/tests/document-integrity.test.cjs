@@ -6,7 +6,7 @@ const metric=score=>({status:'completed',score,evidence:[]});
 const result={status:'completed',stale:false,documents:[{id:'a',student_id:'one',file_name:'First.pdf',units_total:2},{id:'b',student_id:'two',file_name:'Second.pdf',units_total:4}],pairs:[{submission_id:'a',candidate_id:'b',metrics:{document:metric(.75),text:metric(.4),visual:metric(.75),semantic:{...metric(1),source_evidence:[{concept:'force',current:{unit:1,quote:'<script>source</script>'},candidate:{unit:2,quote:'second original passage'}}]}}}]};
 test('AI detector never presents an uncalibrated probability or converts a missing analysis to zero',()=>{
  for(const status of ['not_analyzed','failed','awaiting_budget','no_readable_text','input_limit','stale'])assert.doesNotMatch(integrity.detectorLabel({status}),/0%|100%|человек|ИИ написал/);
- assert.equal(integrity.detectorLabel({status:'completed',detector_status:'advisory',signal_count:0}),'Неопределённо');
+ assert.equal(integrity.detectorLabel({status:'completed',detector_status:'advisory',signal_count:0}),'Явных признаков нет');
  assert.equal(integrity.detectorLabel({status:'completed',detector_status:'not_applicable'}),'Не применим к этой работе');
  assert.match(integrity.INTEGRITY_NOTE,/единственное основание/);
 });
@@ -43,4 +43,11 @@ test('side-by-side view opens PDF pages and readable Office sections without cla
   if(file_type==='pdf'){assert.match(html,/PDF original a/);assert.match(html,/PDF original b/);}
   else{assert.match(html,/A source passage &lt;script&gt;untrusted&lt;\/script&gt;/);assert.match(html,/Скачать оригинал/);assert.match(html,/Извлечённое содержимое/);assert.doesNotMatch(html,/PDF original|<script>/);}
  }
+});
+
+test('detector report explains local zero-cost analysis, coverage and exact quotes without Qwen or an authorship percentage',()=>{
+ const report={status:'completed',detector_status:'advisory',signal_count:1,report:{metrics:{word_count:215,sentence_count:12},units_analyzed:2,units_total:3,chunks_analyzed:2,chunks_total:2,features:[],style_signals:[{unit:2,quote:'<script>As an AI language model</script>',observation:'Самоупоминание модели.',alternative_explanation:'Это может быть цитата.'}],limitations:['Отсутствие признаков не подтверждает авторство.']}};
+ const {IntegrityDialog}=load('src/components/assignment/integrity-signal.tsx',{react:{...React,useState:initial=>[initial===null?report:initial,()=>{}]},'next/link':link,'../../lib/platform':{},'../../lib/document-integrity':integrity});
+ const html=render(React.createElement(IntegrityDialog,{submissionId:'a',onClose(){}}));
+ assert.match(html,/ЛОКАЛЬНЫЙ АНАЛИЗ · БЕСПЛАТНО/);assert.match(html,/Признаки · 1/);assert.match(html,/2 из 3/);assert.match(html,/215/);assert.match(html,/&lt;script&gt;/);assert.match(html,/Это может быть цитата/);assert.doesNotMatch(html,/Qwen|QWEN|\d+%|<script>/);
 });

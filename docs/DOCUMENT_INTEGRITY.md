@@ -1,44 +1,45 @@
-# File comparison and advisory Qwen profiles
+# File comparison and local text signals
 
-Assignment rows expose separate file-similarity and AI-detector columns. Missing,
-failed, stale and unsupported analyses are never displayed as a successful zero.
-The AI-detector column is an experimental qualitative style review by the existing
-Qwen model, not a calibrated authorship classifier. It returns no authorship
-probability, never updates grades, and is not applicable to problem sets/code.
-Every displayed model observation must quote an exact supplied source passage and
-include a plausible alternative explanation. Teachers see the limitation beside
-the results and inside the report.
+Assignment rows show file similarity and AI detector separately. The detector now
+runs deterministic Python rules locally: no Qwen, external detector, network
+request or token charge. Its version is `local-text-signals-v1`. Old Qwen detector
+reports become stale; already queued legacy detector jobs also run locally. The
+retained `FORMA_INTEGRITY_PROVIDER` setting has no effect.
 
-Local comparison reads each original and validates its content hash. It compares
-all extracted text (up to the ingestion limit of 500,000 characters), formula
-strings, abstracted code and all eligible PDF pages or embedded Office images.
-Visual matching aggregates across both files instead of reporting only the most
-similar page. Byte-identical meaningful files are reported explicitly. The overall
-index is the strongest applicable text/code/visual signal, not a plagiarism
-percentage or an average of unrelated measurements. Qwen concept similarity is a
-separate advisory channel, with quotes from both originals. DOCX/PPTX page layouts
-are not rendered; scans without embedded text are compared visually and receive no
-text-authorship claim. Reformatting and rotation remain limitations.
+The local analyzer inspects all extracted text, up to 500,000 UTF-8 bytes and the
+worker's 50-page/unit bound. It finds explicit model self-disclosures, chat/citation
+markup and duplicate passages of at least 40 words. Every observation contains an
+exact source quote, source unit and possible non-AI explanation. It records word
+and sentence counts, lexical diversity and sentence-length variation. These style
+statistics do **not** trigger an authorship verdict: regular sentences, polished
+language and limited vocabulary alone are not evidence of generation.
 
-The archive can compare 2–10 selected files of one course and offers a view of both
-originals. Each source is independently authorized; same-author pairs are skipped.
-Results are immutable, cached, bound to source hashes and marked stale after a
-source or profile changes. GET requests never run paid inference.
+This is an inspectable signal checker, **not a trained or calibrated authorship
+classifier**. It cannot identify all AI writing; quoted examples, templates and
+extraction artifacts can trigger observations. There is no authorship percentage.
+No findings does not mean human authorship. Prose shorter than 200 words and
+problem sets/code are marked insufficient/not applicable unless an explicit
+artifact is present. Scans without extracted text are not analyzed. Coverage and
+limitations are shown in the report. No detector action changes grades.
 
-Qwen jobs reuse `document_processing_jobs` and the existing provider adapter,
-reservations, dedicated key cap, concurrency limit and unknown-billing holds.
-Optional `FORMA_INTEGRITY_PROVIDER` selects `openrouter` or `ollama`; otherwise the
-existing assessment/AI provider configuration is used. No model or endpoint changes
-are made. The hard caps stay $4/month and $0.02/job. Requests over 48,000 UTF-8 text
-bytes decline the AI stage before any paid call; local file comparison remains
-available. Successful chunks are checkpointed, so resuming a paused job reuses them.
-No paid fallback or automatic inference on file views is introduced.
+GET only reads a saved report. Explicit teacher requests use durable private
+`document_processing_jobs` with a `local` provider and zero cost, independent of
+paid-provider availability. Local checks do not consume the model-job daily
+allowance. No new migration, model download or secret is required.
 
-Deploy backend migration `014_document_integrity_profiles` and updated backend
-routes before the frontend. The migration is additive. Existing storage and
-provider settings are reused; model outputs and student sources stay in private
-course storage. Run the synthetic frontend/backend tests without provider keys;
-a real paid smoke run should be limited to one explicitly requested document.
+File comparison still validates each original's content hash and compares all
+extracted text, formula strings, normalized code and eligible PDF pages or embedded
+Office images. The overall index is the strongest text/code/visual signal; it is
+not a plagiarism probability. DOCX/PPTX layouts are not rendered. Historical saved
+Qwen concept channels remain labeled as such; new local detector reports do not
+create or invent semantic profiles. Reformatting, OCR gaps and rotation remain
+limitations. The archive compares authorized files across the shared course
+archive; same-author pairs are skipped. Results are cached, immutable and marked
+stale when sources change.
 
-References: [GPT detectors and non-native writers](https://arxiv.org/abs/2304.02819)
-and [OpenRouter structured outputs](https://openrouter.ai/docs/guides/features/structured-outputs).
+The limitations are consistent with research on [detector bias for non-native
+writers](https://arxiv.org/abs/2304.02819) and [detector robustness under editing and
+paraphrasing](https://aclanthology.org/2024.acl-long.160/). Synthetic tests verify
+local-only execution, exact evidence, coverage, missing results, permissions,
+idempotency, zero charges and unchanged grades. They do not establish detection
+accuracy on a labeled academic corpus.

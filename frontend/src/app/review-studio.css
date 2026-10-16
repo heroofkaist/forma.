@@ -157,3 +157,32 @@
   .rw-grade-total strong { font-size: 22px; }
   .rw-studio .rw-save-state span { font-size: 10px; }
 }
+
+/* Rubric AI scores belong in the main grading flow. */
+.rw-ai-summary { margin: 18px 20px 4px; padding: 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 14px; border: 1px solid #dcd6ef; border-radius: 10px; background: #f8f6fd; }
+.rw-ai-summary > div { flex: 1 1 200px; min-width: 0; }
+.rw-ai-eyebrow { color: var(--blue); font-size: 10px; font-weight: 600; }
+.rw-ai-summary h3 { margin: 6px 0; font-size: 18px; line-height: 1.35; }
+.rw-ai-summary p { margin: 0; font-size: 11px; line-height: 1.65; color: var(--secondary); }
+.rw-ai-summary > .rw-field-error { flex-basis: 100%; color: #98462e; }
+.rw-studio .rw-criterion-heading { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: start; }
+.rw-studio .rw-criterion-heading > .rw-status { grid-column: 2; justify-self: start; }
+.rw-ai-score { grid-column: 3; grid-row: 1 / span 2; display: grid; gap: 5px; padding: 8px 10px; text-align: right; border-radius: 7px; background: #eee8fc; color: var(--blue); white-space: nowrap; }
+.rw-ai-score > span { font-size: 10px; }
+.rw-ai-score strong { font-size: 21px; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.rw-ai-score small { font-size: 12px; font-weight: 400; opacity: .75; }
+.rw-ai-score.is-empty { background: #f3f2f6; color: #797181; }
+.rw-studio .rw-assistant-note { margin: 2px 0 14px; }
+.rw-ai-rationale { margin: 8px 0 0; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .rw-ai-summary { margin: 14px 16px 4px; padding: 14px; }
+  .rw-ai-summary > button { width: 100%; }
+  .rw-ai-score { padding: 8px; }
+  .rw-ai-score strong { font-size: 19px; }
+}
+
+@media (max-width: 600px) {
+  .rw-ai-summary.has-results > div { flex-basis: 130px; }
+  .rw-ai-summary.has-results > div p { display: none; }
+  .rw-ai-summary.has-results > button { width: auto; }
+}

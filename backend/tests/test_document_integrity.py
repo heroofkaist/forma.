@@ -1,7 +1,5 @@
 """Synthetic content profiles, whole-file evidence and private archive comparison. No paid calls."""
-import copy
 import hashlib
-import json
 from sqlalchemy import select, func
 import pytest
 from test_accounts_courses import platform, identity
@@ -10,7 +8,6 @@ import document_integrity as api
 import assignment_comparison as comparison_api
 import document_processing as processing
 from services import document_integrity as engine
-from services.ai_providers.engine import configuration
 from services.similarity_vectors import visual_signal, text_features
 from integrity_models import DocumentIntegrityReport
 from processing_models import ProcessingJob, DocumentInterpretation
@@ -19,33 +16,52 @@ from persistence import AcademicSubmission, AcademicGrade
 from budget_models import AIRequestCharge
 
 
-def completion(config,schema,system,context,*args):
-    source=context['source'][0]
-    return {'done':True,'done_reason':'stop','message':{'content':json.dumps({'features':[{'concept':'newtonian mechanics','unit':source['unit'],'quote':source['text'][:30]}],'style_signals':[]})}}
+def forbid_models(monkeypatch):
+    def unexpected(*args, **kwargs): raise AssertionError('Local detector must never call a language model')
+    monkeypatch.setattr('services.ai_providers.ollama.structured_completion', unexpected)
+    monkeypatch.setattr('services.ai_providers.openrouter.OpenRouterProvider.complete', unexpected)
 
 
-def test_full_text_chunks_and_exact_evidence_checkpoint_reuse(monkeypatch):
-    calls=[]
-    def chat(*args):calls.append(args[3]['source'][0]);return completion(*args)
-    monkeypatch.setattr('services.ai_providers.ollama.structured_completion',chat)
-    structure={'pages':[{'number':1,'text':'alpha beta '*600},{'number':2,'text':'distinctive conclusion and reasoning'}]}
-    checkpoints=[]
-    result,usage=engine.evaluate(structure,'essay',configuration('ollama'),'synthetic',checkpoint=lambda chunks:checkpoints.extend(copy.deepcopy(chunks[len(checkpoints):])))
-    assert result['status']=='completed' and result['units_analyzed']==2 and result['chunks_analyzed']>2
-    assert ''.join(c['text'] for c in calls)==''.join(p['text'] for p in structure['pages'])
-    assert all(len(c['text'].encode())<=engine.BATCH_BYTES for c in calls)
-    again,_=engine.evaluate(structure,'essay',configuration('ollama'),'synthetic',checkpoints=checkpoints)
-    assert again==result and len(calls)==len(checkpoints)
-    with pytest.raises(ValueError):engine.validate_observations({'features':[{'concept':'invented','unit':1,'quote':'invented text that is not present'}],'style_signals':[]},[{'unit':1,'text':'actual text'}])
+def test_local_detector_covers_late_pages_preserves_evidence_and_never_calls_models(monkeypatch):
+    forbid_models(monkeypatch)
+    text='The experiment measures force and acceleration under controlled conditions. '*60
+    structure={'pages':[{'number':1,'text':text}, {'number':2,'text':'As an AI language model, I cannot perform this experiment.'}]}
+    result,usage=engine.evaluate(structure,'essay')
+    assert result['status']=='completed' and result['units_analyzed']==2
+    assert not usage['ai_called'] and usage['cost_usd']=='0.00'
+    assert result['provider']=='local' and result['authorship_probability'] is None
+    assert result['metrics']['word_count']>500
+    assert result['style_signals'][0]['code']=='model_disclosure'
+    assert result['style_signals'][0]['unit']==2
+    for signal in result['style_signals']:
+        assert signal['quote'] in structure['pages'][signal['unit']-1]['text']
+        assert signal['alternative_explanation']
+    assert engine.evaluate(structure,'essay')[0]==result
 
 
 def test_scans_oversize_and_problem_sets_do_not_become_authorship_percentages(monkeypatch):
-    monkeypatch.setattr('services.ai_providers.ollama.structured_completion',completion)
-    for source,status in [({'pages':[{'number':1,'text':''}]},'no_readable_text'),({'pages':[{'number':1,'text':'x'*50000}]},'input_limit')]:
-        result,usage=engine.evaluate(source,'essay',configuration('ollama'),'synthetic')
+    forbid_models(monkeypatch)
+    for source,status in [({'pages':[{'number':1,'text':''}]},'no_readable_text'),({'pages':[{'number':1,'text':'x'*(engine.MAX_INPUT_BYTES+1)}]},'input_limit')]:
+        result,usage=engine.evaluate(source,'essay')
         assert result['status']==status and result['authorship_probability'] is None and not usage['ai_called']
-    result,_=engine.evaluate({'pages':[{'number':1,'text':'F = mass times acceleration, unit Newton.'}]},'problem_set',configuration('ollama'),'synthetic')
+        assert result['units_analyzed']==0
+    result,_=engine.evaluate({'pages':[{'number':1,'text':'F = mass times acceleration, unit Newton.'}]},'problem_set')
     assert result['detector_status']=='not_applicable' and result['authorship_probability'] is None
+
+
+def test_polished_regular_non_native_text_is_not_an_ai_verdict_and_short_artifacts_are_visible():
+    text='We measured force in this experiment. We calculated error in every measurement. '*35
+    clean,_=engine.evaluate({'pages':[{'number':1,'text':text}]},'lab_report')
+    assert clean['style_signals']==[] and clean['detector_status']=='advisory'
+    short,_=engine.evaluate({'pages':[{'number':1,'text':'Example: <|im_start|>assistant'}]},'programming')
+    assert short['detector_status']=='advisory' and short['style_signals'][0]['code']=='chat_markup'
+    russian,_=engine.evaluate({'pages':[{'number':1,'text':'Я языковая модель, поэтому не могу провести эксперимент.'}]},'essay')
+    assert russian['style_signals'][0]['code']=='model_disclosure'
+    paragraph=' '.join('word'+str(i) for i in range(45))
+    repeats,_=engine.evaluate({'pages':[{'number':1,'text':paragraph+'\n\n'+paragraph}]},'essay')
+    assert repeats['style_signals'][0]['code']=='repeated_passage'
+    changed,_=engine.evaluate({'pages':[{'number':1,'text':paragraph+'\n\n'+paragraph.replace('word20', 'word99')}]},'lab_report')
+    assert changed['style_signals']==[]
 
 
 def test_one_matching_page_is_not_a_whole_file_match_and_late_text_is_used():
@@ -56,11 +72,13 @@ def test_one_matching_page_is_not_a_whole_file_match_and_late_text_is_used():
     assert 'distinctivetail' in text_features(('common words '*5000)+' distinctivetail endmarker','')
 
 
-def test_private_jobs_get_no_compute_idempotency_worker_and_stale_receipts(platform,monkeypatch):
+@pytest.mark.parametrize('legacy_queued', [False, True])
+def test_private_jobs_get_no_compute_idempotency_worker_and_stale_receipts(platform,monkeypatch,legacy_queued):
     client,factory,teacher,student,sid,structure,assignment,content=setup_submission(platform,monkeypatch)
     monkeypatch.setattr(api,'SessionLocal',factory)
-    monkeypatch.setenv('FORMA_INTEGRITY_PROVIDER','ollama')
-    monkeypatch.setattr('services.ai_providers.ollama.structured_completion',completion)
+    monkeypatch.setenv('FORMA_INTEGRITY_PROVIDER','openrouter')
+    monkeypatch.setenv('FORMA_AI_PAID_ENABLED','false')
+    forbid_models(monkeypatch)
     path='/api/document-integrity/'+sid
     assert client.get(path,headers=teacher).json()['status']=='not_analyzed'
     assert client.get(path,headers=student).status_code==403
@@ -70,10 +88,16 @@ def test_private_jobs_get_no_compute_idempotency_worker_and_stale_receipts(platf
     with factory() as db:assert db.scalar(select(func.count()).select_from(ProcessingJob))==0
     first=client.post(path,headers=teacher,json={});assert first.status_code==202,first.text
     assert client.post(path,headers=teacher,json={}).json()['id']==first.json()['id']
+    if legacy_queued:
+        with factory() as db:
+            job=db.get(ProcessingJob,first.json()['id'])
+            job.context={**job.context,'ai':{'name':'openrouter','model':'qwen/legacy','version':'qwen-content-profile-v1','options':{}}}
+            job.prompt_version='qwen-content-profile-v1';db.commit()
     assert processing.process_one()
     body=client.get(path,headers=teacher).json()
     assert body['status']=='completed' and body['detector_status']=='not_applicable'
-    assert body['authorship_probability'] is None and body['report']['features']
+    assert body['authorship_probability'] is None and body['report']['metrics']['word_count']>0
+    assert body['report']['provider']=='local' and first.json()['maximum_cost_usd']=='0.00'
     with factory() as db:
         assert db.scalar(select(func.count()).select_from(DocumentIntegrityReport))==1
         assert db.scalar(select(func.count()).select_from(DocumentInterpretation))==0
