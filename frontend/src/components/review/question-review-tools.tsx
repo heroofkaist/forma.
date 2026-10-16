@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { platformRequest } from '../../lib/platform';
 import type { ReviewResponse } from '../../lib/review-workspace';
@@ -14,23 +14,33 @@ export function QuestionReviewNavigation({data, question, onQuestion}: {data:Rev
     {question && <><p className="rw-muted">Показаны критерии выбранного вопроса. Сохранение учитывает всю рубрику; неполную работу сохраняйте как черновик.</p><div className="rw-pilot-links">{adjacent.map((item,i)=>item && <Link className="rw-text-button" key={item.id} href={questionReviewUrl(item.id,question,item.mapping?.pages)}>{i===0?'← Предыдущая работа':'Следующая работа →'}</Link>)}<Link href={`/teacher/assignments/${data.assignment_id}/question-review`}>Вся очередь →</Link></div>{error && <p role="alert">Очередь не загрузилась. Проверка этой работы доступна.</p>}</>}
   </div>;
 }
-export function QuestionPages({ data, busy: workspaceBusy, onPage, onDirty }: {
+export function QuestionPages({ data, busy: workspaceBusy, onPage, onDirty, initialQuestionId, reveal = false }: {
   data: ReviewResponse;
   busy: boolean;
   onPage: (page: number) => void;
   onDirty: (dirty: boolean) => void;
+  initialQuestionId?: string;
+  reveal?: boolean;
 }) {
-  const [qid, setQid] = useState(data.questions[0]?.id ?? '');
+  const [qid, setQid] = useState(data.questions.find(q => q.id === initialQuestionId)?.id ?? data.questions[0]?.id ?? '');
   const [mappings, setMappings] = useState<PageMapping[]>([]);
   const [pages, setPages] = useState<number[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [open, setOpen] = useState(reveal);
+  const section = useRef<HTMLDetailsElement>(null);
   const savedPages = mappings.find(m => m.question_id === qid)?.pages ?? [];
   const dirty = loaded && JSON.stringify(pages) !== JSON.stringify(savedPages);
   useEffect(() => { onDirty(dirty); }, [dirty, onDirty]);
   useEffect(() => () => onDirty(false), [onDirty]);
+  useEffect(() => {
+    if (!reveal || data.file_type !== 'pdf') return;
+    section.current?.scrollIntoView({ block: 'start' });
+    section.current?.querySelector('summary')?.focus({ preventScroll: true });
+    void load();
+  }, [reveal]);
 
   async function load() {
     if (dirty || busy) return;
@@ -59,7 +69,7 @@ export function QuestionPages({ data, busy: workspaceBusy, onPage, onDirty }: {
     } finally { setBusy(false); }
   }
   if (data.file_type !== 'pdf') return null;
-  return <details className="rw-detail rw-pilot-panel">
+  return <details id="rw-question-pages" ref={section} open={open} onToggle={e => setOpen(e.currentTarget.open)} className="rw-detail rw-pilot-panel">
     <summary>Страницы вопросов · ручная разметка</summary>
     <p className="rw-muted">Страницы отмечает преподаватель. Автоматических предположений о расположении ответа нет. Разметка нужна для очереди одного вопроса.</p>
     <button className="rw-button" disabled={busy || workspaceBusy || dirty} onClick={() => void load()}>{loaded ? 'Перезагрузить разметку' : 'Загрузить разметку'}</button>

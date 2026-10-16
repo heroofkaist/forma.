@@ -33,7 +33,7 @@ export function AssessmentDiagnostics({ submissionId, data, assessment, selected
     <details><summary>Извлечённый текст и предупреждения</summary>{data.structure?.pages.map(p => <details key={p.number}><summary>Раздел {p.number}</summary><pre className="document-text">{p.text || "Встроенный текст отсутствует."}</pre></details>)}{data.structure?.warnings.map((warning, i) => <p key={i}>{warning}</p>)}</details>
     <details><summary>Транскрипция, LaTeX, интерпретации и обработка</summary><DocumentAnalysis submissionId={submissionId} questions={data.questions} onPage={page => onPage(page + 1)}/></details>
     <details><summary>Повторная оценка и состояние модели</summary><p>Повторная оценка запускает отдельную обработку. Для проверки сохранённых предложений она не нужна.</p><button className="rw-button" disabled={dirty || !assessment?.supported || assessment.jobs.some(j => ['queued', 'extracting', 'interpreting'].includes(j.status))} onClick={() => void repeat()}>Запросить повторную оценку</button>{assessment?.jobs.map(j => <details key={j.id}><summary>Задача обработки</summary><p>{statusLabel(j.status)}</p><p>{j.error}</p></details>)}</details>
-    <details><summary>Подтверждённые наблюдения по курсу</summary><TeachingInsights key={submissionId} submissionId={submissionId}/></details>
+    <details><summary>Подтверждённые наблюдения о студенте в курсе</summary><TeachingInsights key={submissionId} submissionId={submissionId}/></details>
     <Link className="rw-text-button" href={`/teacher/submissions/${submissionId}/originality`}>Отчёт о сходстве →</Link>{message && <p role="status">{message}</p>}
   </div>}</details>;
 }

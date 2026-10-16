@@ -4,6 +4,30 @@ function load(file,imports={}){const name=path.resolve(file),m=new Module(name,m
 const preflight=load('src/lib/assignment-preflight.ts'),review=load('src/lib/review-workspace.ts'),pilot=load('src/lib/review-pilot.ts');
 function find(node,predicate){if(!React.isValidElement(node))return; if(predicate(node))return node;for(const child of React.Children.toArray(node.props.children)){const hit=find(child,predicate);if(hit)return hit;}}
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
+test('question queue offers direct mapping for missing and stale pages while keeping ready and unsupported work reviewable',()=>{
+ const {QuestionReviewQueue}=load('src/components/review/question-review-queue.tsx',{'next/link':{default:({children,...props})=>React.createElement('a',props,children)},'../../lib/review-pilot':pilot,'../../lib/presentation':load('src/lib/presentation.ts')});
+ const base={student_name:'Synthetic student',file_name:'Synthetic.pdf',file_type:'pdf',page_count:3,review_status:'unreviewed',mapping:null};
+ const data={questions:[{id:'q2',title:'Second'}],items:[{...base,id:'missing'},{...base,id:'stale',mapping:{id:'map',question_id:'q2',pages:[3],stale:true}},{...base,id:'ready',mapping:{id:'map',question_id:'q2',pages:[2],stale:false}},{...base,id:'unavailable',page_count:0},{...base,id:'docx',file_type:'docx',page_count:0}]};
+ const html=render(React.createElement(QuestionReviewQueue,{data,question:'q2'}));
+ assert.match(html,/Требуют разметки: 2/);
+ for(const id of ['missing','stale'])assert.ok(html.includes(pilot.questionMappingUrl(id,'q2').replaceAll('&','&amp;')));
+ assert.ok(html.includes(pilot.questionReviewUrl('ready','q2',[2]).replaceAll('&','&amp;')));
+ for(const id of ['ready','unavailable','docx'])assert.ok(!html.includes(pilot.questionMappingUrl(id,'q2').replaceAll('&','&amp;')));
+ assert.match(html,/Вопрос изменён/);assert.match(html,/Страницы пока недоступны/);assert.match(html,/Оригинал доступен для скачивания/);
+ assert.equal(pilot.questionMappingUrl('s/1','q & 2'),'/teacher/submissions/s%2F1/review?question=q+%26+2&tool=pages#rw-question-pages');
+ assert.match(render(React.createElement(QuestionReviewQueue,{data:{...data,items:[]},question:'q2'})),/Работ пока нет/);
+});
+test('queue mapping entry reveals the selected question, focuses the tool and loads only saved page metadata',async()=>{
+ const slots=[],effects=[],requests=[];let cursor,tree,scrolled=false,focused=false;
+ const hooks={...React,useState:init=>{const i=cursor++;if(!(i in slots))slots[i]=init;return[slots[i],v=>{slots[i]=typeof v==='function'?v(slots[i]):v;}];},useEffect:fn=>{effects.push(fn);},useRef:()=>({current:{scrollIntoView:()=>{scrolled=true;},querySelector:()=>({focus:()=>{focused=true;}})}})};
+ const {QuestionPages}=load('src/components/review/question-review-tools.tsx',{react:hooks,'next/link':{},'../../lib/review-pilot':pilot,'../../lib/platform':{platformRequest:async(...args)=>{requests.push(args);return{items:[{id:'map',question_id:'q2',pages:[2],stale:false}]};}}});
+ const props={data:{submission_id:'s',file_type:'pdf',questions:[{id:'q1',title:'One'},{id:'q2',title:'Two'}],structure:{pages:[{number:1},{number:2}]}},busy:false,onPage:()=>{},onDirty:()=>{},initialQuestionId:'q2',reveal:true};
+ const view=()=>render(React.createElement(()=>{cursor=0;effects.length=0;tree=QuestionPages(props);return tree;}));
+ view();assert.equal(tree.props.open,true);assert.equal(requests.length,0);effects[2]();await tick();view();
+ assert.equal(scrolled,true);assert.equal(focused,true);assert.deepEqual(requests,[['/api/review-pilot/submissions/s/pages']]);
+ assert.equal(find(tree,n=>n.type==='select').props.value,'q2');
+ assert.equal(find(tree,n=>n.type==='input'&&n.props.checked===true).props.type,'checkbox');
+});
 test('assignment preflight distinguishes invalid dates/scores from incomplete rubric warnings',()=>{
  const form={title:'Synthetic task',maximum_score:'10',available_at:'2026-10-16T09:00',due_at:'2026-10-17T09:00'};
  assert.deepEqual(preflight.assignmentPreflight(form,[{description:'Method',maximum_points:'10'}]).errors,[]);

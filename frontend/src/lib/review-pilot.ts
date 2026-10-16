@@ -12,3 +12,9 @@ export function questionReviewUrl(id: string, question: string, pages: number[] 
   if (pages.length) query.set('page', String(pages[0]));
   return `/teacher/submissions/${encodeURIComponent(id)}/review?${query}`;
 }
+export function questionMappingUrl(id: string, question: string) {
+  return `${questionReviewUrl(id, question)}&tool=pages#rw-question-pages`;
+}
+export function needsPageMapping(item: QuestionQueue['items'][number]) {
+  return item.file_type === 'pdf' && item.page_count > 0 && (!item.mapping?.pages.length || item.mapping.stale);
+}

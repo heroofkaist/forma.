@@ -108,6 +108,18 @@ test('teaching insights load, fail, retry and refresh without preserving stale m
   await insights.loadTeachingInsights(async()=>({items:[{...data.items[0],confirmed_concerns:5}]}),s=>states.push(s));
   assert.equal(states.at(-1).status,'error');
 });
+test('review history heading identifies student scope rather than course-wide analytics',()=>{
+  let hook=0;
+  const {AssessmentDiagnostics}=load('src/components/review/assessment-diagnostics.tsx',{
+    react:{...React,useState:init=>[hook++===0?true:init,()=>{}]},
+    'next/link':{default:({children,...props})=>React.createElement('a',props,children)},
+    '../../lib/presentation':load('src/lib/presentation.ts'),
+    './teaching-insights':{TeachingInsights:()=>null},'../document-analysis':{DocumentAnalysis:()=>null},'../../lib/platform':{},
+  });
+  const html=render(React.createElement(AssessmentDiagnostics,{submissionId:'s',data:{assignment_id:'a',reviews:[]},assessment:null,selected:'',dirty:false}));
+  assert.match(html,/<summary>Подтверждённые наблюдения о студенте в курсе<\/summary>/);
+  assert.doesNotMatch(html,/Подтверждённые наблюдения по курсу/);
+});
 test('shared assignment form exposes type, dates, resubmission and teacher rubric with existing styles',()=>{
   const {AssignmentCreateForm}=load('src/components/assignment-create-form.tsx',{'../lib/academic':{}, '../lib/assignment-preflight':load('src/lib/assignment-preflight.ts')});
   const html=render(React.createElement(AssignmentCreateForm,{offeringId:'synthetic',onCreated:()=>{}}));

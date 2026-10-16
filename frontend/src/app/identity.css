@@ -891,3 +891,5 @@ textarea { line-height: 1.6; }
 .submission-checklist { border: 1px solid var(--border); padding: 14px; margin: 14px 0; font-size: 12px; }
 .submission-checklist label { margin: 10px 0; }
 .submission-checklist input { flex: none; margin-top: 3px; }
+/* Direct queue links reveal the page mapper below the persistent navigation. */
+#rw-question-pages { scroll-margin-top: 6rem; }

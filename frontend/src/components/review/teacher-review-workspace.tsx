@@ -26,6 +26,7 @@ export function TeacherReviewWorkspace({ submissionId }: { submissionId: string 
   const [error, setError] = useState(""); const [message, setMessage] = useState(""); const [assessmentError, setAssessmentError] = useState(false);
   const [dialog, setDialog] = useState<"publish" | "discard" | null>(null); const discardAction = useRef<() => void>(() => {});
   const [focusQuestion, setFocusQuestion] = useState("");
+  const [mappingTarget, setMappingTarget] = useState("");
   const [mappingDirty, setMappingDirty] = useState(false);
   const hasUnsaved = dirty || advancedDirty || mappingDirty;
   const unsavedRef = useRef(hasUnsaved); unsavedRef.current = hasUnsaved;
@@ -42,7 +43,11 @@ export function TeacherReviewWorkspace({ submissionId }: { submissionId: string 
   useEffect(() => { let active = true; setLoading(true); void fetchData().then(({ review, ai }) => { if (active) {
       apply(review, ai);
       const requestedQuestion = new URLSearchParams(window.location.search).get('question') ?? '';
-      setFocusQuestion(review.questions.some(q => q.id === requestedQuestion) ? requestedQuestion : '');
+      const validQuestion = review.questions.some(q => q.id === requestedQuestion);
+      setFocusQuestion(validQuestion ? requestedQuestion : '');
+      const mappingRequested = validQuestion && new URLSearchParams(window.location.search).get('tool') === 'pages' && review.file_type === 'pdf';
+      setMappingTarget(mappingRequested ? requestedQuestion : '');
+      if (mappingRequested) setMobileTab('assessment');
       const requestedPage = Number(new URLSearchParams(window.location.search).get('page'));
       setPage(Number.isSafeInteger(requestedPage) && requestedPage >= 1 && requestedPage <= (review.structure?.pages.length ?? 1) ? requestedPage : 1);
     } }).catch(() => { if (active) setError("Не удалось загрузить работу. Проверьте доступ и попробуйте снова."); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, [fetchData]);
@@ -112,6 +117,7 @@ export function TeacherReviewWorkspace({ submissionId }: { submissionId: string 
   const total = complete ? criteria.reduce((sum, c) => sum + Number(editor.criteria[c.key].points), 0) : null;
   const reviewed = criteria.filter(c => editor.mode === "manual" ? data.reviews[0]?.criteria.some(s => s.question_id === c.question_id && s.criterion_id === c.criterion_id && s.points !== null && s.confirmed !== false) : c.saved?.confirmed !== false && ['accepted', 'rejected'].includes(c.saved?.action ?? '')).length;
   const changedSincePublication = data.published_grade && data.reviews[0]?.id !== data.published_grade.review_id;
+  const pageMapping = <QuestionPages key={submissionId} data={data} busy={busy} onPage={goToPage} onDirty={setMappingDirty} initialQuestionId={mappingTarget} reveal={!!mappingTarget}/>;
   return <div className="review-workspace-page" data-mobile-panel={mobileTab}>
     <SubmissionOverview data={data} aiAvailable={!!version} reviewed={reviewed} total={criteria.length}/>
     {error && <div className="rw-alert" role="alert"><span>{error}</span><button className="rw-text-button" disabled={hasUnsaved || busy} onClick={() => void refresh()}>Обновить данные</button></div>}
@@ -125,11 +131,12 @@ export function TeacherReviewWorkspace({ submissionId }: { submissionId: string 
           {!version && <p className="rw-muted">Сохранённых предложений нет. Работу можно оценить вручную без запуска модели.</p>}
           {version && <div className="rw-ai-overview"><span>ИИ: {criteria.filter(c => c.suggestion?.finding === 'strength').length} сильных сторон</span><span>{criteria.filter(c => ['concern', 'mixed'].includes(c.suggestion?.finding ?? '')).length} замечаний</span><span>{criteria.filter(c => c.suggestion?.proposed_score == null).length} без балла</span></div>}
         </div>
+        {mappingTarget && pageMapping}
         <QuestionReviewNavigation data={data} question={focusQuestion} onQuestion={value => {setFocusQuestion(value);setExpanded(criteria.find(c=>c.question_id===value)?.key ?? null);}}/>
         <RubricReviewPanel criteria={focusQuestion ? criteria.filter(c => c.question_id === focusQuestion) : criteria} editor={editor} expanded={expanded} onExpand={setExpanded} onChange={edit} onPage={goToPage} busy={busy} dirtyKeys={dirtyKeys} savedState={editorSavedState(data, version, editor.mode)}/>
         <details className="rw-overall-feedback"><summary>Общая обратная связь <span>{editor.feedback ? 'есть комментарий' : 'для студента'}</span></summary><label className="rw-sr-only" htmlFor="review-overall-feedback">Общая обратная связь</label><textarea id="review-overall-feedback" rows={4} maxLength={10000} value={editor.feedback} placeholder="Итоговый комментарий к работе…" disabled={busy} onChange={e => { setEditor({ ...editor, feedback: e.target.value }); setDirty(true); }}/><p className="rw-muted">Студент увидит подтверждённую обратную связь после публикации.</p></details>
         <DecisionMemory key={`${submissionId}/${selected}/${editor.mode}`} data={data} rubricId={editor.mode === "assisted" ? version?.rubric.id : undefined} criteria={criteria} editor={editor} busy={busy} onApply={edit}/>
-        <QuestionPages key={submissionId} data={data} busy={busy} onPage={goToPage} onDirty={setMappingDirty}/>
+        {!mappingTarget && pageMapping}
         <AssessmentDiagnostics submissionId={submissionId} data={data} assessment={assessment} selected={selected} onSelect={choose} dirty={hasUnsaved} onPage={goToPage} onAdvancedDirty={setAdvancedDirty} onRefresh={() => void refresh()}/>
         </div>
       </section>
