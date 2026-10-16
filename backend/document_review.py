@@ -1,5 +1,5 @@
 """Teacher document review with immutable versions and explicit publication."""
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 import pymupdf
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
@@ -55,20 +55,47 @@ def review_json(review):
 
 
 @router.get("/assignment-submissions/{assignment_id}")
-def list_submissions(assignment_id: str, request: Request):
+def list_submissions(assignment_id: str, request: Request, response: Response):
+    response.headers["Cache-Control"] = "private, no-store"
     with SessionLocal() as db:
         assignment = db.get(AcademicAssignment, assignment_id)
         if not assignment:
             raise HTTPException(404, "Assignment not found.")
         require_teacher(db, request_user(request), assignment.offering_id)
-        rows = db.scalars(select(AcademicSubmission).where(AcademicSubmission.assignment_id == assignment_id).order_by(AcademicSubmission.created_at.desc())).all()
+        rows = db.scalars(select(AcademicSubmission).where(AcademicSubmission.assignment_id == assignment_id).order_by(AcademicSubmission.created_at.desc(), AcademicSubmission.id.desc())).all()
         from processing_models import ProcessingJob
         jobs = db.scalars(select(ProcessingJob).join(AcademicSubmission, ProcessingJob.submission_id == AcademicSubmission.id).where(AcademicSubmission.assignment_id == assignment_id).order_by(ProcessingJob.created_at.desc())).all()
         latest = {}
         for job in jobs:
             latest.setdefault(job.submission_id, job)
         summaries = review_summaries(db, assignment, [row.id for row in rows])
-        return {"title": assignment.title, "offering_id": assignment.offering_id, "items": [{**summaries[row.id], "id": row.id, "student_name": student_display_name(db, row.student_id, row.student_name), "file_name": row.file_name, "status": row.status, "processing_status": latest[row.id].status if row.id in latest else "not_scheduled", "processing_error": latest[row.id].error if row.id in latest else "", "submitted_at": utc(row.created_at)} for row in rows]}
+        from similarity_status import similarity_summaries
+        from persistence import CourseEnrollment, AcademicCourse, CourseOffering
+        from permissions import enrollment_active
+        similarities = similarity_summaries(db, rows)
+        offering = db.get(CourseOffering, assignment.offering_id)
+        course = db.get(AcademicCourse, offering.course_id)
+        roster = {e.student_id: {'student_id': e.student_id, 'student_name': student_display_name(db, e.student_id, e.student_name), 'active': True}
+                  for e in db.scalars(select(CourseEnrollment).where(CourseEnrollment.offering_id == offering.id)) if enrollment_active(db, e)}
+        items = []
+        for row in rows:
+            roster.setdefault(row.student_id, {'student_id': row.student_id, 'student_name': student_display_name(db, row.student_id, row.student_name), 'active': False})
+            items.append({**summaries[row.id], 'id': row.id, 'student_id': row.student_id,
+                'student_name': roster[row.student_id]['student_name'], 'file_name': row.file_name, 'file_type': row.file_type,
+                'status': row.status, 'processing_status': latest[row.id].status if row.id in latest else 'not_scheduled',
+                'processing_error': latest[row.id].error if row.id in latest else '', 'submitted_at': utc(row.created_at),
+                'similarity': similarities[row.id]})
+        from assignment_comparison import fingerprint
+        latest_sources = {}
+        for row in rows:
+            latest_sources.setdefault(row.student_id, row)
+        comparison_revision = fingerprint(db, assignment, sorted(latest_sources.values(), key=lambda row: row.id), '')
+        return {'comparison_revision': comparison_revision, 'id': assignment.id, 'title': assignment.title, 'description': assignment.description,
+            'assignment_type': assignment.assignment_type, 'offering_id': offering.id, 'course_name': course.name,
+            'course_code': course.code, 'maximum_score': assignment.maximum_score, 'due_at': utc(assignment.due_at) if assignment.due_at else None,
+            'originality_enabled': assignment.originality_enabled,
+            'students': sorted(roster.values(), key=lambda s: (s['student_name'].casefold(), s['student_id'])), 'items': items}
+
 
 
 @router.get("/submission-files/{submission_id}")
@@ -86,7 +113,7 @@ def get_review(submission_id: str, request: Request):
         reviews = db.scalars(select(DocumentReview).where(DocumentReview.submission_id == submission_id).order_by(DocumentReview.created_at.desc())).all()
         grade = db.scalar(select(AcademicGrade).where(AcademicGrade.submission_id == submission_id, AcademicGrade.published.is_(True)))
         published = db.get(PublishedDocumentReview, grade.id) if grade else None
-        return {"submission_id": submission_id, "assignment_id": assignment.id, "title": assignment.title, "assignment_type": assignment.assignment_type, "instructions": assignment.description, "submitted_at": utc(submission.created_at), "student_name": student_display_name(db, submission.student_id, submission.student_name), "file_name": submission.file_name, "file_type": submission.file_type, "maximum_score": assignment.maximum_score, "questions": assignment.questions, "structure": document.structure if document else None, "reviews": [review_json(review) for review in reviews], "published_grade": {"points": grade.points, "maximum_score": grade.maximum_score, "review_id": published.review_id if published else None, "published_at": utc(grade.published_at) if grade.published_at else None} if grade else None}
+        return {"submission_id": submission_id, "assignment_id": assignment.id, "title": assignment.title, "assignment_type": assignment.assignment_type, "instructions": assignment.description, "submitted_at": utc(submission.created_at), "student_id": submission.student_id, "student_name": student_display_name(db, submission.student_id, submission.student_name), "file_name": submission.file_name, "file_type": submission.file_type, "maximum_score": assignment.maximum_score, "questions": assignment.questions, "structure": document.structure if document else None, "reviews": [review_json(review) for review in reviews], "published_grade": {"points": grade.points, "maximum_score": grade.maximum_score, "review_id": published.review_id if published else None, "published_at": utc(grade.published_at) if grade.published_at else None} if grade else None}
 
 
 @router.get('/document-review/{submission_id}/pages/{page_number}')

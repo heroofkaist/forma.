@@ -226,7 +226,7 @@ def test_additive_migration_repeated_and_profile_security(platform):
     engine = factory.kw["bind"]
     apply_migrations(engine); apply_migrations(engine)
     with factory() as db:
-        assert len(db.scalars(select(account_models.SchemaMigration)).all()) == 12
+        assert len(db.scalars(select(account_models.SchemaMigration)).all()) == 13
         assert db.scalar(select(account_models.Account)).display_name == "New Name"
     assert client.post('/api/accounts/password', headers=headers, json={"current_password": "bad", "password": "new-password-123"}).status_code == 400
     assert client.post('/api/accounts/password', headers=headers, json={"current_password": "correct-password-123", "password": "new-password-123"}).status_code == 200

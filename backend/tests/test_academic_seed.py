@@ -226,4 +226,4 @@ def test_account_migrations_preserve_existing_records_and_repeat(monkeypatch, po
         init_db(connection, factory)
         with factory() as db:
             assert db.get(AcademicCourse, "preserved-chemistry").name == "Chemistry"
-            assert len(db.scalars(select(SchemaMigration)).all()) == 12
+            assert len(db.scalars(select(SchemaMigration)).all()) == 13

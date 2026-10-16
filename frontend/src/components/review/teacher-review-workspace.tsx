@@ -47,7 +47,7 @@ export function TeacherReviewWorkspace({ submissionId }: { submissionId: string 
       setFocusQuestion(validQuestion ? requestedQuestion : '');
       const mappingRequested = validQuestion && new URLSearchParams(window.location.search).get('tool') === 'pages' && review.file_type === 'pdf';
       setMappingTarget(mappingRequested ? requestedQuestion : '');
-      if (mappingRequested) setMobileTab('assessment');
+      setMobileTab(mappingRequested || new URLSearchParams(window.location.search).get('panel') === 'assessment' ? 'assessment' : 'document');
       const requestedPage = Number(new URLSearchParams(window.location.search).get('page'));
       setPage(Number.isSafeInteger(requestedPage) && requestedPage >= 1 && requestedPage <= (review.structure?.pages.length ?? 1) ? requestedPage : 1);
     } }).catch(() => { if (active) setError("Не удалось загрузить работу. Проверьте доступ и попробуйте снова."); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, [fetchData]);

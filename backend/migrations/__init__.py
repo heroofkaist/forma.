@@ -10,6 +10,7 @@ def apply_migrations(bind):
     import budget_models
     import assessment_models
     import review_pilot_models
+    import comparison_models
     from persistence import Base
     names = ("accounts", "account_sessions", "account_actions", "account_rate_buckets",
              "course_owners", "offering_policies", "enrollment_states", "assignment_owners")
@@ -51,4 +52,9 @@ def apply_migrations(bind):
         if not connection.scalar(select(SchemaMigration.version).where(SchemaMigration.version == version)):
             for name in ('review_decision_cards', 'review_question_page_maps', 'submission_upload_receipts'):
                 Base.metadata.tables[name].create(connection, checkfirst=True)
+            connection.execute(SchemaMigration.__table__.insert().values(version=version))
+
+        version = "013_local_comparison"
+        if not connection.scalar(select(SchemaMigration.version).where(SchemaMigration.version == version)):
+            Base.metadata.tables['assignment_comparisons'].create(connection, checkfirst=True)
             connection.execute(SchemaMigration.__table__.insert().values(version=version))

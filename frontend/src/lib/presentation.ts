@@ -35,6 +35,14 @@ export function submissionAvailability(assignment: { available_at?: string | nul
 }
 export function requestError(status: number, detail?: unknown) {
   const known: Record<string, string> = {
+    'Local comparison requires 2–40 students with submissions.': 'Для локального сравнения нужны работы от 2 до 40 разных студентов.',
+    'A submission has no extracted structure. Prepare the original before comparing.': 'У одной из работ нет сохранённой структуры документа. Откройте работу и проверьте извлечение перед сравнением.',
+    'An original document is unavailable.': 'Один из оригиналов недоступен. Проверьте наличие файла работы.',
+    'Local comparison is limited to 60 MB of originals.': 'Суммарный объём оригиналов для локального сравнения не должен превышать 60 МБ.',
+    'An original document changed. Reload the submission before comparing.': 'Оригинал изменился. Проверьте документ и обновите данные перед сравнением.',
+    'Submissions changed during comparison. Reload and run again.': 'Во время сравнения появились новые работы или изменились условия. Обновите задание и повторите сравнение.',
+    'Local comparison failed or exceeded its limits. No result was recorded.': 'Локальный анализ не завершился. Проверьте лимиты: 40 работ, 60 МБ, 200 страниц/изображений. Новый результат не сохранён.',
+
     'Decision card rubric has changed.': 'Версия критерия изменилась. Уберите связь с карточкой и проверьте решение заново.',
     'Confirm this teacher decision before saving a card.': 'Сначала подтвердите и сохраните решение по этому критерию.',
     'Page mapping changed; reload it before saving.': 'Другой проверяющий изменил страницы. Перезагрузите разметку перед сохранением.',

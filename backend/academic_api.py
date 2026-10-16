@@ -1669,17 +1669,10 @@ def submission_originality(submission_id: str) -> dict:
         ).all()
         items = [_report_json(db, r) for r in reports]
         receipt = db.get(OriginalityAnalysis, submission_id)
-        status = receipt.status if receipt else "missing"
-        # Valid legacy positive evidence remains usable; absence is never a zero result.
-        if items and not receipt:
-            status = "completed" if all(r["analysis_status"] == "completed" for r in items) else "incomplete"
-        if any(r["analysis_status"] != "completed" for r in items):
-            status = "incomplete"
-        eligible = receipt.eligible_token_count if receipt else (reports[0].eligible_token_count if reports else None)
-        if status == "completed" and (not eligible or eligible < MIN_MATCH_TOKENS or
-                                      (receipt and (receipt.candidate_count < 1 or not receipt.completed_at or receipt.report_count != len(reports))) or
-                                      eligible != len(_tokens(submission.extracted_text)[0])):
-            status = "incomplete"
+        from similarity_status import similarity_summary
+        summary = similarity_summary(submission, reports, receipt,
+            {r.candidate_submission_id: db.get(AcademicSubmission, r.candidate_submission_id) for r in reports})
+        status, eligible = summary['analysis_status'], summary['eligible_token_count']
         assignment = db.get(AcademicAssignment, submission.assignment_id)
         offering = db.get(CourseOffering, assignment.offering_id)
         course = db.get(AcademicCourse, offering.course_id)

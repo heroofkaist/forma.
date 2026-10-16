@@ -229,6 +229,8 @@ async def grade(
 
 from assignment_api import router as assignment_router
 
+from assignment_comparison import router as assignment_comparison_router
+app.include_router(assignment_comparison_router)
 app.include_router(assignment_router)
 
 from academic_api import router as academic_router
