@@ -6,11 +6,12 @@ import "./identity.css";
 import "./review-studio.css";
 import "./teaching-workflow.css";
 import "./document-integrity.css";
+import "./product-design.css";
 import { AuthProvider } from "../components/auth-provider";
 
 export const metadata: Metadata = {
-  title: "Forma — бюро мысли",
-  description: "Оригинал, свидетельства и критерии — рядом. ИИ помогает понять работу, преподаватель принимает решение.",
+  title: { default: "Forma — курсы, работы и проверка с ИИ", template: "%s · Forma" },
+  description: "Учебные курсы, работы студентов и проверка по критериям. ИИ предлагает баллы, преподаватель принимает решение.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

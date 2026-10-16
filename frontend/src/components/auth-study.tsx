@@ -1,4 +1,7 @@
-import { FormStudy } from "./form-study";
+import Link from "next/link";
+import { Check } from "lucide-react";
+import { FormaMark } from "./forma-mark";
+import { ProductTour } from "./product-tour";
 export function AuthStudy() {
-  return <aside className="auth-study"><div className="auth-study-top"><span>FORMA /</span><span>БЮРО МЫСЛИ</span></div><h2>Смотрим<br/>глубже<span className="ink-dot">.</span></h2><FormStudy compact/><div className="auth-study-bottom"><span>У КАЖДОЙ РАБОТЫ<br/>ЕСТЬ СВОЯ ЛОГИКА.</span><p>ИИ предлагает прочтение.<br/>Человек принимает решение.</p></div></aside>;
+  return <aside className="auth-study"><Link href="/" className="forma-brand" aria-label="Forma · главная"><FormaMark/>forma<span className="brand-period">.</span></Link><div className="auth-study-intro"><span className="eyebrow">ВАШЕ УЧЕБНОЕ ПРОСТРАНСТВО</span><h2>От работы<br/>к пониманию.</h2><p>Меньше переключений между файлами.<br/>Больше внимания к обратной связи.</p></div><ProductTour compact/><div className="auth-study-bottom"><Check size={18} aria-hidden="true"/><p>ИИ предлагает баллы.<br/><strong>Преподаватель принимает решение.</strong></p></div></aside>;
 }

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowRight, Search, X } from "lucide-react";
+import { ArrowRight, BookOpen, Search, X } from "lucide-react";
 import { StudentShell } from "../../components/student-shell";
 import { CourseEnrollment } from "../../components/course-enrollment";
 import { academicApi, type Course, type AcademicAssignment } from "../../lib/academic";
@@ -44,7 +44,7 @@ export default function StudentHomePage() {
         const next = pending.find(item => item.offering_id === offering.id);
         return <article className="course-sheet" key={offering.id}>
           <div className="course-sheet-register"><span>КУРС / {String(index + 1).padStart(2, "0")}</span><span>{termLabel(offering.term)} {offering.academic_year}</span></div>
-          <div className="course-sheet-title"><span className="course-sheet-symbol" aria-hidden="true">{index % 2 ? "↗" : "+"}</span><div><span className="course-sheet-code">{course.code}</span><h2><Link href={`/student/courses/${offering.id}`}>{course.name}</Link></h2></div></div>
+          <div className="course-sheet-title"><span className="course-sheet-symbol" aria-hidden="true"><BookOpen size={24}/></span><div><span className="course-sheet-code">{course.code}</span><h2><Link href={`/student/courses/${offering.id}`}>{course.name}</Link></h2></div></div>
           <p className="course-sheet-instructor">{offering.instructor ?? course.instructor ?? "Преподаватель"}</p>
           {next && offering.status === "active" && <Link className="course-next-task" href={`/student/assignments/${next.id}`}><span>СЛЕДУЮЩИЙ ШАГ</span><strong>{next.title}</strong><ArrowRight size={16} aria-hidden="true"/></Link>}
           <div className="course-sheet-access"><span>ОЖИДАЮТ <strong>{taskCount(offering.pending_assignments ?? 0)}</strong></span><span className={`student-status ${offering.status === "active" ? "status-open" : "status-archived"}`}>{offering.status === "active" ? "Активен" : offering.status === "archived" ? "Архив" : statusLabel(offering.status)}</span></div>
