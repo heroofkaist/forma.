@@ -15,7 +15,7 @@ test('assignment roster groups immutable attempts without hiding students who ha
 test('assignment register renders identity, original, prior published zero and explicit missing report with working filters',()=>{
  const slots=[];let cursor,tree;
  const hooks={...React,useState:init=>{const i=cursor++;if(!(i in slots))slots[i]=init;return[slots[i],v=>{slots[i]=v;}];}};
- const {AssignmentRegister}=load('src/components/assignment/assignment-workspace.tsx',{react:hooks,'next/link':link,'../assignment-template':{},'../assignment-briefs':{},'./comparison-panel':{},'../../lib/api':{},'../../lib/platform':{},'../../lib/submission-status':status,'../../lib/assignment-workspace':lib});
+ const {AssignmentRegister}=load('src/components/assignment/assignment-workspace.tsx',{react:hooks,'next/link':link,'../assignment-template':{},'../assignment-briefs':{},'./integrity-signal':{IntegritySignal:()=>null},'../../lib/document-integrity':{},'./comparison-panel':{},'../../lib/api':{},'../../lib/platform':{},'../../lib/submission-status':status,'../../lib/assignment-workspace':lib});
  const view=()=>render(React.createElement(()=>{cursor=0;tree=AssignmentRegister({data});return tree;}));
  let html=view();for(const text of ['student-1','student-2','Revision.pdf','Работа не отправлена','Не сравнивалось','Опубликована студенту · 0 / 10'])assert.ok(html.includes(text),text);
  assert.match(html,/review\?panel=assessment/);assert.match(html,/review\?panel=document/);assert.match(html,/originality/);
@@ -25,7 +25,7 @@ test('assignment register renders identity, original, prior published zero and e
 test('local comparison loads saved results without POST, serializes run clicks and retains context on failure',async()=>{
  const slots=[];let cursor,tree,start,finish;const calls=[];
  const hooks={...React,useState:init=>{const i=cursor++;if(!(i in slots))slots[i]=init;return[slots[i],v=>{slots[i]=typeof v==='function'?v(slots[i]):v;}];},useRef:init=>{const i=cursor++;return slots[i]??(slots[i]={current:init});},useEffect:fn=>{start??=fn;}};
- const {ComparisonPanel}=load('src/components/assignment/comparison-panel.tsx',{react:hooks,'next/link':link,'../../lib/assignment-workspace':lib,'../../lib/platform':{platformRequest:async(...args)=>{calls.push(args);if(args.length===1)return{status:'missing',documents:[],pairs:[],stale:false};return await new Promise((resolve,reject)=>{finish={resolve,reject};});}}});
+ const {ComparisonPanel}=load('src/components/assignment/comparison-panel.tsx',{react:hooks,'next/link':link,'./comparison-report':{ComparisonReport:()=>null},'../../lib/assignment-workspace':lib,'../../lib/platform':{platformRequest:async(...args)=>{calls.push(args);if(args.length===1)return{status:'missing',documents:[],pairs:[],stale:false};return await new Promise((resolve,reject)=>{finish={resolve,reject};});}}});
  const props={assignmentId:'a',students:[{student_id:'1',student_name:'Ada',latest:work},{student_id:'2',student_name:'Ivan',latest:{...work,id:'2'}}],revision:'one'};
  const view=()=>render(React.createElement(()=>{cursor=0;tree=ComparisonPanel(props);return tree;}));
  view();assert.equal(calls.length,0);start();await tick();assert.match(view(),/Новый анализ ещё не запускался/);assert.equal(calls.length,1);

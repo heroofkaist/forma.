@@ -11,6 +11,7 @@ def apply_migrations(bind):
     import assessment_models
     import review_pilot_models
     import comparison_models
+    import integrity_models
     from persistence import Base
     names = ("accounts", "account_sessions", "account_actions", "account_rate_buckets",
              "course_owners", "offering_policies", "enrollment_states", "assignment_owners")
@@ -57,4 +58,9 @@ def apply_migrations(bind):
         version = "013_local_comparison"
         if not connection.scalar(select(SchemaMigration.version).where(SchemaMigration.version == version)):
             Base.metadata.tables['assignment_comparisons'].create(connection, checkfirst=True)
+            connection.execute(SchemaMigration.__table__.insert().values(version=version))
+
+        version = "014_document_integrity_profiles"
+        if not connection.scalar(select(SchemaMigration.version).where(SchemaMigration.version == version)):
+            Base.metadata.tables['document_integrity_reports'].create(connection, checkfirst=True)
             connection.execute(SchemaMigration.__table__.insert().values(version=version))

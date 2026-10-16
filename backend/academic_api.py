@@ -353,6 +353,8 @@ class ArchiveSubmissionResponse(BaseModel):
     file_type: str
     submitted_at: str | None
     extracted_text: str
+    similarity: dict | None = None
+    integrity: dict | None = None
 
 
 class ArchiveItemsResponse(BaseModel):
@@ -1730,11 +1732,12 @@ def assignment_archive(assignment_id: str, request: Request) -> dict:
             offering = db.get(CourseOffering, family_assignment.offering_id)
             if auth_required() and not can_teach(db, request_user(request), offering.course_id):
                 continue
-            for submission in db.scalars(
-                select(AcademicSubmission).where(
-                    AcademicSubmission.assignment_id == family_assignment.id
-                )
-            ).all():
+            submissions = db.scalars(select(AcademicSubmission).where(AcademicSubmission.assignment_id == family_assignment.id)).all()
+            from document_integrity import summaries as integrity_summaries
+            from similarity_status import similarity_summaries
+            integrity = integrity_summaries(db, [row.id for row in submissions])
+            similarities = similarity_summaries(db, submissions)
+            for submission in submissions:
                 results.append(
                     {
                         "submission_id": submission.id,
@@ -1748,6 +1751,8 @@ def assignment_archive(assignment_id: str, request: Request) -> dict:
                         "file_type": submission.file_type,
                         "submitted_at": _timestamp(submission.created_at),
                         "extracted_text": submission.extracted_text,
+                        "similarity": similarities[submission.id],
+                        "integrity": integrity[submission.id],
                     }
                 )
         return {"items": sorted(results, key=lambda item: (item["academic_year"], item["submitted_at"]))}

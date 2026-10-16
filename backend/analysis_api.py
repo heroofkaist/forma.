@@ -76,7 +76,7 @@ def status(submission_id:str,request:Request):
     with SessionLocal() as db:
         get_submission(db,submission_id,request)
         jobs=db.scalars(select(ProcessingJob).where(ProcessingJob.submission_id==submission_id).order_by(ProcessingJob.created_at.desc())).all()
-        visible = [job for job in jobs if job.context.get('task') != 'assessment']
+        visible = [job for job in jobs if job.context.get('task', 'understanding') == 'understanding']
         if request_user(request).role == 'student':
             # Students receive progress, never infrastructure, provider/billing or errors.
             from student_messages import processing_message

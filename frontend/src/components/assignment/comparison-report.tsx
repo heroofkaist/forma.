@@ -1,0 +1,17 @@
+import Link from 'next/link';
+import { comparisonUrl, signalLabels, signalScore, type Comparison } from '../../lib/assignment-workspace';
+export function ComparisonReport({ result, names = new Map<string,string>() }: { result: Comparison; names?: Map<string,string> }) {
+  const docs=new Map((result.documents??[]).map(doc=>[doc.id,doc]));
+  const pairs=[...(result.pairs??[])].sort((a,b)=>(signalScore(b.metrics.document)??-1)-(signalScore(a.metrics.document)??-1));
+  return <div className="file-comparison-report" id="file-comparison">
+    {result.stale&&<p className="notice">Исходные файлы или AI-профили изменились. Обновите сравнение.</p>}
+    {pairs.map(pair=>{const score=signalScore(pair.metrics.document);return <article className="file-comparison-pair" key={`${pair.submission_id}/${pair.candidate_id}`}>
+      <header><div>{[pair.submission_id,pair.candidate_id].map(id=>{const doc=docs.get(id);return <div className="comparison-document" key={id}><strong>{doc?names.get(doc.student_id)??doc.file_name:'Работа'}</strong><span>{doc?.file_name} · {doc?.units_total??'—'} стр. / разделов</span></div>;})}</div><div className="comparison-overall"><strong>{score===null?'—':`${Math.round(score*100)}%`}</strong><small>Индекс сходства файлов</small></div></header>
+      <div className="comparison-metrics">{Object.entries(signalLabels).map(([key,label])=>{const value=signalScore(pair.metrics[key]);return <div key={key}><span>{label}</span><strong>{value===null?'—':`${Math.round(value*100)}%`}</strong><small>{value===null?key==='semantic'?'Нужны AI-профили':'Нет сопоставимых данных':'Сопоставимые признаки'}</small></div>;})}</div>
+      {pair.metrics.document?.identical_file&&<p className="notice">Файлы побайтово идентичны.</p>}
+      <Link className="button" href={comparisonUrl(pair.submission_id,pair.candidate_id)}>Открыть два оригинала рядом →</Link>
+      {Object.entries(pair.metrics).filter(([key,metric])=>key!=='document'&&(metric.evidence?.length||metric.source_evidence?.length)).map(([key,metric])=><details className="comparison-evidence" key={key}><summary>{signalLabels[key]} · найденные совпадения</summary>{metric.evidence?.map((e,index)=>typeof e==='string'?<code className="assignment-feature" key={index}>{e}</code>:<p key={index}><Link href={`/teacher/submissions/${pair.submission_id}/review?page=${e.current.page??1}`}>{e.current.page?`Стр. ${e.current.page}`:e.current.asset??'Изображение'}</Link> ↔ <Link href={`/teacher/submissions/${pair.candidate_id}/review?page=${e.candidate.page??1}`}>{e.candidate.page?`Стр. ${e.candidate.page}`:e.candidate.asset??'Изображение'}</Link>{e.identical_thumbnail?' · совпадает миниатюра':''}</p>)}{metric.source_evidence?.map((e,index)=><div className="semantic-evidence" key={index}><strong>{e.concept}</strong>{e.current&&<blockquote><Link href={`/teacher/submissions/${pair.submission_id}/review?page=${e.current.unit}`}>Первый файл · раздел {e.current.unit}</Link><p>{e.current.quote}</p></blockquote>}{e.candidate&&<blockquote><Link href={`/teacher/submissions/${pair.candidate_id}/review?page=${e.candidate.unit}`}>Второй файл · раздел {e.candidate.unit}</Link><p>{e.candidate.quote}</p></blockquote>}</div>)}</details>)}
+    </article>;})}
+    {pairs.length>0&&<p className="muted">Процент — индекс сходства признаков, а не доля плагиата. Общая тема, условия или шаблон могут давать совпадения. Оценивайте оригиналы и найденные фрагменты.</p>}
+  </div>;
+}

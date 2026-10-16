@@ -103,6 +103,8 @@ export type SimilarityReport = {
 };
 
 export type ArchiveSubmission = {
+  similarity?: import("./assignment-workspace").TextSimilarity;
+  integrity?: import("./document-integrity").IntegritySummary;
   student_name: string;
   submission_id: string;
   assignment_id: string;

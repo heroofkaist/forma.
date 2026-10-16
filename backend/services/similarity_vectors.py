@@ -13,11 +13,11 @@ from collections import Counter
 from PIL import Image, ImageOps, ImageStat
 import pymupdf
 
-VERSION = 'local-vectors-v1'
+VERSION = 'whole-file-v2'
 MAX_WORKS = 40
 MAX_PAGES = 200
 MAX_BYTES = 60 * 1024 * 1024
-MAX_CHARS = 50000
+MAX_CHARS = 500000
 STOP = set('the a an and or of to in is are for with this that и в во на с со к от по из для или это как что'.split())
 WORDS = re.compile(r'[^\W_]+', re.UNICODE)
 FORMULA = re.compile(r'[=∫∑√≤≥≈]')
@@ -138,14 +138,19 @@ def cosine(a,b):
 def visual_signal(a,b):
     if not a or not b:
         return {'status':'insufficient', 'score':None, 'evidence':[]}
-    best=0; evidence=[]
-    for x in a:
-        for y in b:
+    best_a=[0.0]*len(a); best_b=[0.0]*len(b); evidence=[]
+    for i,x in enumerate(a):
+        for j,y in enumerate(b):
             score = sum(v*w for v,w in zip(x['ink'],y['ink']))/(x['norm']*y['norm'])
-            best=max(best,score)
-            if score >= .96:
+            if score >= .985:
+                best_a[i]=max(best_a[i],score); best_b[j]=max(best_b[j],score)
                 evidence.append({'current':{k:v for k,v in x.items() if k in ('page','asset','unit')},'candidate':{k:v for k,v in y.items() if k in ('page','asset','unit')},'score':round(score,6),'identical_thumbnail':x['digest']==y['digest']})
-    return {'status':'completed','score':round(min(1,best),6),'evidence':sorted(evidence,key=lambda e:e['score'],reverse=True)[:5]}
+    # A single matching cover page must not turn a whole document into 100%.
+    score=min(sum(best_a)/len(a),sum(best_b)/len(b))
+    return {'status':'completed','score':round(min(1,score),6),'evidence':sorted(evidence,key=lambda e:e['score'],reverse=True)[:10],
+            'matched_units_current':sum(v>0 for v in best_a),'matched_units_candidate':sum(v>0 for v in best_b),
+            'units_current':len(a),'units_candidate':len(b)}
+
 
 
 def analyze(payload):
@@ -160,23 +165,34 @@ def analyze(payload):
             raise ValueError('File limit exceeded.')
         text=doc.get('text',''); pages=doc.get('pages',[]); kind=doc['file_type']
         profiles.append({'text':text_features(text,context),'formula':formula_features(text), 'code':code_features(pages,kind),
-                         'visual':visuals(raw,kind,used),'truncated':len(text)>MAX_CHARS})
-    vectors={name:tfidf([p[name] for p in profiles]) for name in ('text','formula','code')}
+                         'visual':visuals(raw,kind,used),'truncated':len(text)>MAX_CHARS, 'digest':hashlib.sha256(raw).hexdigest(),
+                         'semantic':Counter(f['concept'].casefold() for f in doc.get('semantic_features',[])) if len(doc.get('semantic_features',[]))>=3 else Counter()})
+    vectors={name:tfidf([p[name] for p in profiles]) for name in ('text','formula','code','semantic')}
     pairs=[]
     for i in range(len(docs)):
         for j in range(i+1,len(docs)):
             if docs[i]['student_id']==docs[j]['student_id']:
                 continue
             metrics={}
-            for name in ('text','formula','code'):
+            for name in ('text','formula','code','semantic'):
                 a,b=vectors[name][i],vectors[name][j]
                 metrics[name]={'status':'completed' if a and b else 'insufficient','score':round(cosine(a,b),6) if a and b else None,
                     'evidence':sorted(set(a)&set(b),key=lambda k:a[k]*b[k],reverse=True)[:10]}
             metrics['visual']=visual_signal(profiles[i]['visual'],profiles[j]['visual'])
+            identical=profiles[i]['digest']==profiles[j]['digest']
+            meaningful_identity=identical and bool(docs[i].get('text','').strip() or profiles[i]['visual'])
+            eligible=[metrics[k]['score'] for k in ('text','code','visual') if metrics[k]['score'] is not None]
+            metrics['document']={'status':'completed' if eligible or meaningful_identity else 'insufficient', 'score':1.0 if meaningful_identity else max(eligible) if eligible else None,
+                'evidence':['Файлы полностью совпадают по SHA-256.'] if identical else [], 'identical_file':identical}
+            if metrics['semantic']['status']=='completed':
+                common=metrics['semantic']['evidence']
+                metrics['semantic']['source_evidence']=[{'concept':concept,
+                    'current':next((f for f in docs[i].get('semantic_features',[]) if f['concept'].casefold()==concept),None),
+                    'candidate':next((f for f in docs[j].get('semantic_features',[]) if f['concept'].casefold()==concept),None)} for concept in common[:5]]
             pairs.append({'submission_id':docs[i]['id'],'candidate_id':docs[j]['id'],'metrics':metrics})
-    return {'version':VERSION,'pairs':pairs,'documents':[{'id':d['id'],'student_id':d['student_id'],'file_name':d['file_name'],'truncated':p['truncated']} for d,p in zip(docs,profiles)],
+    return {'version':VERSION,'pairs':pairs,'documents':[{'id':d['id'],'student_id':d['student_id'],'file_name':d['file_name'],'file_type':d['file_type'],'truncated':p['truncated'],'units_total':len(d.get('pages',[])),'visual_units':len(p['visual']),'text_chars':len(d.get('text',''))} for d,p in zip(docs,profiles)],
             'context':context,'scope':'latest_attempt_per_student_in_assignment','limits':{'works':MAX_WORKS,'pages_or_images':MAX_PAGES,'text_chars_per_work':MAX_CHARS},
-            'limitations':['TF-IDF is lexical, not semantic embeddings or proof of copying.','Formula strings are compared without proving algebraic equivalence.','Visual comparison uses low-resolution page/image appearance; templates can match and crops/rotation can be missed.','Code features abstract identifiers and literals; algorithms are not executed.']}
+            'limitations':['TF-IDF is lexical, not semantic embeddings or proof of copying.','Formula strings are compared without proving algebraic equivalence.','Visual score aggregates matching nonblank pages/images across both files; shared templates can match and crops/rotation can be missed.','Code features abstract identifiers and literals; algorithms are not executed.', 'Semantic profiles are advisory Qwen-extracted concepts, not neural embeddings or proof of shared authorship.']}
 
 
 if __name__ == '__main__':

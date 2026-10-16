@@ -67,12 +67,14 @@ def list_submissions(assignment_id: str, request: Request, response: Response):
         jobs = db.scalars(select(ProcessingJob).join(AcademicSubmission, ProcessingJob.submission_id == AcademicSubmission.id).where(AcademicSubmission.assignment_id == assignment_id).order_by(ProcessingJob.created_at.desc())).all()
         latest = {}
         for job in jobs:
-            latest.setdefault(job.submission_id, job)
+            if job.context.get('task') != 'integrity': latest.setdefault(job.submission_id, job)
         summaries = review_summaries(db, assignment, [row.id for row in rows])
         from similarity_status import similarity_summaries
         from persistence import CourseEnrollment, AcademicCourse, CourseOffering
         from permissions import enrollment_active
         similarities = similarity_summaries(db, rows)
+        from document_integrity import summaries as integrity_summaries
+        integrity = integrity_summaries(db, [row.id for row in rows])
         offering = db.get(CourseOffering, assignment.offering_id)
         course = db.get(AcademicCourse, offering.course_id)
         roster = {e.student_id: {'student_id': e.student_id, 'student_name': student_display_name(db, e.student_id, e.student_name), 'active': True}
@@ -84,7 +86,7 @@ def list_submissions(assignment_id: str, request: Request, response: Response):
                 'student_name': roster[row.student_id]['student_name'], 'file_name': row.file_name, 'file_type': row.file_type,
                 'status': row.status, 'processing_status': latest[row.id].status if row.id in latest else 'not_scheduled',
                 'processing_error': latest[row.id].error if row.id in latest else '', 'submitted_at': utc(row.created_at),
-                'similarity': similarities[row.id]})
+                'similarity': similarities[row.id], 'integrity': integrity[row.id]})
         from assignment_comparison import fingerprint
         latest_sources = {}
         for row in rows:

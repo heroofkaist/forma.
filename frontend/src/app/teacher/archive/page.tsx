@@ -1,27 +1,24 @@
 "use client";
-
-import Link from "next/link";
-import { FormEvent, useState } from "react";
-import { Search } from "lucide-react";
-import { AppShell } from "../../../components/app-shell";
-import { academicApi, type ArchiveSubmission } from "../../../lib/academic";
-
+import Link from 'next/link';
+import { FormEvent, useRef, useState } from 'react';
+import { Search } from 'lucide-react';
+import { AppShell } from '../../../components/app-shell';
+import { IntegritySignal } from '../../../components/assignment/integrity-signal';
+import { ComparisonReport } from '../../../components/assignment/comparison-report';
+import { academicApi, type ArchiveSubmission } from '../../../lib/academic';
+import { platformRequest } from '../../../lib/platform';
+import { textSimilarityLabel, fileMatchFor, comparisonUrl, type Comparison } from '../../../lib/assignment-workspace';
+import { INTEGRITY_NOTE } from '../../../lib/document-integrity';
 export default function TeacherArchivePage() {
-  const [query, setQuery] = useState("");
-  const [items, setItems] = useState<ArchiveSubmission[]>([]);
-  const [error, setError] = useState("");
-  const [searched, setSearched] = useState(false);
-  async function search(event: FormEvent) {
-    event.preventDefault();
-    try { setItems(await academicApi.archive(query)); setSearched(true); setError(""); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : "Не удалось выполнить поиск по архиву."); }
-  }
-  return <AppShell>
-    <div className="academic-crumb">FORMA <span>/</span> АРХИВ</div>
-    <section className="academic-heading"><div><div className="eyebrow">ИСТОРИЧЕСКИЙ АРХИВ</div><h1>Работы прошлых потоков</h1><p>Поиск по историческим работам курсов, к которым у вас есть преподавательский доступ.</p></div></section>
-    <div className="academic-info">Архивные документы содержат учебные записи и авторские работы. Реальные сроки хранения, основания доступа и удаление должны определяться политикой учреждения.</div>
-    <form className="archive-search" onSubmit={(event) => void search(event)}><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Курс, учебный год, задание или тип документа" /><button className="button secondary">Искать в архиве</button></form>
-    {error && <div className="notice error-notice">{error}</div>}
-    {searched && items.length ? <div className="academic-originality-table"><div className="academic-originality-row academic-table-head"><span>СТУДЕНТ</span><span>КУРС</span><span>УЧЕБНЫЙ ГОД</span><span>ЗАДАНИЕ</span><span>ДОКУМЕНТ</span><span>ОТПРАВЛЕНО</span><span>ФРАГМЕНТ</span></div>{items.map((item) => <div className="academic-originality-row" key={item.submission_id}><strong>{item.student_name || "Студент"}</strong><span>{item.course_code} · {item.course_name}</span><span>{item.academic_year} · {item.term}</span><span>{item.assignment_title}</span><span><Link href={`/teacher/submissions/${item.submission_id}/review`}>{item.file_name}</Link> <small>{item.file_type.toUpperCase()}</small></span><span>{item.submitted_at ? new Date(item.submitted_at).toLocaleDateString("ru-RU") : "—"}</span><details><summary>Текст</summary><p>{item.extracted_text.slice(0, 500)}{item.extracted_text.length > 500 ? "…" : ""}</p></details></div>)}</div> : searched ? <div className="student-empty">В доступном архиве ничего не найдено.</div> : <div className="archive-empty"><strong>Архив разделён по курсам и учебным годам</strong><p>При анализе новых работ сначала проверяется семейство того же задания, затем при разрешении — работы того же курса.</p></div>}
+  const [query,setQuery]=useState(''),[items,setItems]=useState<ArchiveSubmission[]>([]),[error,setError]=useState(''),[searched,setSearched]=useState(false),[busy,setBusy]=useState(false),[selected,setSelected]=useState<string[]>([]),[result,setResult]=useState<Comparison|null>(null);
+  const sending=useRef(false);
+  async function search(event:FormEvent){event.preventDefault();setBusy(true);try{setItems(await academicApi.archive(query));setSearched(true);setError('');setSelected([]);setResult(null);}catch(e){setError(e instanceof Error?e.message:'Не удалось выполнить поиск.');}finally{setBusy(false);}}
+  async function compare(){if(sending.current||selected.length<2)return;sending.current=true;setBusy(true);setError('');try{setResult(await platformRequest<Comparison>('/api/assignment-comparison/files/compare',{submission_ids:selected}));}catch(e){setError(e instanceof Error?e.message:'Не удалось сравнить файлы.');}finally{sending.current=false;setBusy(false);}}
+  return <AppShell><section className="academic-heading"><div><div className="eyebrow">АРХИВ РАБОТ</div><h1>Работы прошлых потоков</h1><p>Найдите документы и выберите от 2 до 10 работ одного курса для сравнения полных файлов.</p></div></section>
+    <form className="archive-search" onSubmit={event=>void search(event)}><Search size={16}/><input aria-label="Поиск по архиву" value={query} onChange={event=>setQuery(event.target.value)} placeholder="Курс, год, задание или файл"/><button className="button secondary" disabled={busy}>Искать</button></form>
+    {error&&<div className="notice error-notice" role="alert">{error}</div>}
+    {searched&&items.length>0&&<><div className="archive-comparison-toolbar"><span>Выбрано файлов: {selected.length} / 10</span><button className="button primary" disabled={selected.length<2||busy} onClick={()=>void compare()}>{busy?'Обрабатываем…':'Сравнить выбранные файлы'}</button></div><p className="integrity-advisory">{INTEGRITY_NOTE}</p><div className="student-table-wrap"><table className="student-table archive-document-table"><thead><tr><th>ВЫБРАТЬ</th><th>СТУДЕНТ И КУРС</th><th>ДОКУМЕНТ</th><th>СХОДСТВО</th><th>AI DETECTOR</th></tr></thead><tbody>{items.map(item=><tr key={item.submission_id}><td><input type="checkbox" aria-label={`Сравнить ${item.file_name} · ${item.student_name}`} checked={selected.includes(item.submission_id)} disabled={busy||(!selected.includes(item.submission_id)&&selected.length>=10)} onChange={event=>setSelected(values=>event.target.checked?[...values,item.submission_id]:values.filter(id=>id!==item.submission_id))}/></td><td><strong>{item.student_name||'Студент'}</strong><small>{item.course_code} · {item.course_name}</small><small>{item.academic_year} · {item.term}</small></td><td><Link href={`/teacher/submissions/${item.submission_id}/review`}>{item.file_name}</Link><small>{item.assignment_title} · {item.file_type.toUpperCase()}</small><small>{item.submitted_at?new Date(item.submitted_at).toLocaleString('ru-RU'):'—'}</small></td><td>{(() => {const match=fileMatchFor(item.submission_id,result);return match?<><Link className="assignment-text-score" href={comparisonUrl(item.submission_id,match.candidateId)}>{Math.round(match.score*100)}%</Link><small>Индекс сходства файлов</small></>:<><Link className="assignment-text-score" href={`/teacher/submissions/${item.submission_id}/originality`}>{textSimilarityLabel(item.similarity)}</Link><small>Текст · доступный архив</small></>;})()}</td><td><IntegritySignal submissionId={item.submission_id} value={item.integrity}/></td></tr>)}</tbody></table></div></>}
+    {result&&<section className="archive-file-results"><h2>Сравнение выбранных файлов</h2><ComparisonReport result={result} names={new Map((result.documents??[]).map(doc=>[doc.student_id,items.find(item=>item.submission_id===doc.id)?.student_name??doc.file_name]))}/></section>}
+    {searched&&!items.length&&<p className="student-empty">По этому запросу работ нет.</p>}{!searched&&<p className="archive-empty">Нажмите «Искать», чтобы открыть доступные работы. Сравнение файлов не расходует бюджет ИИ; анализ Qwen запускается отдельно.</p>}
   </AppShell>;
 }

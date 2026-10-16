@@ -166,6 +166,25 @@ def process_one():
                     lease_db.commit()
                     if not renewed: raise ValueError('Assessment worker lease was lost.')
             result, usage = evaluate(context['assessment'], ai, progress=assessment_heartbeat, job_id=job_id)
+        elif context.get('task') == 'integrity':
+            if cached_result:
+                result, usage = cached_result, {'cache_hit': True, 'ai_called': False}
+            else:
+                from services.document_integrity import evaluate
+                def integrity_heartbeat():
+                    with SessionLocal() as lease_db:
+                        renewed = lease_db.scalar(update(ProcessingJob).where(ProcessingJob.id == job_id,
+                            ProcessingJob.lease_owner == owner, ProcessingJob.status.in_(ACTIVE),
+                            ProcessingJob.lease_until > now_utc()).values(lease_until=now_utc()+timedelta(minutes=5)).returning(ProcessingJob.id))
+                        lease_db.commit()
+                        if not renewed: raise ValueError('Content-analysis worker lease was lost.')
+                def save_checkpoint(checkpoints):
+                    with SessionLocal() as save_db:
+                        current=save_db.scalar(select(ProcessingJob).where(ProcessingJob.id==job_id,ProcessingJob.lease_owner==owner,ProcessingJob.status.in_(ACTIVE),ProcessingJob.lease_until>now_utc()).with_for_update())
+                        if not current:raise ValueError('Content-analysis worker lease was lost.')
+                        current.context={**current.context,'integrity_checkpoints':checkpoints};save_db.commit()
+                result, usage = evaluate(structure, context['document_type'], ai, job_id, progress=integrity_heartbeat,
+                    checkpoints=context.get('integrity_checkpoints'), checkpoint=save_checkpoint)
         elif cached_result:
             result, usage = cached_result, {'cache_hit':True, 'ai_called':False, 'visual_pages':0}
         else:
@@ -188,6 +207,9 @@ def process_one():
                     db.add(AssessmentSuggestion(submission_id=current.submission_id, job_id=job_id,
                         rubric_id=snapshot['rubric_id'], interpretation_id=snapshot['interpretation_id'],
                         correction_id=snapshot['correction_id'], result=result))
+                elif context.get('task') == 'integrity':
+                    from integrity_models import DocumentIntegrityReport
+                    db.add(DocumentIntegrityReport(submission_id=current.submission_id, job_id=job_id, content_hash=current.content_hash, result=result))
                 else:
                     db.add(DocumentInterpretation(submission_id=current.submission_id, job_id=job_id, result=result))
                 if context.get('task') != 'assessment' and usage.get('ai_called') and not usage.get('partial') and not db.get(InterpretationCache, context['cache_key']):
@@ -199,7 +221,7 @@ def process_one():
                         # constraints/schema failures that need diagnostics.
                         if not db.get(InterpretationCache, context['cache_key']):
                             raise
-                current.status='needs_review'; current.stage='review'; current.usage=usage
+                current.status='completed' if context.get('task') == 'integrity' else 'needs_review'; current.stage='review'; current.usage=usage
                 current.lease_until=None; current.error=''; current.error_class=''; current.updated_at=now_utc()
                 db.commit()
     except Exception as error:

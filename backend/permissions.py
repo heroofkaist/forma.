@@ -63,7 +63,7 @@ def legacy_access(db, user, assignment_id):
 async def authorize_request(request, user):
     path = request.url.path
     method = request.method
-    if path.startswith('/api/assignment-comparison/'):
+    if path.startswith(('/api/assignment-comparison/', '/api/document-integrity/')):
         if user.role == 'student':
             raise HTTPException(403, 'Teacher permission required.')
         return  # Handlers authorize the concrete course before accessing receipts or files.
