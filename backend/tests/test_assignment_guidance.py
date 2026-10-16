@@ -75,7 +75,8 @@ def test_question_batches_use_own_answer_and_reuse_completed_paid_batches(monkey
     from services.assessment import validate_assessment
     import pytest
     wrong=copy.deepcopy(first);wrong['criteria'][0]['evidence'][0]={'section_id':'s2','page_number':2,'quote':source['sections'][1]['transcription']}
-    with pytest.raises(ValueError,match='different assignment question'):validate_assessment(wrong,rubric,source)
+    with pytest.raises(ValueError) as error: validate_assessment(wrong,rubric,source)
+    assert error.value.reason=='assessment_evidence_question'
 
 
 def test_archive_joins_teachers_and_years_refreshes_old_reports_but_never_opens_grades(platform,monkeypatch):

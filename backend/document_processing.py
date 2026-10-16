@@ -10,6 +10,7 @@ from sqlalchemy import select, update, or_, func, text
 from sqlalchemy.exc import IntegrityError, OperationalError
 from botocore.exceptions import ClientError, ConnectionError as StorageConnectionError, HTTPClientError
 from services.processing_diagnostics import set_stage, log_failure
+from services.assessment_errors import AssessmentValidationError
 from processing_models import ProcessingJob, DocumentInterpretation, InterpretationCache, AssignmentBrief
 from document_models import SubmissionDocument
 from persistence import SessionLocal, AcademicSubmission, AcademicAssignment, now_utc, read_blob
@@ -241,6 +242,7 @@ def process_one():
     except Exception as error:
         retryable = retryable_error(error)
         classification = 'awaiting_budget' if isinstance(error, BudgetUnavailable) else 'processing_limit' if isinstance(error, ProcessingLimitError) else 'source_missing' if isinstance(error, FileNotFoundError) else 'database_temporary' if retryable and isinstance(error, OperationalError) else 'storage_temporary' if retryable and isinstance(error, (ClientError, StorageConnectionError, HTTPClientError)) else 'provider_temporary' if retryable else 'invalid_document_or_model_output' if isinstance(error, ValueError) else 'processing_error'
+        if isinstance(error, AssessmentValidationError): classification = error.reason
         log_failure(error, job_id=job_id, classification=classification, retryable=retryable)
         try:
             set_stage('failure_persist')
@@ -256,6 +258,7 @@ def process_one():
                         current.error='Document exceeds the configured analysis page/unit limit. Manual review remains available.'
                     if isinstance(error, FileNotFoundError):
                         current.error='The private original document is unavailable. Restore the source before requesting analysis.'
+                    if isinstance(error, AssessmentValidationError): current.error = error.user_message
                     current.available_at=now_utc()+timedelta(seconds=15*2**current.attempts)
                     current.lease_until=None; current.updated_at=now_utc(); db.commit()
         except Exception as persistence_error:

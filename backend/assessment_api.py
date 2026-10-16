@@ -170,6 +170,9 @@ def request_assessment(submission_id: str, payload: AssessRequest, request: Requ
                 context = {'task': 'assessment', 'depends_on': reading.id, 'rubric_id': approved.id}
             job = enqueue(db, submission, assignment, user.account_id or user.username, payload.reanalyze,
                           task_context=context, provider_config=config)
+            if job.status == 'failed' and not payload.reanalyze:
+                job = enqueue(db, submission, assignment, user.account_id or user.username, True,
+                              task_context=context, provider_config=config)
         except ValueError as error: raise HTTPException(429, str(error)) from error
         audit(db, user, 'assessment.request', job.id, {'submission_id': submission_id, 'rubric_id': approved.id})
         db.commit(); return {'id': job.id, 'status': job.status}

@@ -7,6 +7,7 @@ from contextvars import ContextVar
 from pathlib import PurePath
 from botocore.exceptions import ClientError
 from google.genai.errors import APIError
+from services.assessment_errors import AssessmentValidationError
 
 logger = logging.getLogger('forma.document_processing')
 _stage = ContextVar('document_processing_stage', default='worker_loop')
@@ -66,6 +67,7 @@ def log_failure(error, *, job_id=None, classification='worker_error', retryable=
              'job_id': job_id, 'exception_type': _symbol(type(error).__name__),
              'classification': classification, 'retryable': retryable,
              'sanitized_traceback': chains}
+    if isinstance(error, AssessmentValidationError): entry['validation_code'] = error.reason
     # Only numeric status codes / SQLSTATE; never provider text, DB parameters,
     # object keys, URLs, account/submission identity or model output.
     code = getattr(error, 'code', None)

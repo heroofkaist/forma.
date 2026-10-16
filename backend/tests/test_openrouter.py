@@ -57,6 +57,8 @@ def mock_cloud(monkeypatch, factory, calls, mode='success', key_limit=4, endpoin
             raw = json.dumps(suggestion(parsed['rubric'], parsed['source']))
             if mode == 'invalid_evidence':
                 result = json.loads(raw); result['criteria'][0]['evidence'][0]['quote'] = 'invented passage'; raw = json.dumps(result)
+            if mode == 'contradictory_score' and parsed['rubric']['criteria'][0]['question_id'] == 'q2':
+                result = json.loads(raw); result['criteria'][0].update(proposed_score=0, evidence=[], missing_evidence=['Ответ не найден.'], finding='insufficient_evidence'); raw = json.dumps(result)
         else:
             raw = response_for({'messages': [{}, {'content': context}]}).json()['message']['content']
         if mode == 'invalid_json': raw = 'private invalid model content'
@@ -260,3 +262,52 @@ def test_assessment_cloud_admission_denies_before_paid_post(cloud, platform, mon
     with factory() as db:
         assert db.get(ProcessingJob, queued.json()['id']).status in {'failed', 'awaiting_budget'}
         assert db.scalar(select(AIRequestCharge).where(AIRequestCharge.job_id == queued.json()['id'])) is None
+
+
+def test_cloud_conflicting_score_is_saved_once_with_other_scores_without_automatic_paid_retry(cloud, platform, monkeypatch):
+    client, factory, teacher, student, sid, spec, calls = cloud_assessment_fixture(platform, monkeypatch)
+    mock_cloud(monkeypatch, factory, calls, mode='contradictory_score')
+    path = '/api/assessment/' + sid
+    queued = client.post(path, headers=teacher, json={'prepare': True})
+    assert queued.status_code == 202, queued.text
+    assert processing.process_one()
+    body = client.get(path, headers=teacher).json()
+    assert body['jobs'][0]['status'] == 'needs_review' and not body['jobs'][0]['error']
+    assert [c['proposed_score'] for c in body['items'][0]['result']['criteria']] == [1, None]
+    count = sum(r.method == 'POST' for r in calls)
+    assert count == 3  # One reading + exactly two question batches; no repair call.
+    for _ in range(3):
+        assert client.get(path, headers=teacher).json()['items'][0]['id'] == body['items'][0]['id']
+        assert processing.process_one() is False
+    assert client.post(path, headers=teacher, json={'prepare': True}).json()['id'] == queued.json()['id']
+    assert sum(r.method == 'POST' for r in calls) == count
+    from persistence import AcademicGrade
+    with factory() as db:
+        job = db.get(ProcessingJob, queued.json()['id'])
+        assert job.usage['validation_notes'][0]['criterion_id'] == 'q2-overall'
+        assert len(db.scalars(select(AIRequestCharge)).all()) == 3
+        assert db.scalar(select(AcademicGrade)) is None
+    assert client.get('/academic/student/grades', headers=student).json()['items'] == []
+
+
+def test_failed_assessment_explains_evidence_error_and_explicit_retry_creates_one_new_job(cloud, platform, monkeypatch):
+    client, factory, teacher, student, sid, spec, calls = cloud_assessment_fixture(platform, monkeypatch)
+    mock_cloud(monkeypatch, factory, calls, mode='invalid_evidence')
+    path = '/api/assessment/' + sid
+    first = client.post(path, headers=teacher, json={'prepare': True}).json()
+    assert processing.process_one()
+    body = client.get(path, headers=teacher).json()
+    assert body['jobs'][0]['status'] == 'failed'
+    assert 'Цитату модели не удалось подтвердить' in body['jobs'][0]['error_hint']
+    count = sum(r.method == 'POST' for r in calls)
+    assert processing.process_one() is False and sum(r.method == 'POST' for r in calls) == count
+    mock_cloud(monkeypatch, factory, calls)
+    retry = client.post(path, headers=teacher, json={'prepare': True})
+    assert retry.status_code == 202 and retry.json()['id'] != first['id']
+    assert client.post(path, headers=teacher, json={'prepare': True}).json()['id'] == retry.json()['id']
+    assert processing.process_one()
+    body = client.get(path, headers=teacher).json()
+    assert body['jobs'][0]['status'] == 'needs_review' and len(body['items']) == 1
+    with factory() as db:
+        assert db.get(ProcessingJob, first['id']).status == 'failed'
+        assert db.get(ProcessingJob, retry.json()['id']).status == 'needs_review'

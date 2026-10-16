@@ -225,3 +225,14 @@ def test_non_collision_cache_integrity_failure_is_not_silenced(platform, monkeyp
     with factory() as db:
         assert db.get(ProcessingJob, job_id).status == 'failed'
         assert db.scalar(select(func.count()).select_from(DocumentInterpretation)) == 0
+
+
+def test_assessment_diagnostics_use_fixed_reason_without_source_or_model_payload(caplog):
+    from services.assessment_errors import AssessmentValidationError
+    error = AssessmentValidationError('assessment_evidence_quote')
+    set_stage('assessment_validate')
+    log_failure(error, job_id='synthetic-job')
+    entry = entries(caplog)[0]
+    assert entry['validation_code'] == 'assessment_evidence_quote'
+    assert entry['stage'] == 'assessment_validate'
+    assert error.user_message not in caplog.text  # Logs carry codes, not prose or exception messages.

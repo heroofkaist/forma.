@@ -33,6 +33,20 @@ kind/submission; reading and grading have distinct version counters. Local detec
 jobs do not consume that model-job allowance. Every stage still uses the existing
 hard dollar caps. Partial/failed reading never produces invented scores.
 
+A provider can contradict itself by returning a numeric score (including zero)
+while marking source evidence missing/insufficient or supplying no quote. Before
+strict validation, the application withholds only that score, marks its finding
+insufficient and adds a visible explanation. Other criteria retain their validated
+scores. This never fills or increases a score, invents evidence, remaps identities
+or relaxes source/quote checks. The reconciled result and per-criterion diagnostic
+notes are saved/checkpointed with no second model request. Existing completed
+results remain available through GET without inference.
+
+Other contract failures keep fixed diagnostic codes and teacher-facing hints;
+logs contain only allowlisted codes, never source/model content or exception
+messages. An explicit retry after a failed assessment creates a new bounded job;
+reloading a failed or completed report does not retry it automatically.
+
 Strategies cover problem sets, essays, lab/research reports, slides, programming,
 homework and general documents. Slide assessment cannot judge oral delivery and
 code is never executed. Different question batches receive their own observed answers;

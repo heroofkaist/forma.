@@ -379,3 +379,54 @@ def test_pipeline_exposes_paused_reading_and_resumes_only_with_available_budget(
         assert db.get(ProcessingJob, parent.id).status == 'queued'
         assert db.scalar(select(func.count()).select_from(AssessmentSuggestion)) == 0
         assert db.scalar(select(func.count()).select_from(AcademicGrade)) == 0
+
+
+@pytest.mark.parametrize('contradiction', ['missing_evidence', 'insufficient_finding', 'no_quote'])
+def test_conflicting_score_is_withheld_without_losing_other_criteria_or_calling_again(monkeypatch, contradiction):
+    import json
+    from services.assessment import evaluate, reconcile_score_evidence
+    from services.ai_providers.engine import configuration
+    rubric = {'category': 'lab_report', 'instructions': 'Solve the four numbered tasks.', 'reference_material': '',
+        'criteria': [{'question_id': 'q1', 'criterion_id': f'c{i}', 'description': f'{i} задача', 'maximum_points': 25} for i in range(1, 5)]}
+    source = {'sections': [{'id': 'p1-s1', 'page_number': 1, 'question_id': 'q1',
+        'transcription': 'Problem 1: F = ma. Problem 2: W = Fd. Problem 3: P = W/t.', 'readability': 'readable'}]}
+    raw = suggestion(rubric, source)
+    raw['criteria'][0]['proposed_score'] = 0  # A supported real zero stays zero.
+    raw['criteria'][1]['proposed_score'] = 21
+    bad = raw['criteria'][3]
+    bad['proposed_score'] = 0  # Production trigger: zero with unavailable source, not an observed wrong solution.
+    if contradiction == 'missing_evidence': bad['missing_evidence'] = ['Ответ на задачу 4 не найден.']
+    elif contradiction == 'insufficient_finding': bad['finding'] = 'insufficient_evidence'
+    else: bad['evidence'] = []
+    before = copy.deepcopy(raw)
+    with pytest.raises(ValueError): validate_assessment(raw, rubric, source)
+    calls = []
+    def complete(*args, **kwargs):
+        calls.append(True)
+        return {'done': True, 'done_reason': 'stop', 'message': {'content': json.dumps(raw)}}
+    monkeypatch.setattr('services.ai_providers.ollama.structured_completion', complete)
+    snapshot = {'rubric': rubric, 'title': 'Midterm', 'source': source, 'source_limitations': {}}
+    checkpoints = []
+    first, usage = evaluate(snapshot, configuration('ollama'), checkpoint=lambda chunks: checkpoints.extend(copy.deepcopy(chunks[len(checkpoints):])))
+    assert [c['proposed_score'] for c in first['criteria']] == [0, 21, 1, None]
+    assert first['criteria'][3]['finding'] == 'insufficient_evidence'
+    assert first['criteria'][3]['uncertainty'][0].startswith('Балл модели снят:')
+    assert usage['validation_notes'] == [{'question_id': 'q1', 'criterion_id': 'c4', 'code': 'score_withheld_insufficient_evidence'}]
+    again, resumed_usage = evaluate(snapshot, configuration('ollama'), checkpoints=checkpoints)
+    assert again == first and len(calls) == 1 and resumed_usage['validation_notes'] == usage['validation_notes']
+    assert raw == before  # Never mutate the source response in place.
+    assert reconcile_score_evidence(first) == (first, [])
+
+
+def test_score_reconciliation_does_not_approve_invented_evidence_or_identifiers():
+    from services.assessment import reconcile_score_evidence
+    from services.assessment_errors import AssessmentValidationError
+    rubric = {'criteria': [{'question_id': 'q1', 'criterion_id': 'c1', 'maximum_points': 5}]}
+    source = {'sections': [{'id': 's1', 'page_number': 1, 'transcription': 'F = ma.', 'readability': 'readable'}]}
+    for patch, reason in [({'evidence': [{'section_id': 's1', 'page_number': 1, 'quote': 'invented proof'}]}, 'assessment_evidence_quote'),
+                          ({'criterion_id': 'invented'}, 'assessment_criteria_mismatch'), ({'proposed_score': 6}, 'assessment_score_out_of_range')]:
+        raw = suggestion(rubric, source); raw['criteria'][0].update(patch)
+        normalized, notes = reconcile_score_evidence(raw)
+        assert not notes
+        with pytest.raises(AssessmentValidationError) as error: validate_assessment(normalized, rubric, source)
+        assert error.value.reason == reason

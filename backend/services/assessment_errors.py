@@ -1,0 +1,21 @@
+"""Fixed diagnostics only: no model output, student text or provider messages."""
+
+MESSAGES = {
+    'assessment_criteria_mismatch': 'Модель вернула неполный или повторяющийся набор критериев. Повторите проверку.',
+    'assessment_score_out_of_range': 'Балл модели превышает максимум критерия. Повторите проверку или выставьте балл вручную.',
+    'assessment_evidence_source': 'Модель сослалась на недоступный фрагмент работы. Повторите проверку.',
+    'assessment_evidence_question': 'Модель использовала ответ на другой вопрос. Повторите проверку.',
+    'assessment_evidence_task': 'Модель использовала решение другой задачи. Повторите проверку.',
+    'assessment_evidence_quote': 'Цитату модели не удалось подтвердить в распознанном ответе. Проверьте распознавание или повторите оценивание.',
+    'assessment_score_without_evidence': 'Модель выставила балл при недостаточных данных. Этот критерий требует ручной проверки.',
+    'assessment_completion_incomplete': 'Ответ модели оборвался до завершения оценки. Повторите проверку.',
+    'assessment_checkpoint_mismatch': 'Сохранённая часть проверки относится к другой версии данных. Запустите новую проверку.',
+    'assessment_task_incomplete': 'Модели переданы не все условия задания. Проверьте материалы задания и оцените работу вручную.',
+}
+
+
+class AssessmentValidationError(ValueError):
+    def __init__(self, reason):
+        self.reason = reason
+        self.user_message = MESSAGES[reason]
+        super().__init__(self.user_message)

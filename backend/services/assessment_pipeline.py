@@ -56,7 +56,9 @@ def activate_waiting(db):
 
 
 def job_state(db, job):
+    from services.assessment_errors import MESSAGES
     parent = db.get(ProcessingJob, job.context.get('depends_on')) if job.status == 'awaiting_source' else None
     paused = parent if parent and parent.status == 'awaiting_budget' else job
-    return {'id': job.id, 'status': paused.status, 'error': paused.error}
+    return {'id': job.id, 'status': paused.status, 'error': paused.error,
+        'error_hint': MESSAGES.get(paused.error_class)}
 
