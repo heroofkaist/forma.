@@ -49,7 +49,7 @@ def test_one_contract_all_strategies_and_no_invented_evidence():
     source = {'sections': [{'id': 's1', 'page_number': 1, 'transcription': 'F = m / a = 2 N', 'readability': 'readable'}]}
     rubric = {'criteria': [{'question_id': 'q1', 'criterion_id': 'c1', 'maximum_points': 5}]}
     valid = suggestion(rubric, source)
-    assert set(STRATEGIES) == {'problem_set', 'essay', 'lab_report'}
+    assert set(STRATEGIES) == {'problem_set', 'essay', 'lab_report', 'research_report', 'presentation', 'programming', 'general', 'homework'}
     assert validate_assessment(valid, rubric, source)['criteria'][0]['verification_status'] == 'needs_review'
     for mutation in [
         {'proposed_score': 6}, {'proposed_score': float('nan')}, {'verification_status': 'teacher_confirmed'},
@@ -120,7 +120,7 @@ def test_authorization_approval_and_format_boundaries(assessed):
         assert client.post(route, headers=student, json=body).status_code == 403
     with factory() as db:
         submission = db.get(AcademicSubmission, sid); submission.file_type = 'pptx'; db.commit()
-    assert client.post(path, headers=teacher, json={}).status_code == 422
+    assert client.post(path, headers=teacher, json={}).status_code == 202
     with factory() as db:
         db.get(AcademicSubmission, sid).file_type = 'pdf'
         approved = db.scalar(select(AssessmentRubric)); db.delete(approved); db.commit()
@@ -212,9 +212,11 @@ def test_rubric_draft_requires_explicit_approval_and_failed_output_not_saved(ass
     assert client.post(rubric_path + '/draft', headers=teacher, json=spec).status_code == 422
 
 
-def test_future_categories_are_explicitly_unsupported():
+def test_additional_categories_have_explicit_static_reasoning_limits():
     from scripts.assessment_fixtures import FUTURE_CASES
-    assert {c['category'] for c in FUTURE_CASES}.isdisjoint(STRATEGIES)
+    assert {c['category'] for c in FUTURE_CASES}.issubset(STRATEGIES)
+    assert 'never executed' in STRATEGIES['programming'].guidance
+    assert 'speaking' in STRATEGIES['presentation'].guidance
     assert any('FAILED' in c['text'] for c in FUTURE_CASES)
 
 
@@ -284,4 +286,4 @@ def test_migration_009_upgrades_old_schema_without_rewriting_sources(assessed):
     with factory() as db:
         assert db.get(AcademicSubmission, sid).file_name == 'synthetic.pdf'
         assert db.scalar(select(func.count()).select_from(DocumentInterpretation)) == 1
-        assert db.scalar(select(func.count()).select_from(SchemaMigration)) == 14
+        assert db.scalar(select(func.count()).select_from(SchemaMigration)) == 15

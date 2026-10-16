@@ -30,6 +30,12 @@ class CorrectRequest(BaseModel):
 def job_json(job):
     return {'id':job.id,'status':job.status,'stage':job.stage,'attempts':job.attempts,'error':job.error,'error_class':job.error_class,'created_at':utc(job.created_at),'updated_at':utc(job.updated_at),'provider':job.context.get('ai',{}).get('name','gemini'),'partial':bool(job.usage.get('partial')),'model':job.model,'prompt_version':job.prompt_version,'usage':job.usage}
 
+
+def analysis_questions(assignment, job):
+    current = {q['id']:q for q in assignment.questions}
+    saved = job.context['questions'] if job else assignment.questions
+    return [{**current.get(q['id'],{}),**q,'criteria':current.get(q['id'],q).get('criteria',[])} for q in saved]
+
 @router.post('/{submission_id}',status_code=202)
 def analyze(submission_id: str,payload: AnalyzeRequest,request:Request):
     user=request_user(request)
@@ -94,7 +100,9 @@ def interpretation(submission_id:str,request:Request):
             corrections=db.scalars(select(InterpretationCorrection).where(InterpretationCorrection.interpretation_id==row.id).order_by(InterpretationCorrection.created_at.desc())).all()
             items.append({'id':row.id,'job_id':row.job_id,'original':row.result,'created_at':utc(row.created_at),'corrections':[{'id':correction.id,'result':correction.result,'confirmed':correction.confirmed,'reviewer':correction.reviewer,'created_at':utc(correction.created_at)} for correction in corrections]})
         job = db.get(ProcessingJob, rows[0].job_id) if rows else None
-        return {'items':items,'questions':job.context['questions'] if job else assignment.questions}
+        from services.assignment_context import answer_groups
+        questions = analysis_questions(assignment, job)
+        return {'items':items,'questions':questions,'answer_groups':answer_groups(questions,assignment.assignment_type)}
 
 @router.post('/{submission_id}/corrections',status_code=201)
 def correct(submission_id:str,payload:CorrectRequest,request:Request):
@@ -105,7 +113,7 @@ def correct(submission_id:str,payload:CorrectRequest,request:Request):
         if not row or row.submission_id != submission_id: raise HTTPException(404,'Interpretation not found for this submission.')
         structure=db.get(SubmissionDocument,submission_id).structure
         visual=[section['page_number'] for section in row.result['sections'] if section['evidence_kind']=='visual_page']
-        try: result=validate_result(payload.result.model_dump(),structure,db.get(ProcessingJob,row.job_id).context['questions'],visual,teacher=True)
+        try: result=validate_result(payload.result.model_dump(),structure,analysis_questions(assignment,db.get(ProcessingJob,row.job_id)),visual,teacher=True)
         except ValueError as error: raise HTTPException(422,str(error)) from error
         correction=InterpretationCorrection(interpretation_id=row.id,reviewer=user.username,result=result,confirmed=payload.confirmed)
         db.add(correction); db.flush()

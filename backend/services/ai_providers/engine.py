@@ -1,7 +1,7 @@
 """Small provider registry; jobs snapshot provider/config, never fail over."""
 import os
 import ai_budget
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from typing import Callable, Protocol
 from services.document_understanding import PROMPT_VERSION, gemini_interpret, limit
 from services.ai_grader import configured_model
@@ -24,6 +24,7 @@ class DocumentRequest:
     document_type: str
     config: ProviderConfig
     job_id: str | None = None
+    assignment_context: dict = field(default_factory=dict)
 
 
 class Provider(Protocol):
@@ -53,7 +54,7 @@ def configuration(name=None):
         endpoint = os.getenv('FORMA_OPENROUTER_ENDPOINT', '')
         if model != MODEL or not re.fullmatch(r'[a-z0-9_-]+/[a-z0-9_.-]+', endpoint):
             raise ValueError('OpenRouter requires the exact Qwen model and one explicit approved endpoint slug.')
-        return ProviderConfig(name, model, 'qwen-cloud-v1', {
+        return ProviderConfig(name, model, 'qwen-cloud-v2-assignment', {
             'endpoint': endpoint, 'pages': limit('FORMA_OPENROUTER_MAX_PAGES', 3, 3),
             'batch_pages': limit('FORMA_OPENROUTER_BATCH_PAGES', 3, 3),
             'image_edge': limit('FORMA_OPENROUTER_IMAGE_EDGE', 1120, 1400),
@@ -63,7 +64,7 @@ def configuration(name=None):
             'completion_price_cap': os.getenv('FORMA_OPENROUTER_MAX_COMPLETION_USD_PER_MILLION', '0.75')})
     if name == 'ollama':
         from .ollama import local_base_url
-        return ProviderConfig(name, os.getenv('FORMA_OLLAMA_MODEL', 'qwen3-vl:8b-instruct'), 'qwen-document-v1', {
+        return ProviderConfig(name, os.getenv('FORMA_OLLAMA_MODEL', 'qwen3-vl:8b-instruct'), 'qwen-document-v2-assignment', {
             'base_url': local_base_url(os.getenv('FORMA_OLLAMA_BASE_URL', 'http://127.0.0.1:11434')),
             'pages': limit('FORMA_OLLAMA_MAX_PAGES', 3, 6),
             'batch_pages': limit('FORMA_OLLAMA_BATCH_PAGES', 1, 2),
@@ -85,7 +86,7 @@ def config_for_job(context, model, version):
 
 
 def interpret_document(content, file_type, structure, questions, document_type, config,
-                       progress=None, observe=None, job_id=None):
+                       progress=None, observe=None, job_id=None, assignment_context=None):
     if config.name == 'ollama':
         from .ollama import OllamaProvider
         provider: Provider = OllamaProvider()
@@ -97,11 +98,12 @@ def interpret_document(content, file_type, structure, questions, document_type, 
     else:
         raise ValueError('Unsupported persisted AI provider.')
     return provider.interpret(DocumentRequest(content, file_type, structure, questions,
-                                             document_type, config, job_id), progress, observe)
+                                             document_type, config, job_id, assignment_context or {}), progress, observe)
 
 
 def assessment_configuration():
-    name = os.getenv('FORMA_ASSESSMENT_PROVIDER', 'ollama').strip().lower()
+    selected = os.getenv('FORMA_AI_PROVIDER', 'ollama').strip().lower()
+    name = os.getenv('FORMA_ASSESSMENT_PROVIDER', selected if selected in {'ollama', 'openrouter'} else 'ollama').strip().lower()
     if name not in {'ollama', 'openrouter'}:
         raise ValueError('Assessment requires explicitly selected Ollama or OpenRouter; no fallback.')
     config = configuration(name)

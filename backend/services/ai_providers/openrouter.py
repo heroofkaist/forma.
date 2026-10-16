@@ -109,10 +109,10 @@ class OpenRouterProvider:
         return self._run(request.config, request.job_id,
             lambda chat: interpret_pages(request, chat, progress, observe))
 
-    def complete(self, config, job_id, schema, system, context, progress=None):
+    def complete(self, config, job_id, schema, system, context, progress=None, images=None):
         def run(chat):
             if progress: progress()
-            result = chat([], context, config.options['timeout'])
+            result = chat(images or [], context, config.options['timeout'])
             if progress: progress()
             return result
         return self._run(config, job_id, run, schema, system)

@@ -21,7 +21,7 @@ test('whole-file report keeps Qwen concepts separate from file percentage and li
  const {ComparisonReport}=load('src/components/assignment/comparison-report.tsx',{'next/link':link,'../../lib/assignment-workspace':lib});
  const html=render(React.createElement(ComparisonReport,{result}));
  for(const text of ['75%','40%','Содержание · Qwen','First.pdf','Second.pdf','2 стр. / разделов','4 стр. / разделов'])assert.ok(html.includes(text),text);
- assert.match(html,/\/teacher\/compare\/a\/b/);assert.match(html,/review\?page=2/);assert.match(html,/&lt;script&gt;source&lt;\/script&gt;/);assert.doesNotMatch(html,/<script>/);
+ assert.match(html,/\/teacher\/compare\/a\/b/);assert.match(html,/rightPage=2/);assert.match(html,/&lt;script&gt;source&lt;\/script&gt;/);assert.doesNotMatch(html,/<script>/);
 });
 test('register renders separate file similarity and AI detector for each submitted work',()=>{
  const {IntegritySignal}=load('src/components/assignment/integrity-signal.tsx',{'next/link':link,'../../lib/platform':{},'../../lib/document-integrity':integrity});
@@ -32,13 +32,12 @@ test('register renders separate file similarity and AI detector for each submitt
 test('side-by-side view opens PDF pages and readable Office sections without claiming rendered Office layouts',()=>{
  for(const file_type of ['pdf','docx']){
   const source={student_name:'Ada',file_name:`Source.${file_type}`,file_type,structure:{pages:[{number:1,text:'A source passage <script>untrusted</script>'}]}};
-  const {default:Compare}=load('src/app/teacher/compare/[leftId]/[rightId]/page.tsx',{
-   react:{...React,useEffect(){},useState:initial=>[initial===null?source:initial,()=>{}]},
-   'next/link':link,'next/navigation':{useParams:()=>({leftId:'a',rightId:'b'})},
-   '../../../../../components/app-shell':{AppShell:({children})=>React.createElement('main',null,children)},
-   '../../../../../components/review/document-viewer':{DocumentViewer:({submissionId})=>React.createElement('div',null,`PDF original ${submissionId}`)},
-   '../../../../../lib/platform':{},'../../../../../lib/api':{}
+  const {ArchiveOriginal}=load('src/components/assignment/archive-original.tsx',{
+   react:{...React,useEffect(){},useState:initial=>[initial===null?{...source,can_review:true}:initial,()=>{}]},
+   'next/link':link,'../review/document-viewer':{DocumentViewer:({submissionId})=>React.createElement('div',null,`PDF original ${submissionId}`)},
+   '../../lib/platform':{},'../../lib/api':{}
   });
+  const Compare=()=>React.createElement(React.Fragment,null,React.createElement(ArchiveOriginal,{id:'a'}),React.createElement(ArchiveOriginal,{id:'b'}));
   const html=render(React.createElement(Compare));
   assert.match(html,/Source\./);assert.match(html,/\/teacher\/submissions\/a\/review/);assert.match(html,/\/teacher\/submissions\/b\/review/);
   if(file_type==='pdf'){assert.match(html,/PDF original a/);assert.match(html,/PDF original b/);}

@@ -757,7 +757,7 @@ def _normalize_questions(
                     "partial_credit": criterion.get("partial_credit", ""),
                 }
             )
-        if criteria and sum(row["maximum_points"] for row in criteria) > item["maximum_points"]:
+        if criteria and sum(row["maximum_points"] for row in criteria) > item["maximum_points"] + 1e-6:
             raise HTTPException(status_code=422, detail="Rubric criteria exceed the question maximum.")
         if not criteria:
             criteria = [
@@ -885,12 +885,14 @@ def _compare_submission_pairs(
         return []
     offering = db.get(CourseOffering, assignment.offering_id)
     family = db.get(AssignmentFamily, assignment.family_id)
+    from course_archive import course_ids
+    archive_ids = course_ids(db, offering.course_id)
     candidate_rows = db.scalars(
         select(AcademicSubmission)
         .join(AcademicAssignment, AcademicSubmission.assignment_id == AcademicAssignment.id)
         .join(CourseOffering, AcademicAssignment.offering_id == CourseOffering.id)
         .where(
-            CourseOffering.course_id == offering.course_id,
+            CourseOffering.course_id.in_(archive_ids),
             AcademicSubmission.id != submission.id,
             AcademicSubmission.student_id != submission.student_id,
         )
@@ -924,14 +926,13 @@ def _compare_submission_pairs(
     elif assignment.originality_scope == "course":
         matches = family_matches + course_matches
     else:
-        matches = family_matches or course_matches
+        matches = family_matches + course_matches
     scope = "assignment_family" if matches and matches[0][0].assignment_id in {
         row[0].assignment_id for row in family_matches
     } else "course"
     receipt = db.get(OriginalityAnalysis, submission.id)
     receipt.candidate_count = (compared_family if assignment.originality_scope == "family" else
-                              compared_family + compared_course if assignment.originality_scope == "course" else
-                              compared_family if family_matches else compared_family + compared_course)
+                              compared_family + compared_course)
     receipt.status = "completed" if receipt.candidate_count > 0 else "no_sources"
     reports = []
     for candidate, matched, eligible, evidence in matches:
@@ -939,7 +940,7 @@ def _compare_submission_pairs(
             submission_id=submission.id,
             candidate_submission_id=candidate.id,
             assignment_family_id=family.id,
-            match_scope=scope,
+            match_scope="assignment_family" if db.get(AcademicAssignment, candidate.assignment_id).family_id == family.id else "course",
             match_ratio=round(matched / eligible, 6) if eligible else 0,
             eligible_token_count=eligible,
             matched_token_count=matched,
@@ -952,17 +953,27 @@ def _compare_submission_pairs(
     return reports
 
 
-def _compare_submission(db: Session, submission: AcademicSubmission) -> list[OriginalityReport]:
+def _compare_submission(db: Session, submission: AcademicSubmission, force=False) -> list[OriginalityReport]:
     assignment = db.get(AcademicAssignment, submission.assignment_id)
-    existing = db.get(OriginalityAnalysis, submission.id)
-    if existing:
-        return list(db.scalars(select(OriginalityReport).where(OriginalityReport.submission_id == submission.id)))
+    from course_archive import corpus_fingerprint, current_reports
+    from course_archive_models import OriginalityCorpusSnapshot
+    # Preserve historical reports and teacher decisions; each corpus revision has its own report set.
+    db.scalar(select(AcademicSubmission).where(AcademicSubmission.id == submission.id).with_for_update())
+    key = corpus_fingerprint(db, submission)
+    snapshot = db.get(OriginalityCorpusSnapshot, submission.id)
+    receipt = db.get(OriginalityAnalysis, submission.id)
+    if snapshot: db.refresh(snapshot)
+    if receipt: db.refresh(receipt)
+    if receipt and snapshot and snapshot.fingerprint == key and not force:
+        return current_reports(db, submission.id)
     tokens = len(_tokens(submission.extracted_text)[0])
-    receipt = OriginalityAnalysis(submission_id=submission.id, status="analyzing",
-                                 eligible_token_count=tokens, candidate_count=0,
-                                 scope=assignment.originality_scope if assignment else "")
-    db.add(receipt)
+    if not receipt:
+        receipt = OriginalityAnalysis(submission_id=submission.id, status="analyzing", scope=assignment.originality_scope)
+        db.add(receipt)
+    receipt.status = "analyzing"; receipt.eligible_token_count = tokens; receipt.candidate_count = 0; receipt.report_count = 0
+    receipt.scope = assignment.originality_scope
     db.flush()
+    reports = []
     if not assignment or not assignment.originality_enabled:
         receipt.status = "disabled"
     elif tokens < MIN_MATCH_TOKENS:
@@ -972,13 +983,16 @@ def _compare_submission(db: Session, submission: AcademicSubmission) -> list[Ori
             with db.begin_nested():
                 reports = _compare_submission_pairs(db, submission)
             receipt.completed_at = now_utc()
-            return reports
         except Exception:
             logging.getLogger(__name__).error("Deterministic similarity failed for submission %s", submission.id)
             receipt.status = "failed"
     receipt.completed_at = now_utc()
+    if snapshot:
+        snapshot.fingerprint = key; snapshot.report_ids = [r.id for r in reports]
+    else:
+        db.add(OriginalityCorpusSnapshot(submission_id=submission.id, fingerprint=key, report_ids=[r.id for r in reports]))
     db.flush()
-    return []
+    return reports
 
 
 def _valid_similarity_report(report, submission, candidate):
@@ -1035,7 +1049,7 @@ def _report_json(db: Session, report: OriginalityReport) -> dict:
         "submission_id": report.submission_id,
         "candidate_submission_id": report.candidate_submission_id,
         "student_id": submission.student_id if submission else None,
-        "candidate_student_id": candidate.student_id if candidate else None,
+        "candidate_student_id": candidate.student_id if candidate and candidate_course and course and candidate_course.id == course.id else None,
         "assignment_family_id": report.assignment_family_id,
         "match_scope": report.match_scope,
         "match_ratio": report.match_ratio if valid else None,
@@ -1647,6 +1661,9 @@ def teacher_originality(
         if review_status:
             query = query.where(OriginalityReport.review_status == review_status)
         reports = db.scalars(query).all()
+        from course_archive_models import OriginalityCorpusSnapshot
+        snapshots = {r.submission_id: set(r.report_ids) for r in db.scalars(select(OriginalityCorpusSnapshot))}
+        reports = [r for r in reports if r.submission_id not in snapshots or r.id in snapshots[r.submission_id]]
         if auth_required():
             user = request_user(request)
             reports = [report for report in reports if can_teach(db, user, db.get(CourseOffering, db.get(AcademicAssignment, db.get(AcademicSubmission, report.submission_id).assignment_id).offering_id).course_id)]
@@ -1664,11 +1681,9 @@ def submission_originality(submission_id: str) -> dict:
         submission = db.get(AcademicSubmission, submission_id)
         if submission is None:
             raise HTTPException(status_code=404, detail="Submission not found.")
-        reports = db.scalars(
-            select(OriginalityReport)
-            .where(OriginalityReport.submission_id == submission_id)
-            .order_by(OriginalityReport.match_ratio.desc())
-        ).all()
+        from course_archive import refresh_similarity
+        reports = refresh_similarity(db, submission)
+        db.commit()
         items = [_report_json(db, r) for r in reports]
         receipt = db.get(OriginalityAnalysis, submission_id)
         from similarity_status import similarity_summary
@@ -1687,6 +1702,15 @@ def submission_originality(submission_id: str) -> dict:
             "match_scope": receipt.scope if receipt else (reports[0].match_scope if reports else assignment.originality_scope),
             "created_at": _timestamp(receipt.completed_at) if receipt else (_timestamp(reports[0].created_at) if reports else None),
         }}
+
+
+@router.post("/submissions/{submission_id}/originality/recheck")
+def recheck_originality(submission_id: str):
+    with SessionLocal() as db:
+        row = db.get(AcademicSubmission, submission_id)
+        if not row: raise HTTPException(404, 'Submission not found.')
+        _compare_submission(db, row, force=True); db.commit()
+    return submission_originality(submission_id)
 
 
 @router.patch(

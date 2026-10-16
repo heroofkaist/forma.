@@ -29,11 +29,11 @@ test('template upload persists file and required policy and recovers a lost resp
 test('failed template upload keeps the created assignment and retries attachment without duplicate assignment or double clicks',async()=>{
  const slots=[];let cursor,tree,created=0,uploads=0,completed=0,finish;
  const hooks={...React,useState:init=>{const i=cursor++;if(!(i in slots))slots[i]=init;return[slots[i],v=>{slots[i]=typeof v==='function'?v(slots[i]):v;}];},useRef:init=>{const i=cursor++;return slots[i]??(slots[i]={current:init});}};
- const {AssignmentCreateForm}=load('src/components/assignment-create-form.tsx',{react:hooks,'../lib/assignment-preflight':load('src/lib/assignment-preflight.ts'),'../lib/academic':{academicApi:{createAssignment:async()=>{created++;return{id:'a'};}}},'../lib/assignment-template':{templateFileError:()=>null,uploadAssignmentTemplate:async(...args)=>{uploads++;assert.equal(args[1],'a');assert.equal(args[3],true);if(uploads===1)return await new Promise((resolve,reject)=>{finish={resolve,reject};});}}});
+ const {AssignmentCreateForm}=load('src/components/assignment-create-form.tsx',{react:hooks,'../lib/assignment-brief':{},'./task-rubric-editor':load('src/components/task-rubric-editor.tsx'),'../lib/assignment-preflight':load('src/lib/assignment-preflight.ts'),'../lib/academic':{academicApi:{createAssignment:async()=>{created++;return{id:'a'};}}},'../lib/assignment-template':{templateFileError:()=>null,uploadAssignmentTemplate:async(...args)=>{uploads++;assert.equal(args[1],'a');assert.equal(args[3],true);if(uploads===1)return await new Promise((resolve,reject)=>{finish={resolve,reject};});}}});
  const props={offeringId:'offering',onCreated:id=>{assert.equal(id,'a');completed++;}};
  const view=()=>render(React.createElement(()=>{cursor=0;tree=AssignmentCreateForm(props);return tree;}));
  view();find(tree,n=>n.type==='input'&&n.props.required&&n.props.type===undefined).props.onChange({target:{value:'Synthetic task'}});view();
- find(tree,n=>n.type==='input'&&n.props.type==='file').props.onChange({target:{files:[new File(['synthetic'],'Template.pdf')]}});view();
+ find(tree,n=>n.type==='input'&&n.props['aria-label']==='Файл шаблона').props.onChange({target:{files:[new File(['synthetic'],'Template.pdf')]}});view();
  find(tree,n=>n.type==='input'&&n.props.type==='checkbox'&&n.props.checked===false).props.onChange({target:{checked:true}});view();
  const submit=()=>find(tree,n=>n.type==='form').props.onSubmit({preventDefault(){}});
  submit();submit();await tick();assert.equal(created,1);assert.equal(uploads,1);assert.equal(completed,0);

@@ -103,6 +103,9 @@ export type SimilarityReport = {
 };
 
 export type ArchiveSubmission = {
+  can_review?: boolean;
+  instructor?: string;
+  course_id?: string;
   similarity?: import("./assignment-workspace").TextSimilarity;
   integrity?: import("./document-integrity").IntegritySummary;
   student_name: string;
@@ -250,19 +253,9 @@ export const academicApi = {
     const response = await request<{ submission_id: string; analysis: Record<string, unknown>; items: Record<string, unknown>[] }>(`/academic/submissions/${submissionId}/originality`);
     return normalizeSimilarityResult(response);
   },
+  recheckOriginality: async (submissionId:string) => normalizeSimilarityResult(await request(`/academic/submissions/${submissionId}/originality/recheck`,json({}))),
   reviewOriginality: (reportId: string, payload: { review_status: string; teacher_notes: string }) =>
     request<SimilarityReport>(`/academic/reports/${reportId}/review`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }),
-  archive: async (query = "") =>
-    {
-      const offerings = await academicApi.offerings();
-      const assignments = offerings.flatMap((offering) => (offering.assignments ?? []).map((assignment) => ({ offering, assignment })));
-      const pages = await Promise.all(assignments.map(async ({ offering, assignment }) =>
-        unwrap(await request<{ items?: ArchiveSubmission[] } | ArchiveSubmission[]>(`/academic/teacher/assignments/${assignment.id}/archive`))
-          .map((item) => ({ ...item, course_name: offering.course_name, course_code: offering.course_code })),
-      ));
-      const normalizedQuery = query.trim().toLocaleLowerCase("ru-RU");
-      const unique = new Map(pages.flat().map((item) => [item.submission_id, item]));
-      return [...unique.values()].filter((item) => !normalizedQuery || `${item.course_name} ${item.course_code} ${item.assignment_title} ${item.academic_year} ${item.term} ${item.file_name} ${item.file_type} ${item.extracted_text}`.toLocaleLowerCase("ru-RU").includes(normalizedQuery));
-    },
+  archive: async (query = "", courseId = "") => unwrap(await request<{items:ArchiveSubmission[]}>(`/api/course-archive/search?${new URLSearchParams({query,...(courseId?{course_id:courseId}:{})})}`)),
   publish: (assignmentId: string) => request<Record<string, unknown>>(`/academic/assignments/${assignmentId}/publish`, { method: "POST" }),
 };

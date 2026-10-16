@@ -172,7 +172,7 @@ def test_resume_after_verified_receipt_preserves_job_attempts_and_authorization(
 
 
 @pytest.mark.parametrize('mode,expected', [('success', 'needs_review'), ('invalid_evidence', 'failed'),
-    ('invalid_json', 'failed'), ('timeout', 'awaiting_budget'), ('no_cost', 'needs_review')])
+    ('invalid_json', 'failed'), ('timeout', 'awaiting_budget'), ('no_cost', 'awaiting_budget')])
 def test_cloud_assessment_full_workflow_shared_ledger(cloud, platform, monkeypatch, mode, expected):
     client, factory, teacher, student, sid, spec, calls = cloud_assessment_fixture(platform, monkeypatch)
     from assessment_models import AssessmentSuggestion
@@ -191,7 +191,7 @@ def test_cloud_assessment_full_workflow_shared_ledger(cloud, platform, monkeypat
         job = db.get(ProcessingJob, job_id)
         assert job.status == expected and job.context['ai']['name'] == 'openrouter'
         charges = db.scalars(select(AIRequestCharge)).all()
-        assert len(charges) == 2 and {c.provider for c in charges} == {'openrouter'}
+        assert len(charges) == (3 if mode=='success' else 2) and {c.provider for c in charges} == {'openrouter'}
         assert {c.model for c in charges} == {MODEL}
         charge = next(c for c in charges if c.job_id == job_id)
         assert charge.reserved_nusd == ai_budget.HARD_JOB
@@ -217,8 +217,10 @@ def test_cloud_assessment_full_workflow_shared_ledger(cloud, platform, monkeypat
     assert client.get('/academic/student/grades', headers=student).json()['items'] == []
 
 
-def test_assessment_provider_selection_is_explicit(cloud, monkeypatch):
+def test_assessment_provider_inherits_existing_selected_provider_without_fallback(cloud, monkeypatch):
     monkeypatch.delenv('FORMA_ASSESSMENT_PROVIDER', raising=False)
+    assert engine.assessment_configuration().name == 'openrouter'
+    monkeypatch.setenv('FORMA_ASSESSMENT_PROVIDER', 'ollama')
     assert engine.assessment_configuration().name == 'ollama'
     monkeypatch.setenv('FORMA_ASSESSMENT_PROVIDER', 'gemini')
     with pytest.raises(ValueError): engine.assessment_configuration()

@@ -10,6 +10,7 @@ export function QuestionReviewNavigation({data, question, onQuestion}: {data:Rev
   useEffect(()=>{let active=true;setQueue(null);setError(false);if(question)void platformRequest<QuestionQueue>(`/api/review-pilot/assignments/${data.assignment_id}/question-queue?${new URLSearchParams({question_id:question})}`).then(value=>{if(active)setQueue(value);}).catch(()=>{if(active)setError(true);});return()=>{active=false;};},[data.assignment_id,question]);
   const index=queue?.items.findIndex(item=>item.id===data.submission_id) ?? -1;
   const adjacent=[queue?.items[index-1],index>=0?queue?.items[index+1]:undefined];
+  if(data.questions.length<2)return null;
   return <div className="rw-question-navigation"><div className="rw-question-filters" role="group" aria-label="Вопросы задания"><button type="button" aria-pressed={!question} onClick={() => onQuestion("")}>Все вопросы</button>{data.questions.map(q => <button type="button" key={q.id} aria-pressed={question === q.id} onClick={() => onQuestion(q.id)}>{q.title}</button>)}</div>
     {question && <><p className="rw-muted">Показаны критерии выбранного вопроса. Сохранение учитывает всю рубрику; неполную работу сохраняйте как черновик.</p><div className="rw-pilot-links">{adjacent.map((item,i)=>item && <Link className="rw-text-button" key={item.id} href={questionReviewUrl(item.id,question,item.mapping?.pages)}>{i===0?'← Предыдущая работа':'Следующая работа →'}</Link>)}<Link href={`/teacher/assignments/${data.assignment_id}/question-review`}>Вся очередь →</Link></div>{error && <p role="alert">Очередь не загрузилась. Проверка этой работы доступна.</p>}</>}
   </div>;
@@ -25,6 +26,7 @@ export function QuestionPages({ data, busy: workspaceBusy, onPage, onDirty, init
 }) {
   const [qid, setQid] = useState(data.questions.find(q => q.id === initialQuestionId)?.id ?? data.questions[0]?.id ?? '');
   const [mappings, setMappings] = useState<PageMapping[]>([]);
+  const [suggestions,setSuggestions]=useState<{question_id:string;pages:number[];confirmed:boolean}[]>([]);
   const [pages, setPages] = useState<number[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -47,8 +49,8 @@ export function QuestionPages({ data, busy: workspaceBusy, onPage, onDirty, init
     if (dirty || busy) return;
     setBusy(true); setError(''); setMessage('');
     try {
-      const result = await platformRequest<{ items: PageMapping[] }>(`/api/review-pilot/submissions/${data.submission_id}/pages`);
-      setMappings(result.items);
+      const result = await platformRequest<{ items: PageMapping[]; suggestions?:{question_id:string;pages:number[];confirmed:boolean}[] }>(`/api/review-pilot/submissions/${data.submission_id}/pages`);
+      setMappings(result.items);setSuggestions(result.suggestions??[]);
       setPages(result.items.find(m => m.question_id === qid)?.pages ?? []);
       setLoaded(true);
     } catch (cause) {
@@ -70,17 +72,19 @@ export function QuestionPages({ data, busy: workspaceBusy, onPage, onDirty, init
     } finally { setBusy(false); }
   }
   if (data.file_type !== 'pdf') return null;
+  if(data.questions.length<2)return <section className="rw-pilot-panel"><h3>Вся работа целиком</h3><p>В задании один общий ответ. Все страницы относятся к нему; отдельная разметка не нужна.</p><button className="rw-button" onClick={()=>onPage(1)}>Открыть начало работы</button></section>;
   const content = <>
     {!embedded && <summary>Страницы вопросов · ручная разметка</summary>}
-    <p className="rw-muted">Страницы отмечает преподаватель. Автоматических предположений о расположении ответа нет. Разметка нужна для очереди одного вопроса.</p>
-    <button className="rw-button" disabled={busy || workspaceBusy || dirty} onClick={() => void load()}>{loaded ? 'Перезагрузить разметку' : 'Загрузить разметку'}</button>
+    <p className="rw-muted">Укажите, где находится решение выбранной задачи. Это навигация по работе; баллы и критерии здесь не меняются.</p>
+    <button className="rw-button" disabled={busy || workspaceBusy || dirty} onClick={() => void load()}>{loaded ? 'Обновить' : 'Открыть страницы задач'}</button>
     {loaded && <>
-      <label>Вопрос<select value={qid} disabled={busy || workspaceBusy || dirty} onChange={e => {
+      <label>Задача<select value={qid} disabled={busy || workspaceBusy || dirty} onChange={e => {
         setQid(e.target.value);
         setPages(mappings.find(m => m.question_id === e.target.value)?.pages ?? []);
         setMessage(''); setError('');
       }}>{data.questions.map(q => <option key={q.id} value={q.id}>{q.title}</option>)}</select></label>
       {mappings.find(m => m.question_id === qid)?.stale && <p role="status">Вопрос изменён. Отметьте страницы заново.</p>}
+      {suggestions.find(s=>s.question_id===qid)?.pages.length ? <div className="rw-page-suggestion"><p>Распознавание нашло ответ на страницах {suggestions.find(s=>s.question_id===qid)!.pages.join(', ')}. Сверьте с оригиналом.</p><button className="rw-button" disabled={busy||workspaceBusy} onClick={()=>setPages(suggestions.find(s=>s.question_id===qid)!.pages)}>Использовать найденные страницы</button></div> : <p className="rw-muted">Готовой привязки пока нет. Выберите страницы ниже или запустите разбор ответов в разделе «Помощь ИИ».</p>}
       <div className="rw-page-mapping">{data.structure?.pages.map(page => <div key={page.number}>
         <label><input type="checkbox" checked={pages.includes(page.number)} disabled={busy || workspaceBusy} onChange={e => {
           setPages(current => e.target.checked ? [...current, page.number].sort((a, b) => a - b) : current.filter(n => n !== page.number));
@@ -99,5 +103,5 @@ export function QuestionPages({ data, busy: workspaceBusy, onPage, onDirty, init
     {error && <p role="alert" className="rw-alert">{error} Выбранные страницы сохранены на экране. При конфликте отмените изменения и перезагрузите разметку.</p>}
     {message && <p role="status">{message}</p>}
   </>;
-  return embedded ? <section id="rw-question-pages" ref={section} className="rw-pilot-panel"><h3 tabIndex={-1}>Выберите страницы для каждого вопроса</h3>{content}</section> : <details id="rw-question-pages" ref={section as React.RefObject<HTMLDetailsElement>} open={open} onToggle={e => setOpen(e.currentTarget.open)} className="rw-detail rw-pilot-panel">{content}</details>;
+  return embedded ? <section id="rw-question-pages" ref={section} className="rw-pilot-panel"><h3 tabIndex={-1}>Где находится решение задачи</h3>{content}</section> : <details id="rw-question-pages" ref={section as React.RefObject<HTMLDetailsElement>} open={open} onToggle={e => setOpen(e.currentTarget.open)} className="rw-detail rw-pilot-panel">{content}</details>;
 }

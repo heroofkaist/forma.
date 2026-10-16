@@ -3,8 +3,8 @@ import { memo, useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Download, Expand, ZoomOut, ZoomIn, RotateCcw, X } from "lucide-react";
 import { authenticatedResourceUrl, downloadAuthenticatedFile } from "../../lib/api";
 
-type Props = { submissionId: string; fileName: string; fileType: string; pageCount: number; page: number; onPage: (page: number) => void };
-export const DocumentViewer = memo(function DocumentViewer({ submissionId, fileName, fileType, pageCount, page, onPage }: Props) {
+type Props = { submissionId: string; fileName: string; fileType: string; pageCount: number; page: number; onPage: (page: number) => void; resourceBase?: string };
+export const DocumentViewer = memo(function DocumentViewer({ submissionId, fileName, fileType, pageCount, page, onPage, resourceBase }: Props) {
   const [source, setSource] = useState(""); const [loading, setLoading] = useState(false); const [error, setError] = useState("");
   const [pageDraft, setPageDraft] = useState(String(page));
   useEffect(() => setPageDraft(String(page)), [page]);
@@ -20,14 +20,14 @@ export const DocumentViewer = memo(function DocumentViewer({ submissionId, fileN
     let active = true; setError(""); setLoading(true);
     const found = cache.current.get(page);
     if (found) { setSource(found); setLoading(false); return; }
-    void authenticatedResourceUrl(`/api/document-review/${submissionId}/pages/${page}`).then(url => {
+    void authenticatedResourceUrl(`${resourceBase??`/api/document-review/${submissionId}`}/pages/${page}`).then(url => {
       if (!active) { URL.revokeObjectURL(url); return; }
       cache.current.set(page, url);
       while (cache.current.size > 5) { const first = cache.current.keys().next().value as number; URL.revokeObjectURL(cache.current.get(first)!); cache.current.delete(first); }
       setSource(url); setLoading(false);
     }).catch(() => { if (active) { setLoading(false); setError("Не удалось открыть страницу. Повторите загрузку или скачайте оригинал."); } });
     return () => { active = false; };
-  }, [submissionId, fileType, page, pageCount, retry]);
+  }, [submissionId, fileType, page, pageCount, retry, resourceBase]);
   useEffect(() => {
     if (!expanded) return;
     const previous = document.body.style.overflow; document.body.style.overflow = "hidden";
@@ -44,7 +44,7 @@ export const DocumentViewer = memo(function DocumentViewer({ submissionId, fileN
     document.addEventListener("keydown", keydown); expandButton.current?.focus();
     return () => { document.body.style.overflow = previous; document.removeEventListener("keydown", keydown); };
   }, [expanded]);
-  async function download() { try { await downloadAuthenticatedFile(`/api/submission-files/${submissionId}`, fileName); } catch { setError("Не удалось скачать оригинал. Повторите попытку."); } }
+  async function download() { try { await downloadAuthenticatedFile(resourceBase?`${resourceBase}/file`:`/api/submission-files/${submissionId}`, fileName); } catch { setError("Не удалось скачать оригинал. Повторите попытку."); } }
   return <section ref={panel} className={`rw-document ${expanded ? "rw-document-expanded" : ""}`} aria-label="Оригинал работы" role={expanded ? "dialog" : undefined} aria-modal={expanded || undefined}>
     <div className="rw-document-toolbar"><div className="rw-page-controls"><button className="rw-icon-button" aria-label="Предыдущая страница" disabled={page <= 1 || loading} onClick={() => onPage(page - 1)}><ArrowLeft size={17}/></button>
       <label className="rw-page-label"><span>Стр.</span><input aria-label="Страница" inputMode="numeric" value={pageDraft} disabled={!pageCount} onChange={e => setPageDraft(e.target.value)} onBlur={commitPage} onKeyDown={e => { if(e.key === 'Enter') { commitPage(); e.currentTarget.blur(); } }}/><span>/ {pageCount || "—"}</span></label>

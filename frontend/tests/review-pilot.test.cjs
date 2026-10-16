@@ -75,9 +75,9 @@ test('page mapping retains edits on conflict and reports unsaved state until sav
  const props={data:{submission_id:'s',file_type:'pdf',questions:[{id:'q1',title:'One'},{id:'q2',title:'Two'}],structure:{pages:[{number:1},{number:2}]}},busy:false,onPage:()=>{},onDirty:value=>{dirty=value;}};
  function view(){effects.length=0;const html=render(React.createElement(()=>{cursor=0;tree=QuestionPages(props);return tree;}));effects[0]();return html;}
  const button=label=>find(tree,n=>n.type==='button'&&n.props.children===label);
- view();await button('Загрузить разметку').props.onClick();view();assert.equal(dirty,false);
+ view();await button('Открыть страницы задач').props.onClick();view();assert.equal(dirty,false);
  find(tree,n=>n.type==='input'&&n.props.checked===false).props.onChange({target:{checked:true}});view();assert.equal(dirty,true);
- assert.equal(find(tree,n=>n.type==='select').props.disabled,true);assert.equal(button('Перезагрузить разметку').props.disabled,true);
+ assert.equal(find(tree,n=>n.type==='select').props.disabled,true);assert.equal(button('Обновить').props.disabled,true);
  await button('Сохранить страницы').props.onClick();await tick();assert.match(view(),/Page mapping changed/);assert.equal(dirty,true);
  assert.equal(find(tree,n=>n.type==='input'&&n.props.checked===false),undefined);assert.deepEqual(requests.at(-1).body.pages,[1,2]);assert.equal(requests.at(-1).body.expected_mapping_id,'old');
  button('Отменить изменения разметки').props.onClick();view();assert.equal(dirty,false);

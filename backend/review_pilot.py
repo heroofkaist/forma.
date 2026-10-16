@@ -162,7 +162,20 @@ def mappings(sid: str, request: Request):
     with SessionLocal() as db:
         submission, assignment = get_submission(db, sid, request, teacher=True)
         rows = [latest_mapping(db, sid, q['id']) for q in assignment.questions]
-        return {'page_count': page_count(db, submission), 'items': [mapping_json(row, assignment) for row in rows if row]}
+        from processing_models import DocumentInterpretation, InterpretationCorrection, ProcessingJob
+        source = db.scalar(select(DocumentInterpretation).where(DocumentInterpretation.submission_id==sid).order_by(DocumentInterpretation.created_at.desc()).limit(1))
+        suggestions = []
+        if source:
+            job = db.get(ProcessingJob, source.job_id)
+            correction = db.scalar(select(InterpretationCorrection).where(InterpretationCorrection.interpretation_id==source.id).order_by(InterpretationCorrection.created_at.desc()).limit(1))
+            observed = correction.result if correction else source.result
+            from document_models import SubmissionDocument
+            document = db.get(SubmissionDocument,sid)
+            if document and document.content_hash==job.content_hash:
+                for q in assignment.questions:
+                    pages = sorted({s['page_number'] for s in observed['sections'] if s.get('question_id')==q['id'] and s['readability'] not in {'missing','unreadable'}})
+                    if pages:suggestions.append({'question_id':q['id'],'pages':pages,'confirmed':bool(correction and correction.confirmed)})
+        return {'page_count': page_count(db, submission), 'items': [mapping_json(row, assignment) for row in rows if row], 'suggestions': suggestions}
 
 
 @router.post('/submissions/{sid}/pages', status_code=201)

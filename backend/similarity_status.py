@@ -18,10 +18,16 @@ def similarity_summary(submission, reports, receipt, candidates):
             'eligible_token_count': eligible, 'candidate_count': receipt.candidate_count if receipt else None}
 
 
-def similarity_summaries(db, submissions):
+def similarity_summaries(db, submissions, refresh=True):
+    from course_archive import refresh_similarity
+    # Local, cached comparison is refreshed when new cohorts or linked courses add sources.
+    if refresh:
+        for submission in submissions: refresh_similarity(db, submission)
+        db.commit()
     ids = [s.id for s in submissions]
     receipts = {r.submission_id: r for r in db.scalars(select(OriginalityAnalysis).where(OriginalityAnalysis.submission_id.in_(ids)))}
-    reports = list(db.scalars(select(OriginalityReport).where(OriginalityReport.submission_id.in_(ids))))
+    from course_archive import current_reports
+    reports = [r for sid in ids for r in current_reports(db, sid)]
     candidates = {s.id: s for s in db.scalars(select(AcademicSubmission).where(AcademicSubmission.id.in_({r.candidate_submission_id for r in reports})))}
     grouped = {}
     for r in reports:

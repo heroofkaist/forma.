@@ -188,5 +188,6 @@ def test_uploaded_task_sheet_requires_approval_and_informs_job(platform,monkeypa
     queued=client.post('/api/document-analysis/'+sid,headers=teacher,json={})
     assert queued.status_code==202
     with factory() as db:
-        job=db.get(ProcessingJob,queued.json()['id']);assert job.context['questions']==proposed
+        job=db.get(ProcessingJob,queued.json()['id']);assert [q['id'] for q in job.context['questions']]==['q1','q2']
+        assert job.context['assignment_context']['files'][0]['questions']==proposed
         assert db.get(AcademicAssignment,assignment['id']).questions[0]['id']=='q1'  # Rubric unchanged.

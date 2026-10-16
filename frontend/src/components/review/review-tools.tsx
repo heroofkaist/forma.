@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowUpRight, BookOpen, Clock3, FileSearch, FileText, Layout
 
 export const reviewTools = [
   { id: "history", title: "История проверки", description: "Сохранённые оценки, черновики и версии предложений ИИ.", icon: Clock3 },
-  { id: "pages", title: "Страницы ответов", description: "Отметьте, на каких страницах решён каждый вопрос.", icon: LayoutGrid },
+  { id: "pages", title: "Навигация по задачам", description: "Найдите решение задачи и уточните предложенные страницы.", icon: LayoutGrid },
   { id: "examples", title: "Примеры комментариев", description: "Используйте объяснения из прошлых проверок этого курса.", icon: BookOpen },
   { id: "rubric", title: "Настройки критериев", description: "Уточните инструкции и требования для проверки.", icon: Settings2 },
   { id: "text", title: "Текст работы", description: "Просмотрите извлечённый текст и предупреждения.", icon: FileText },

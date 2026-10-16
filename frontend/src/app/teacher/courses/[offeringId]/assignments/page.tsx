@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AssignmentCreateForm } from "../../../../../components/assignment-create-form";
+import { CourseArchive } from "../../../../../components/course-archive";
 import { CourseMaterials } from "../../../../../components/course-materials";
 import { AppShell } from "../../../../../components/app-shell";
 import { academicApi, type AcademicAssignment, type Offering } from "../../../../../lib/academic";
@@ -61,6 +62,6 @@ export default function TeacherAssignmentsPage() {
     <div className="academic-section-header"><strong>ЗАДАНИЯ</strong><span>{assignments.length}</span></div>
     <div className="academic-assignment-table"><div className="academic-assignment-row academic-table-head"><span>НАЗВАНИЕ</span><span>ТИП</span><span>СРОК</span><span>РАБОТЫ</span><span>ОРИГИНАЛЬНОСТЬ</span><span>СТАТУС</span><span></span></div>{assignments.map((assignment) => <div className="academic-assignment-row" key={assignment.id}><strong><Link href={`/teacher/assignments/${assignment.id}/submissions`}>{assignment.title}</Link>{assignment.reused_from && <small>ПОВТОРНО ИСПОЛЬЗОВАНО</small>}</strong><span>{types.find(([key]) => key === assignment.assignment_type)?.[1] ?? assignment.assignment_type}</span><span>{assignment.due_at ? new Date(assignment.due_at).toLocaleDateString("ru-RU") : "—"}</span><span>{assignment.submission_count ?? "—"}</span><span>{assignment.originality_enabled ? <Link href={`/teacher/assignments/${assignment.id}/submissions`}>Сходство работ</Link> : "—"}</span><span className="student-status">{statusLabel(assignment.status)}</span><div className="academic-row-actions"><Link href={`/teacher/assignments/${assignment.id}/submissions`}>Открыть задание →</Link>{assignment.legacy_assignment_id && <><Link href={`/teacher/assignments/${assignment.id}/submissions`}>Оценки</Link></>}<button onClick={() => void academicApi.publish(assignment.id).then(() => load()).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Не удалось опубликовать оценки."))}>Опубликовать оценки</button></div></div>)}</div>
     {!assignments.length && <div className="student-empty">В этом потоке ещё нет заданий.</div>}
-    <CourseMaterials offeringId={offeringId} teacher />
+    <CourseArchive offeringId={offeringId}/><CourseMaterials offeringId={offeringId} teacher />
   </AppShell>;
 }

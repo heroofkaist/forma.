@@ -304,3 +304,6 @@ def stop_document_processing():
 
 from assignment_briefs import router as assignment_briefs_router
 app.include_router(assignment_briefs_router)
+
+from course_archive import router as course_archive_router
+app.include_router(course_archive_router)

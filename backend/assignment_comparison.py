@@ -76,7 +76,7 @@ def run_local(payload):
         raise HTTPException(422,'Local comparison failed or exceeded its limits. No result was recorded.') from error
 
 
-def prepare_documents(db, rows):
+def prepare_documents(db, rows, anonymize=False):
     from integrity_models import DocumentIntegrityReport
     from services.document_integrity import VERSION as PROFILE_VERSION
     documents=[];total=0
@@ -89,7 +89,10 @@ def prepare_documents(db, rows):
         if len(content)>30*1024*1024 or total>MAX_BYTES: raise HTTPException(413,'Comparison is limited to 60 MB of originals.')
         if hashlib.sha256(content).hexdigest()!=source.content_hash: raise HTTPException(409,'An original document changed. Reload before comparing.')
         profile=db.scalar(select(DocumentIntegrityReport).where(DocumentIntegrityReport.submission_id==row.id,DocumentIntegrityReport.content_hash==source.content_hash).order_by(DocumentIntegrityReport.created_at.desc(),DocumentIntegrityReport.id.desc()).limit(1))
-        documents.append({'id':row.id,'student_id':row.student_id,'file_name':row.file_name,'file_type':row.file_type,
+        import hmac
+        import os
+        author = 'archive-' + hmac.new(os.getenv('FORMA_AUTH_SECRET','local-archive').encode(),row.student_id.encode(),'sha256').hexdigest()[:24] if anonymize else row.student_id
+        documents.append({'id':row.id,'student_id':author,'file_name':row.file_name,'file_type':row.file_type,
             'text':source.structure.get('extracted_text',row.extracted_text),'pages':source.structure.get('pages',[]),'content':base64.b64encode(content).decode(),
             'semantic_features':profile.result.get('features',[]) if profile and profile.result.get('status')=='completed' and profile.result.get('version')==PROFILE_VERSION else []})
     return documents
@@ -110,9 +113,10 @@ def compare_files(payload:FileOptions,request:Request,response:Response):
             row=db.get(AcademicSubmission,sid)
             current=db.get(AcademicAssignment,row.assignment_id) if row else None
             if not current: raise HTTPException(404,'Submission not found.')
-            require_teacher(db,request_user(request),current.offering_id)
+            from course_archive import source_access, course_ids
+            source_access(db,request_user(request),sid)
             offering=db.get(CourseOffering,current.offering_id)
-            if course is not None and course!=offering.course_id: raise HTTPException(422,'Compare files from the same course.')
+            if course is not None and offering.course_id not in course_ids(db,course): raise HTTPException(422,'Compare files from the same course archive.')
             course=offering.course_id;assignment=assignment or current;rows.append(row)
             teacher_context.extend([current.description or '',*(q.get('statement','') for q in current.questions)])
         if len({r.student_id for r in rows})<2: raise HTTPException(422,'Compare works by different students.')
@@ -120,12 +124,12 @@ def compare_files(payload:FileOptions,request:Request,response:Response):
         previous=db.scalar(select(AssignmentComparison).where(AssignmentComparison.assignment_id==assignment.id,AssignmentComparison.fingerprint==key))
         if previous:return result_json(db,assignment,previous)
         rate_limit(request,'file-comparison',request_user(request).username,6)
-        documents=prepare_documents(db,rows)
+        documents=prepare_documents(db,rows,anonymize=True)
         result=run_local({'documents':documents,'context':'\n'.join([*teacher_context,payload.context])[:20000]})
         db.expire_all()
         for row in rows:
             current=db.get(AcademicAssignment,row.assignment_id)
-            require_teacher(db,request_user(request),current.offering_id)
+            source_access(db,request_user(request),row.id)
         if key!=fingerprint(db,assignment,rows,payload.context,'selected_files'):raise HTTPException(409,'Sources changed during comparison.')
         result.update(status='completed',operator_context=payload.context,comparison_scope='selected_files',source_ids=ids)
         receipt=AssignmentComparison(assignment_id=assignment.id,fingerprint=key,result=result,created_by=request_user(request).username)

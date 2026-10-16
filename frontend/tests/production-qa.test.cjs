@@ -121,9 +121,9 @@ test('review history heading identifies student scope rather than course-wide an
   assert.doesNotMatch(html,/Подтверждённые наблюдения по курсу/);
 });
 test('shared assignment form exposes type, dates, resubmission and teacher rubric with existing styles',()=>{
-  const {AssignmentCreateForm}=load('src/components/assignment-create-form.tsx',{'../lib/assignment-template':{},'../lib/academic':{}, '../lib/assignment-preflight':load('src/lib/assignment-preflight.ts')});
+  const {AssignmentCreateForm}=load('src/components/assignment-create-form.tsx',{'../lib/assignment-template':{},'../lib/assignment-brief':{},'./task-rubric-editor':load('src/components/task-rubric-editor.tsx'),'../lib/academic':{}, '../lib/assignment-preflight':load('src/lib/assignment-preflight.ts')});
   const html=render(React.createElement(AssignmentCreateForm,{offeringId:'synthetic',onCreated:()=>{}}));
-  for(const label of ['Тип','Доступно с','Срок сдачи','Макс. балл','Разрешить повторную отправку','Критерии оценивания']) assert.ok(html.includes(label),label);
+  for(const label of ['Тип','Доступно с','Срок сдачи','Макс. балл','Разрешить повторную отправку','Как проверять работу']) assert.ok(html.includes(label),label);
   assert.match(html,/academic-create-form/);
   // Browser validation uses min as the step base: min=.1, step=.5 rejects the default 100.
   const inputs=[...html.matchAll(/<input[^>]*type="number"[^>]*>/g)].map(m=>m[0]);

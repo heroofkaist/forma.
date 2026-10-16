@@ -18,7 +18,7 @@ class LocalProviderError(ValueError):
     pass
 
 
-def structured_completion(config, schema, system, context, progress=None, observe=None):
+def structured_completion(config, schema, system, context, progress=None, observe=None, images=None):
     """Bounded local text reasoning using the same model lock and cleanup policy."""
     if config.name != 'ollama' or config.model != 'qwen3-vl:8b-instruct':
         raise LocalProviderError('Assessment requires local qwen3-vl:8b-instruct.')
@@ -43,7 +43,7 @@ def structured_completion(config, schema, system, context, progress=None, observ
             try:
                 response = client.post('/api/chat', json={'model': config.model, 'stream': False, 'keep_alive': '1m',
                     'format': schema, 'options': {'temperature': 0, 'num_ctx': 8192, 'num_predict': min(options['output_tokens'], 4096)},
-                    'messages': [{'role': 'system', 'content': system}, {'role': 'user', 'content': body}]})
+                    'messages': [{'role': 'system', 'content': system}, {'role': 'user', 'content': body, **({'images':images} if images else {})}]})
                 response.raise_for_status(); data = response.json()
                 if observe: observe(data)  # Only explicit synthetic benchmarks supply this.
                 if not data.get('done') or data.get('done_reason') == 'length':

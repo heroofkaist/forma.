@@ -19,6 +19,7 @@ class Section(BaseModel):
     kind: Literal['answer','heading','paragraph','equation','diagram','table','references','code']
     transcription: str = Field(default='', max_length=20000)
     question_id: str | None = None
+    criterion_ids: list[str] = Field(default_factory=list, max_length=50)
     readability: Literal['readable','uncertain','unreadable','missing'] = 'uncertain'
     rationale: str = Field(default='', max_length=2000)
     uncertainty_notes: list[str] = Field(default_factory=list, max_length=20)
@@ -73,7 +74,7 @@ def deterministic_interpretation(structure, questions, document_type):
         for value in (question.get('label',''), question.get('title','')):
             match = re.search(r'(?:question|вопрос|задача)\s*(\d+)', str(value), re.I)
             if match: labels[match.group(1)] = str(question['id'])
-    active = None
+    active = str(questions[0]['id']) if len(questions)==1 and document_type in {'essay','lab_report','research_report','general','presentation','programming'} else None
     for page in structure['pages']:
         text = page['text']
         matches = list(re.finditer(r'(?im)^\s*(?:question|вопрос|задача)\s*(\d+)\b[^\n]*', text))
@@ -101,6 +102,9 @@ def validate_result(result, structure, questions, visual_pages=(), teacher=False
             raise ValueError('Duplicate section or invalid source page.')
         if section['question_id'] is not None and section['question_id'] not in known:
             raise ValueError('Unknown assignment question.')
+        question = next((q for q in questions if q['id'] == section['question_id']), None)
+        if section['criterion_ids'] and (not question or not set(section['criterion_ids']).issubset({c.get('criterion_id', c.get('id')) for c in question.get('criteria', [])})):
+            raise ValueError('Unknown criterion association.')
         if section['evidence_kind'] == 'teacher_correction' and not teacher:
             raise ValueError('Model cannot claim teacher confirmation.')
         if section['evidence_kind'] == 'visual_page' and section['page_number'] not in visual_pages:

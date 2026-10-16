@@ -99,7 +99,7 @@ def test_changed_rubric_and_cross_course_cards_cannot_be_applied(pilot):
 def test_question_pages_validate_bounds_versions_and_compare_and_swap(pilot):
     client,factory,teacher,_,sid,_,assignment,_=pilot
     path=f'/api/review-pilot/submissions/{sid}/pages'
-    assert client.get(path,headers=teacher).json()=={'page_count':3,'items':[]}
+    assert client.get(path,headers=teacher).json()=={'page_count':3,'items':[],'suggestions':[]}
     for pages in ([0],[4],[1,1],[1.5],[True],['1']):
         assert client.post(path,headers=teacher,json={'question_id':'q1','pages':pages}).status_code==422
     first=client.post(path,headers=teacher,json={'question_id':'q1','pages':[3,1]})

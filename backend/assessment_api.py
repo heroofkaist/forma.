@@ -124,10 +124,15 @@ class AssessRequest(Strict):
 def request_assessment(submission_id: str, payload: AssessRequest, request: Request):
     with SessionLocal() as db:
         submission, assignment = get_submission(db, submission_id, request, teacher=True)
-        if submission.file_type != 'pdf':
-            raise HTTPException(422, 'Phase 4 assessment supports PDF only. Other safe extraction paths remain available for manual review.')
+        user = request_user(request)
+        rate_limit(request, 'assessment', user.account_id or user.username, 10)
         approved = latest_rubric(db, assignment.id)
-        if not approved: raise HTTPException(409, 'Review and approve an explicit rubric first.')
+        if not approved:
+            # Requesting assessment confirms the criteria already supplied by this teacher.
+            try: spec = rubric_for_assignment(default_spec(assignment), assignment)
+            except ValueError as error: raise HTTPException(409, str(error)) from error
+            approved = AssessmentRubric(assignment_id=assignment.id, spec=spec, approved_by=request_user(request).username)
+            db.add(approved); db.flush()
         try: rubric_for_assignment(approved.spec, assignment)
         except ValueError as error: raise HTTPException(409, 'The approved rubric no longer matches the assignment.') from error
         source = db.scalar(select(DocumentInterpretation).where(DocumentInterpretation.submission_id == submission_id).order_by(DocumentInterpretation.created_at.desc()).limit(1))
@@ -142,15 +147,16 @@ def request_assessment(submission_id: str, payload: AssessRequest, request: Requ
         observed = correction.result if correction else source.result
         snapshot = {'rubric_id': approved.id, 'rubric': approved.spec, 'interpretation_id': source.id,
             'correction_id': correction.id if correction else None, 'title': assignment.title,
-            'source': {'sections': [{k: s[k] for k in ('id', 'page_number', 'kind', 'transcription', 'readability', 'evidence_kind')}
+            'source': {'sections': [{k: s.get(k, [] if k=='criterion_ids' else None) for k in ('id', 'page_number', 'question_id', 'criterion_ids', 'kind', 'transcription', 'readability', 'evidence_kind')}
                 for s in observed['sections']]},
             'source_limitations': {'warnings': observed['warnings'], 'teacher_confirmed': bool(correction and correction.confirmed),
                 'visual_transcription_unverified': not bool(correction and correction.confirmed), 'external_facts_verified': False, 'code_executed': False}}
+        from services.assignment_context import assignment_snapshot
+        snapshot['assignment_context'] = assignment_snapshot(db, assignment)
+        snapshot['source_limitations']['assignment_reading_incomplete'] = bool(source_job.usage.get('assignment_context_shortened'))
         from services.ai_providers.engine import assessment_configuration
         try: config = assessment_configuration()
         except ValueError as error: raise HTTPException(409, str(error)) from error
-        user = request_user(request)
-        rate_limit(request, 'assessment', user.account_id or user.username, 10)
         try: job = enqueue(db, submission, assignment, user.account_id or user.username, payload.reanalyze,
                           task_context={'task': 'assessment', 'assessment': snapshot}, provider_config=config)
         except ValueError as error: raise HTTPException(429, str(error)) from error

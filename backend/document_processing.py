@@ -55,12 +55,14 @@ def enqueue(db, submission, assignment, actor, force=False, *, task_context=None
     ai = provider_config or configuration()
     document = db.get(SubmissionDocument, submission.id)
     content_hash = document.content_hash if document else hashlib.sha256(read_blob(submission.file_path)).hexdigest()
-    context = {'document_type':assignment.assignment_type, 'questions':[{'id':q['id'], 'title':q['title'], 'statement':q.get('statement',''), 'label':q.get('label','')} for q in assignment.questions], 'visual_pages':limit('FORMA_AI_VISUAL_PAGES',8,12)}
+    from services.assignment_context import assignment_snapshot
+    context = {'document_type':assignment.assignment_type, 'questions':assignment.questions,
+        'assignment_context':assignment_snapshot(db, assignment), 'visual_pages':limit('FORMA_AI_VISUAL_PAGES',8,12)}
     context['ai'] = asdict(ai)
     if task_context: context.update(task_context)
     briefs=db.scalars(select(AssignmentBrief).where(AssignmentBrief.assignment_id==assignment.id).order_by(AssignmentBrief.created_at.desc()).limit(3)).all()
     approved=next((brief.approved_questions for brief in briefs if brief.approved_questions),None)
-    if approved: context['questions']=approved
+    # Task sheets provide conditions; they must not replace the teacher's rubric IDs.
     context['cache_key'] = hashlib.sha256(json.dumps([assignment.offering_id, content_hash, context, ai.version, ai.model],sort_keys=True).encode()).hexdigest()
     signature = hashlib.sha256(json.dumps([submission.id,content_hash,context,ai.version,ai.model], sort_keys=True).encode()).hexdigest()
     existing = db.scalar(select(ProcessingJob).where(ProcessingJob.input_hash == signature))
@@ -165,7 +167,13 @@ def process_one():
                         ProcessingJob.lease_until > now_utc()).values(lease_until=now_utc()+timedelta(minutes=5)).returning(ProcessingJob.id))
                     lease_db.commit()
                     if not renewed: raise ValueError('Assessment worker lease was lost.')
-            result, usage = evaluate(context['assessment'], ai, progress=assessment_heartbeat, job_id=job_id)
+            def assessment_checkpoint(chunks):
+                with SessionLocal() as save_db:
+                    current=save_db.scalar(select(ProcessingJob).where(ProcessingJob.id==job_id,ProcessingJob.lease_owner==owner,ProcessingJob.status.in_(ACTIVE),ProcessingJob.lease_until>now_utc()).with_for_update())
+                    if not current: raise ValueError('Assessment worker lease was lost.')
+                    current.context={**current.context,'assessment_checkpoints':chunks}; save_db.commit()
+            result, usage = evaluate(context['assessment'], ai, progress=assessment_heartbeat, job_id=job_id,
+                checkpoints=context.get('assessment_checkpoints'), checkpoint=assessment_checkpoint)
         elif context.get('task') == 'integrity':
             if cached_result:
                 result, usage = cached_result, {'cache_hit': True, 'ai_called': False}
@@ -196,7 +204,7 @@ def process_one():
                         ProcessingJob.lease_until > now_utc()).values(lease_until=now_utc()+timedelta(minutes=5), updated_at=now_utc()).returning(ProcessingJob.id))
                     lease_db.commit()
                     if not renewed: raise ValueError('Document worker lease was lost.')
-            result, usage = interpret_document(content, file_type, structure, context['questions'], context['document_type'], ai, progress=heartbeat, job_id=job_id)
+            result, usage = interpret_document(content, file_type, structure, context['questions'], context['document_type'], ai, progress=heartbeat, job_id=job_id, assignment_context=context.get('assignment_context'))
         set_stage('analysis_persist')
         with SessionLocal() as db:
             current = db.scalar(select(ProcessingJob).where(ProcessingJob.id==job_id, ProcessingJob.lease_owner==owner, ProcessingJob.status=='interpreting', ProcessingJob.lease_until>now_utc()).with_for_update())

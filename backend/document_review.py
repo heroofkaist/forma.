@@ -126,6 +126,10 @@ def preview_page(submission_id: str, page_number: int, request: Request):
         if submission.file_type != 'pdf': raise HTTPException(415, 'PDF preview only.')
         try: content = read_blob(submission.file_path)
         except FileNotFoundError as error: raise HTTPException(404, 'Original document unavailable.') from error
+    return render_pdf_page(content, page_number)
+
+
+def render_pdf_page(content, page_number):
     if len(content) > 30 * 1024 * 1024: raise HTTPException(413, 'PDF exceeds preview limits.')
     try:
         with pymupdf.open(stream=content, filetype='pdf') as document:
