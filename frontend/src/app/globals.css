@@ -375,10 +375,6 @@ kbd{font:9px var(--mono);padding:2px 4px;border-radius:3px;background:#ffffff38;
 .student-status.status-submitted,.student-status.status-processing{background:#eef3f8;color:#476989}
 .student-status.status-overdue{background:#f5f0e9;color:#86643b}
 .student-overdue-row td:nth-child(4){color:#8a663f}
-.enroll-form{height:30px;display:flex;align-items:center;gap:6px;padding:2px 5px;border:1px solid #dce4e8;border-radius:4px;background:white;color:#71818a}
-.enroll-form input{width:115px;border:0;outline:0;font-size:11px}
-.enroll-form button{height:24px;padding:0 9px;background:#315f75;color:white;border:0;border-radius:3px;font-size:10px;font-weight:600}
-.enroll-form button:disabled{opacity:.45}
 .student-empty,.student-loading{padding:48px 18px;text-align:center;color:#73828a;font-size:12px}
 .student-empty h2{font-size:15px;color:#31434d;margin-bottom:5px}
 .student-breadcrumb{display:flex;gap:8px;margin-bottom:18px;font-size:11px;color:#74838b}

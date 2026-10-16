@@ -284,4 +284,4 @@ def test_migration_009_upgrades_old_schema_without_rewriting_sources(assessed):
     with factory() as db:
         assert db.get(AcademicSubmission, sid).file_name == 'synthetic.pdf'
         assert db.scalar(select(func.count()).select_from(DocumentInterpretation)) == 1
-        assert db.scalar(select(func.count()).select_from(SchemaMigration)) == 11
+        assert db.scalar(select(func.count()).select_from(SchemaMigration)) == 12

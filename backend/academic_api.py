@@ -7,11 +7,11 @@ from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Literal
-from uuid import uuid4
+from uuid import uuid4, UUID
 
 import pymupdf
 from docx import Document
-from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -1493,7 +1493,7 @@ async def _read_submission_file(file: UploadFile, allow_code: bool = False) -> t
     summary="[DEMO/LOCAL ONLY] Submit PDF or DOCX",
 )
 async def create_submission(
-    assignment_id: str, request: Request, file: UploadFile = File(...)
+    assignment_id: str, request: Request, file: UploadFile = File(...), request_id: UUID | None = Form(default=None)
 ) -> dict:
     ensure_academic_seed()
     student_id, student_name = _student_identity(request)
@@ -1513,13 +1513,6 @@ async def create_submission(
         if db.bind.dialect.name == "sqlite":
             db.execute(update(AcademicAssignment).where(AcademicAssignment.id == assignment_id).values(maximum_score=AcademicAssignment.maximum_score))
         db.scalar(select(AcademicAssignment).where(AcademicAssignment.id == assignment_id).with_for_update())
-        now = now_utc()
-        available_at = _as_utc(assignment.available_at)
-        due_at = _as_utc(assignment.due_at)
-        if available_at and now < available_at:
-            raise HTTPException(status_code=409, detail="Assignment is not available yet.")
-        if due_at and now > due_at:
-            raise HTTPException(status_code=409, detail="The submission deadline has passed.")
         enrolled = db.scalar(
             select(CourseEnrollment).where(
                 CourseEnrollment.offering_id == assignment.offering_id,
@@ -1528,6 +1521,22 @@ async def create_submission(
         )
         if not enrollment_active(db, enrolled):
             raise HTTPException(status_code=403, detail="Student is not actively enrolled in this offering.")
+        from review_pilot_models import SubmissionUploadReceipt
+        content_hash = hashlib.sha256(content).hexdigest()
+        if request_id is not None:
+            receipt = db.scalar(select(SubmissionUploadReceipt).where(SubmissionUploadReceipt.assignment_id == assignment_id,
+                SubmissionUploadReceipt.student_id == student_id, SubmissionUploadReceipt.request_id == str(request_id)))
+            if receipt:
+                if receipt.content_hash != content_hash or receipt.response['file_name'] != Path(file.filename or '').name[:255]:
+                    raise HTTPException(409, 'Upload request ID was already used for a different file.')
+                return receipt.response
+        now = now_utc()
+        available_at = _as_utc(assignment.available_at)
+        due_at = _as_utc(assignment.due_at)
+        if available_at and now < available_at:
+            raise HTTPException(status_code=409, detail="Assignment is not available yet.")
+        if due_at and now > due_at:
+            raise HTTPException(status_code=409, detail="The submission deadline has passed.")
         prior = db.scalars(
             select(AcademicSubmission).where(
                 AcademicSubmission.assignment_id == assignment.id,
@@ -1586,9 +1595,7 @@ async def create_submission(
                 # Receipt is preserved even when today's processing quota is full.
                 # No processing success is reported; teacher can request analysis later.
                 submission.status = "analysis_not_scheduled"
-        db.commit()
-        db.refresh(submission)
-        return {
+        result = {
             "id": submission.id,
             "assignment_id": submission.assignment_id,
             "student_id": submission.student_id,
@@ -1603,6 +1610,11 @@ async def create_submission(
                 else [_report_json(db, report) for report in reports]
             ),
         }
+        if request_id is not None:
+            db.add(SubmissionUploadReceipt(assignment_id=assignment_id, student_id=student_id, request_id=str(request_id),
+                                           content_hash=content_hash, response=result))
+        db.commit()
+        return result
 
 
 @router.get(

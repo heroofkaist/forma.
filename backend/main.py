@@ -260,6 +260,8 @@ app.include_router(materials_router)
 
 from document_review import router as document_review_router
 app.include_router(document_review_router)
+from review_pilot import router as review_pilot_router
+app.include_router(review_pilot_router)
 
 
 @app.on_event("startup")

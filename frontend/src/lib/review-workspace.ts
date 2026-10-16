@@ -1,17 +1,18 @@
+import type { CardUse } from "./review-pilot";
 /** Server contracts and a subject-independent view model. No scoring authority here. */
 export type Finding = "strength" | "concern" | "mixed" | "insufficient_evidence";
 export type Evidence = { section_id: string; page_number: number; quote: string };
 export type Criterion = { question_id: string; criterion_id: string; description: string; maximum_points: number; performance_descriptions?: string; feedback_requirements?: string; weight?: number | null; insight_tag?: string };
 export type Rubric = { category: string; instructions: string; reference_material: string; criteria: Criterion[] };
 export type Suggestion = { question_id: string; criterion_id: string; proposed_score: number | null; rationale: string; evidence: Evidence[]; interpretation: string; finding: Finding; suggested_improvement: string; missing_evidence: string[]; uncertainty: string[]; verification_status: "needs_review" };
-export type Decision = { question_id: string; criterion_id: string; action: "accepted" | "rejected" | "deferred"; points: number | null; feedback: string; finding: Finding; confirmed?: boolean; overall_feedback?: string };
+export type Decision = { question_id: string; criterion_id: string; action: "accepted" | "rejected" | "deferred"; points: number | null; feedback: string; finding: Finding; confirmed?: boolean; overall_feedback?: string; card_use?: CardUse | null };
 export type AssessmentVersion = { id: string; rubric: { id: string; spec: Rubric }; result: { criteria: Suggestion[] }; interpretation_id: string; correction_id: string | null; decisions: { id: string; reviewer: string; created_at: string; decisions: Decision[]; review_id: string | null }[]; source: { sections: { id: string; evidence_kind: string; readability: string }[] } };
 export type AssessmentResponse = { items: AssessmentVersion[]; jobs: { id: string; status: string; error: string }[]; supported: boolean };
-export type Score = { question_id: string; criterion_id: string; points: number | null; comment: string; confirmed?: boolean };
+export type Score = { question_id: string; criterion_id: string; points: number | null; comment: string; confirmed?: boolean; card_use?: CardUse | null };
 export type ManualReview = { id: string; criteria: Score[]; feedback: string; created_at: string; reviewer: string };
 export type ReviewResponse = { submission_id: string; assignment_id: string; title: string; assignment_type?: string; instructions?: string; submitted_at?: string; student_name: string; file_name: string; file_type: string; maximum_score: number; questions: { id: string; title: string; statement?: string; criteria: { criterion_id: string; description: string; maximum_points: number }[] }[]; structure: { pages: { number: number; unit: string; text: string }[]; warnings: string[] } | null; reviews: ManualReview[]; published_grade: { points: number; maximum_score?: number; published_at: string; review_id?: string | null } | null };
 export type CriterionView = Criterion & { key: string; suggestion: Suggestion | null; saved: Decision | null };
-export type EditorValue = { action: Decision["action"] | "unreviewed"; points: string; feedback: string; finding: Finding };
+export type EditorValue = { action: Decision["action"] | "unreviewed"; points: string; feedback: string; finding: Finding; card_use?: CardUse | null };
 export type ReviewEditor = { criteria: Record<string, EditorValue>; feedback: string; mode: "assisted" | "manual" };
 export const criterionKey = (question: string, criterion: string) => JSON.stringify([question, criterion]);
 export const categoryLabels: Record<string, string> = { problem_set: "Задачи и расчёты", essay: "Эссе", lab_report: "Лабораторный отчёт", presentation: "Презентация", research_report: "Исследовательская работа", programming: "Программирование", homework: "Учебная работа", general: "Учебная работа" };
@@ -38,7 +39,7 @@ export function initialEditor(data: ReviewResponse, version?: AssessmentVersion)
       return [c.key, { action: mode === "manual" ? "unreviewed" : saved?.action ?? "unreviewed",
         // Never initialize a teacher score or feedback from an AI proposal.
         points: String((mode === "manual" ? score?.points : saved?.points) ?? ""),
-        feedback: (mode === "manual" ? score?.comment : saved?.feedback) ?? "", finding: saved?.finding ?? c.suggestion?.finding ?? "insufficient_evidence" }];
+        feedback: (mode === "manual" ? score?.comment : saved?.feedback) ?? "", finding: saved?.finding ?? c.suggestion?.finding ?? "insufficient_evidence", ...((mode === "manual" ? score?.card_use : saved?.card_use) ? {card_use: mode === "manual" ? score?.card_use : saved?.card_use} : {}) }];
     })) };
 }
 
@@ -56,10 +57,10 @@ export function completeScores(criteria: CriterionView[], editor: ReviewEditor):
 }
 export function decisionsPayload(criteria: CriterionView[], editor: ReviewEditor): Decision[] {
   return criteria.map(c => { const v = editor.criteria[c.key]; return { question_id: c.question_id, criterion_id: c.criterion_id,
-    action: v.action === "unreviewed" ? "deferred" : v.action, points: v.points.trim() === "" ? null : Number(v.points), feedback: v.feedback, finding: v.finding }; });
+    action: v.action === "unreviewed" ? "deferred" : v.action, points: v.points.trim() === "" ? null : Number(v.points), feedback: v.feedback, finding: v.finding, ...(v.card_use ? {card_use:v.card_use} : {}) }; });
 }
 export function manualPayload(criteria: CriterionView[], editor: ReviewEditor): Score[] {
-  return criteria.map(c => ({ question_id: c.question_id, criterion_id: c.criterion_id, points: editor.criteria[c.key].points.trim() === "" ? null : Number(editor.criteria[c.key].points), comment: editor.criteria[c.key].feedback }));
+  return criteria.map(c => ({ question_id: c.question_id, criterion_id: c.criterion_id, points: editor.criteria[c.key].points.trim() === "" ? null : Number(editor.criteria[c.key].points), comment: editor.criteria[c.key].feedback, ...(editor.criteria[c.key].card_use ? {card_use:editor.criteria[c.key].card_use} : {}) }));
 }
 export function canPublish(data: ReviewResponse): boolean {
   const review = data.reviews[0]; if (!review || !review.criteria.length) return false;

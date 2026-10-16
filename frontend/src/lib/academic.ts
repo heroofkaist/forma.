@@ -230,9 +230,10 @@ export const academicApi = {
     if (!assignment) throw new Error("Задание не найдено среди курсов студента.");
     return assignment;
   },
-  submit: (assignmentId: string, file: File) => {
+  submit: (assignmentId: string, file: File, requestId?: string) => {
     const data = new FormData();
     data.append("file", file);
+    if (requestId) data.append("request_id", requestId);
     return request<Record<string, unknown>>(`/academic/assignments/${assignmentId}/submissions`, { method: "POST", body: data });
   },
   studentGrades: async () =>

@@ -109,7 +109,7 @@ test('teaching insights load, fail, retry and refresh without preserving stale m
   assert.equal(states.at(-1).status,'error');
 });
 test('shared assignment form exposes type, dates, resubmission and teacher rubric with existing styles',()=>{
-  const {AssignmentCreateForm}=load('src/components/assignment-create-form.tsx',{'../lib/academic':{}});
+  const {AssignmentCreateForm}=load('src/components/assignment-create-form.tsx',{'../lib/academic':{}, '../lib/assignment-preflight':load('src/lib/assignment-preflight.ts')});
   const html=render(React.createElement(AssignmentCreateForm,{offeringId:'synthetic',onCreated:()=>{}}));
   for(const label of ['Тип','Доступно с','Срок сдачи','Макс. балл','Разрешить повторную отправку','Критерии оценивания']) assert.ok(html.includes(label),label);
   assert.match(html,/academic-create-form/);

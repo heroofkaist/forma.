@@ -15,6 +15,7 @@ from document_models import DocumentReview, SubmissionDocument
 from document_review import get_submission
 from assessment_models import AssessmentRubric, AssessmentSuggestion, AssessmentDecision
 from services.assessment import Strict, RubricSpec, rubric_for_assignment, STRATEGIES, ENGINE_VERSION
+from review_pilot_contracts import CardUse
 from services.ai_providers.engine import configuration
 from document_processing import enqueue
 
@@ -164,6 +165,7 @@ class Decision(Strict):
     points: float | None = Field(ge=0, le=10000, allow_inf_nan=False)
     feedback: str = Field(max_length=4000)
     finding: Literal['strength', 'concern', 'mixed', 'insufficient_evidence']
+    card_use: CardUse | None = None
 
 
 class Decisions(Strict):
@@ -176,7 +178,7 @@ class Decisions(Strict):
 @router.post('/assessment/{submission_id}/decisions', status_code=201)
 def confirm(submission_id: str, payload: Decisions, request: Request):
     with SessionLocal() as db:
-        _, assignment = get_submission(db, submission_id, request, teacher=True)
+        submission, assignment = get_submission(db, submission_id, request, teacher=True)
         row = db.get(AssessmentSuggestion, payload.suggestion_id)
         if not row or row.submission_id != submission_id: raise HTTPException(404, 'Assessment not found.')
         rubric = db.get(AssessmentRubric, row.rubric_id)
@@ -192,20 +194,17 @@ def confirm(submission_id: str, payload: Decisions, request: Request):
             if d.action != 'accepted' and d.points is not None:
                 raise HTTPException(422, 'Only explicitly accepted teacher decisions can carry points.')
         user = request_user(request)
+        from review_pilot import validate_use, questions_for_spec
+        approved_questions = questions_for_spec(assignment, rubric.spec)
+        for d in payload.decisions:
+            validate_use(db, submission, assignment, d.question_id, d.criterion_id, d.card_use, approved_questions)
         saved_decisions = [dict(d.model_dump(), confirmed=not payload.draft) for d in payload.decisions]
         if payload.feedback is not None: saved_decisions[0]['overall_feedback'] = payload.feedback
         record = AssessmentDecision(suggestion_id=row.id, reviewer=user.username, decisions=saved_decisions)
         # Reuse existing unpublished manual reviews; publication remains separate.
         if not payload.draft and all(d.action == 'accepted' and d.points is not None for d in payload.decisions):
-            from copy import deepcopy
-            approved_questions = deepcopy(assignment.questions)
-            for question in approved_questions:
-                for criterion in question['criteria']:
-                    approved = criteria[(question['id'], criterion['criterion_id'])]
-                    criterion.update(description=approved['description'], partial_credit=approved['performance_descriptions'],
-                                     evidence_expected=approved['feedback_requirements'])
             review = DocumentReview(submission_id=submission_id, reviewer=user.username,
-                criteria=[{'question_id': d.question_id, 'criterion_id': d.criterion_id, 'points': d.points, 'comment': d.feedback} for d in payload.decisions],
+                criteria=[{'question_id': d.question_id, 'criterion_id': d.criterion_id, 'points': d.points, 'comment': d.feedback, 'card_use': d.card_use.model_dump() if d.card_use else None} for d in payload.decisions],
                 rubric_snapshot=approved_questions, feedback=payload.feedback if payload.feedback is not None else '\n\n'.join(d.feedback for d in payload.decisions))
             db.add(review); db.flush(); record.review_id = review.id
         db.add(record); db.flush()

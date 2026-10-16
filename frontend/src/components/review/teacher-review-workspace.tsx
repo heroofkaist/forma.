@@ -9,6 +9,8 @@ import { RubricReviewPanel } from "../assessment-panel";
 import { DocumentViewer } from "./document-viewer";
 import { SubmissionOverview } from "./submission-overview";
 import { ReviewActionBar } from "./review-action-bar";
+import { DecisionMemory } from "./decision-memory";
+import { QuestionPages, QuestionReviewNavigation } from "./question-review-tools";
 import { AssessmentDiagnostics } from "./assessment-diagnostics";
 
 function ReviewDialog({ title, children, onClose, onConfirm, confirmLabel }: { title: string; children: React.ReactNode; onClose: () => void; onConfirm: () => void; confirmLabel: string }) {
@@ -23,7 +25,9 @@ export function TeacherReviewWorkspace({ submissionId }: { submissionId: string 
   const [dirty, setDirty] = useState(false); const [advancedDirty, setAdvancedDirty] = useState(false); const [busy, setBusy] = useState(false); const [loading, setLoading] = useState(true);
   const [error, setError] = useState(""); const [message, setMessage] = useState(""); const [assessmentError, setAssessmentError] = useState(false);
   const [dialog, setDialog] = useState<"publish" | "discard" | null>(null); const discardAction = useRef<() => void>(() => {});
-  const hasUnsaved = dirty || advancedDirty;
+  const [focusQuestion, setFocusQuestion] = useState("");
+  const [mappingDirty, setMappingDirty] = useState(false);
+  const hasUnsaved = dirty || advancedDirty || mappingDirty;
   const unsavedRef = useRef(hasUnsaved); unsavedRef.current = hasUnsaved;
   const version = assessment?.items.find(v => v.id === selected);
   const criteria = data ? reviewCriteria(data, version) : [];
@@ -37,6 +41,8 @@ export function TeacherReviewWorkspace({ submissionId }: { submissionId: string 
   }
   useEffect(() => { let active = true; setLoading(true); void fetchData().then(({ review, ai }) => { if (active) {
       apply(review, ai);
+      const requestedQuestion = new URLSearchParams(window.location.search).get('question') ?? '';
+      setFocusQuestion(review.questions.some(q => q.id === requestedQuestion) ? requestedQuestion : '');
       const requestedPage = Number(new URLSearchParams(window.location.search).get('page'));
       setPage(Number.isSafeInteger(requestedPage) && requestedPage >= 1 && requestedPage <= (review.structure?.pages.length ?? 1) ? requestedPage : 1);
     } }).catch(() => { if (active) setError("Не удалось загрузить работу. Проверьте доступ и попробуйте снова."); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, [fetchData]);
@@ -71,7 +77,7 @@ export function TeacherReviewWorkspace({ submissionId }: { submissionId: string 
   }, [hasUnsaved, router]);
   const goToPage = useCallback((value: number) => { setPage(Math.max(1, Math.min(value, data?.structure?.pages.length ?? 1))); setMobileTab("document"); setMessage(`Открыта страница ${value}.`); }, [data?.structure?.pages.length]);
   function edit(key: string, patch: Partial<EditorValue>) { if (!editor) return; setEditor({ ...editor, criteria: { ...editor.criteria, [key]: { ...editor.criteria[key], ...patch } } }); setDirty(true); setDirtyKeys(keys => new Set([...keys, key])); setError(""); }
-  function discardOr(action: () => void) { if (!hasUnsaved) { action(); return; } discardAction.current = action; setDialog("discard"); }
+  function discardOr(action: () => void) { if (!dirty && !advancedDirty) { action(); return; } discardAction.current = action; setDialog("discard"); }
   function choose(id: string) { if (!data) return; const next = assessment?.items.find(v => v.id === id); if (!next) return; discardOr(() => { setSelected(id); setEditor(initialEditor(data, next)); setDirty(false); setDirtyKeys(new Set()); setExpanded(null); }); }
   function mode(next: ReviewEditor["mode"]) { if (!data || !editor || next === editor.mode) return; discardOr(() => { const values = initialEditor(data, next === 'assisted' ? version : undefined); setEditor({ ...values, mode: next }); setDirty(false); setDirtyKeys(new Set()); }); }
   async function refresh() { if (hasUnsaved) { setMessage("Сначала сохраните изменения, затем обновите предложения."); return; } try { const result = await fetchData(); if (unsavedRef.current) { setMessage('Данные обновились; введённые изменения сохранены на экране.'); return; } apply(result.review, result.ai, selected); setError(""); } catch { setError("Не удалось обновить данные. Введённые значения сохранены на экране."); } }
@@ -119,16 +125,20 @@ export function TeacherReviewWorkspace({ submissionId }: { submissionId: string 
           {!version && <p className="rw-muted">Сохранённых предложений нет. Работу можно оценить вручную без запуска модели.</p>}
           {version && <div className="rw-ai-overview"><span>ИИ: {criteria.filter(c => c.suggestion?.finding === 'strength').length} сильных сторон</span><span>{criteria.filter(c => ['concern', 'mixed'].includes(c.suggestion?.finding ?? '')).length} замечаний</span><span>{criteria.filter(c => c.suggestion?.proposed_score == null).length} без балла</span></div>}
         </div>
-        <RubricReviewPanel criteria={criteria} editor={editor} expanded={expanded} onExpand={setExpanded} onChange={edit} onPage={goToPage} busy={busy} dirtyKeys={dirtyKeys} savedState={editorSavedState(data, version, editor.mode)}/>
+        <QuestionReviewNavigation data={data} question={focusQuestion} onQuestion={value => {setFocusQuestion(value);setExpanded(criteria.find(c=>c.question_id===value)?.key ?? null);}}/>
+        <RubricReviewPanel criteria={focusQuestion ? criteria.filter(c => c.question_id === focusQuestion) : criteria} editor={editor} expanded={expanded} onExpand={setExpanded} onChange={edit} onPage={goToPage} busy={busy} dirtyKeys={dirtyKeys} savedState={editorSavedState(data, version, editor.mode)}/>
         <details className="rw-overall-feedback"><summary>Общая обратная связь <span>{editor.feedback ? 'есть комментарий' : 'для студента'}</span></summary><label className="rw-sr-only" htmlFor="review-overall-feedback">Общая обратная связь</label><textarea id="review-overall-feedback" rows={4} maxLength={10000} value={editor.feedback} placeholder="Итоговый комментарий к работе…" disabled={busy} onChange={e => { setEditor({ ...editor, feedback: e.target.value }); setDirty(true); }}/><p className="rw-muted">Студент увидит подтверждённую обратную связь после публикации.</p></details>
+        <DecisionMemory key={`${submissionId}/${selected}/${editor.mode}`} data={data} rubricId={editor.mode === "assisted" ? version?.rubric.id : undefined} criteria={criteria} editor={editor} busy={busy} onApply={edit}/>
+        <QuestionPages key={submissionId} data={data} busy={busy} onPage={goToPage} onDirty={setMappingDirty}/>
         <AssessmentDiagnostics submissionId={submissionId} data={data} assessment={assessment} selected={selected} onSelect={choose} dirty={hasUnsaved} onPage={goToPage} onAdvancedDirty={setAdvancedDirty} onRefresh={() => void refresh()}/>
         </div>
       </section>
     </div>
     {changedSincePublication && <p className="rw-publication-note"><FileCheck size={14}/> Есть более новая сохранённая проверка. Студент пока видит ранее опубликованную оценку.</p>}
+    {mappingDirty && <p className="rw-publication-note">Сохраните разметку кнопкой «Сохранить страницы» в разделе страниц вопросов.</p>}
     {advancedDirty && <p className="rw-publication-note">Сохраните изменения расширенной рубрики в её настройках.</p>}
     <ReviewActionBar savedState={editorSavedState(data, version, editor.mode)} dirty={hasUnsaved} busy={busy} hasSaved={!!(data.reviews.length || version?.decisions.length)} total={total} maximum={data.maximum_score} error={editorErrors(criteria, editor)[0] ?? null} onSave={() => void save(true)} onConfirm={() => void save(false)} onPublish={() => setDialog("publish")} publishable={publicationReady(data, version, editor.mode) && data.published_grade?.review_id !== data.reviews[0]?.id}/>
     {dialog === "publish" && <ReviewDialog title={data.published_grade ? "Обновить опубликованную оценку?" : "Опубликовать оценку?"} confirmLabel="Опубликовать для студента" onClose={() => setDialog(null)} onConfirm={() => void publish()}><p>Студент увидит последнюю сохранённую ручную проверку, её баллы и обратную связь.</p><p className="rw-publish-total">{data.reviews[0]?.criteria.reduce((sum, c) => sum + (c.points ?? 0), 0)} / {data.maximum_score} <ArrowRight size={17}/> официальная оценка</p></ReviewDialog>}
-    {dialog === "discard" && <ReviewDialog title="Есть несохранённые изменения" confirmLabel="Продолжить без сохранения" onClose={() => setDialog(null)} onConfirm={() => { setDialog(null); discardAction.current(); }}><p>Сохраните проверку, чтобы не потерять введённые баллы и комментарии.</p></ReviewDialog>}
+    {dialog === "discard" && <ReviewDialog title="Есть несохранённые изменения" confirmLabel="Продолжить без сохранения" onClose={() => setDialog(null)} onConfirm={() => { setDialog(null); discardAction.current(); }}><p>Сохраните изменения в проверке, рубрике и разметке страниц перед переходом.</p></ReviewDialog>}
   </div>;
 }

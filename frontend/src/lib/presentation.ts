@@ -35,6 +35,15 @@ export function submissionAvailability(assignment: { available_at?: string | nul
 }
 export function requestError(status: number, detail?: unknown) {
   const known: Record<string, string> = {
+    'Decision card rubric has changed.': 'Версия критерия изменилась. Уберите связь с карточкой и проверьте решение заново.',
+    'Confirm this teacher decision before saving a card.': 'Сначала подтвердите и сохраните решение по этому критерию.',
+    'Page mapping changed; reload it before saving.': 'Другой проверяющий изменил страницы. Перезагрузите разметку перед сохранением.',
+    'Evidence page is unavailable in this original PDF.': 'Такой страницы нет в оригинале PDF. Проверьте номер страницы.',
+    'Select unique existing PDF pages.': 'Выберите существующие страницы PDF без повторов.',
+    'Upload request ID was already used for a different file.': 'Эта попытка уже сохранена с другим файлом. Выберите файл заново перед новой отправкой.',
+    'Enrollment code is invalid or unavailable.': 'Код не найден или запись на курс закрыта. Проверьте код у преподавателя.',
+    'Course enrollment capacity has been reached.': 'На курсе пока нет свободных мест. Обратитесь к преподавателю.',
+    'Student account required for enrollment.': 'Для записи на курс войдите в учётную запись студента.',
     'Guardian registration is not configured.': 'Подтверждение родителем пока не настроено. Обратитесь в своё учебное учреждение.',
     'Guardian approval is required or has expired.': 'Нужно действующее согласие родителя. Вернитесь к проверке возраста.',
     'Guardian link is invalid or expired.': 'Ссылка недействительна или срок её действия истёк. Попросите ребёнка отправить новое письмо.',

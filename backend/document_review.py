@@ -12,6 +12,7 @@ from permissions import require_teacher
 from student_identity import student_display_name
 from review_status import review_summaries
 from persistence import AcademicAssignment, AcademicGrade, AcademicSubmission, SessionLocal, now_utc, read_blob
+from review_pilot_contracts import CardUse
 
 router = APIRouter(prefix="/api", tags=["Document review"])
 
@@ -21,6 +22,7 @@ class CriterionScore(BaseModel):
     criterion_id: str = Field(min_length=1, max_length=80)
     points: float | None = Field(ge=0, le=10000, allow_inf_nan=False)
     comment: str = Field(default="", max_length=4000)
+    card_use: CardUse | None = None
 
 class ReviewPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -113,7 +115,7 @@ def preview_page(submission_id: str, page_number: int, request: Request):
 @router.post("/document-review/{submission_id}", status_code=201)
 def save_review(submission_id: str, payload: ReviewPayload, request: Request):
     with SessionLocal() as db:
-        _, assignment = get_submission(db, submission_id, request, teacher=True)
+        submission, assignment = get_submission(db, submission_id, request, teacher=True)
         maximums = {(question["id"], criterion["criterion_id"]): criterion["maximum_points"] for question in assignment.questions for criterion in question["criteria"]}
         keys = [(criterion.question_id, criterion.criterion_id) for criterion in payload.criteria]
         if len(keys) != len(set(keys)) or set(keys) != set(maximums):
@@ -122,6 +124,9 @@ def save_review(submission_id: str, payload: ReviewPayload, request: Request):
             raise HTTPException(422, 'Every criterion needs a teacher score before confirmation.')
         if any(score.points is not None and score.points > maximums[(score.question_id, score.criterion_id)] for score in payload.criteria) or sum(score.points or 0 for score in payload.criteria) > assignment.maximum_score:
             raise HTTPException(422, "Scores exceed rubric or assignment bounds.")
+        from review_pilot import validate_use
+        for score in payload.criteria:
+            validate_use(db, submission, assignment, score.question_id, score.criterion_id, score.card_use)
         review = DocumentReview(submission_id=submission_id, reviewer=request_user(request).username, criteria=[dict(score.model_dump(), confirmed=not payload.draft) for score in payload.criteria], rubric_snapshot=assignment.questions, feedback=payload.feedback)
         db.add(review); db.commit()
         return review_json(review)
@@ -182,7 +187,7 @@ def published_feedback(db, grade):
         description = str(criterion.get("description") or "").strip()
         if not description or description == score.get("criterion_id"):
             description = f"Критерий {index + 1}"
-        criteria.append({**score, "description": description,
+        criteria.append({**{key: value for key, value in score.items() if key != 'card_use'}, "description": description,
                          "maximum_points": criterion.get("maximum_points")})
     public_rubric = [{"id": q.get("id"), "title": q.get("title", ""), "criteria": [
         {key: c.get(key) for key in ("criterion_id", "description", "maximum_points")}
