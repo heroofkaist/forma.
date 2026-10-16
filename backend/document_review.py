@@ -125,6 +125,7 @@ def list_submissions(assignment_id: str, request: Request, response: Response):
         roster = {e.student_id: {'student_id': e.student_id, 'student_name': student_display_name(db, e.student_id, e.student_name), 'active': True}
                   for e in db.scalars(select(CourseEnrollment).where(CourseEnrollment.offering_id == offering.id)) if enrollment_active(db, e)}
         from teaching_workflow import attention_for
+        from archive_comparison import scan_summary
         items = []
         for row in rows:
             roster.setdefault(row.student_id, {'student_id': row.student_id, 'student_name': student_display_name(db, row.student_id, row.student_name), 'active': False})
@@ -132,7 +133,7 @@ def list_submissions(assignment_id: str, request: Request, response: Response):
                 'student_name': roster[row.student_id]['student_name'], 'file_name': row.file_name, 'file_type': row.file_type,
                 'status': row.status, 'processing_status': latest[row.id].status if row.id in latest else 'not_scheduled',
                 'processing_error': latest[row.id].error if row.id in latest else '', 'submitted_at': utc(row.created_at),
-                'similarity': similarities[row.id], 'integrity': integrity[row.id], 'attention': attention_for(db, row.id)})
+                'similarity': similarities[row.id], 'integrity': integrity[row.id], 'attention': attention_for(db, row.id), 'archive_files':scan_summary(db,row)})
         from assignment_comparison import fingerprint
         latest_sources = {}
         for row in rows:

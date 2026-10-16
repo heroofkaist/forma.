@@ -311,3 +311,5 @@ app.include_router(course_archive_router)
 
 from teaching_workflow import router as teaching_router
 app.include_router(teaching_router)
+from archive_comparison import router as archive_comparison_router
+app.include_router(archive_comparison_router)

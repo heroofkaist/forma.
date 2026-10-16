@@ -103,6 +103,7 @@ export type SimilarityReport = {
 };
 
 export type ArchiveSubmission = {
+  archive_files?:import("./assignment-workspace").ArchiveFileSummary;
   can_review?: boolean;
   instructor?: string;
   course_id?: string;

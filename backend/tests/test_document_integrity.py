@@ -65,8 +65,11 @@ def test_polished_regular_non_native_text_is_not_an_ai_verdict_and_short_artifac
 
 
 def test_one_matching_page_is_not_a_whole_file_match_and_late_text_is_used():
-    a={'ink':bytes([20,0]),'norm':20,'digest':'a','page':1}
-    b={'ink':bytes([0,20]),'norm':20,'digest':'b','page':2}
+    from PIL import Image, ImageDraw
+    from services.similarity_vectors import image_feature
+    first=Image.new('L',(300,400),'white');ImageDraw.Draw(first).rectangle((20,30,180,190),fill='black')
+    second=Image.new('L',(300,400),'white');ImageDraw.Draw(second).ellipse((100,200,260,350),fill='black')
+    a={**image_feature(first),'page':1};b={**image_feature(second),'page':2}
     result=visual_signal([a],[a,b])
     assert result['score']==.5 and result['matched_units_candidate']==1
     assert 'distinctivetail' in text_features(('common words '*5000)+' distinctivetail endmarker','')

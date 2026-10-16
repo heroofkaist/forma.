@@ -114,6 +114,8 @@ def search(request: Request, response: Response, query: str = '', course_id: str
         for item in items:
             item['integrity'] = integrity.get(item['submission_id'])
             item['similarity'] = similarities.get(item['submission_id'])
+            from archive_comparison import scan_summary
+            item['archive_files'] = scan_summary(db,db.get(AcademicSubmission,item['submission_id']))
         return {'items': items}
 
 

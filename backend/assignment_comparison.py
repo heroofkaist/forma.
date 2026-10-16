@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import os
+import threading
 from fastapi import APIRouter, Request, Response, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select, or_
@@ -17,6 +19,7 @@ from comparison_models import AssignmentComparison
 from services.similarity_vectors import VERSION, MAX_WORKS, MAX_BYTES
 
 router=APIRouter(prefix='/api/assignment-comparison', tags=['Local comparison'])
+_comparison_slot=threading.BoundedSemaphore(1)
 
 class Options(BaseModel):
     model_config=ConfigDict(extra='forbid', str_strip_whitespace=True)
@@ -32,6 +35,36 @@ def current_sources(db, assignment):
     return sorted(latest.values(),key=lambda row:row.id)
 
 
+def baseline_records(db, assignments):
+    from processing_models import AssignmentBrief
+    from document_models import CourseMaterial
+    records=[]
+    for assignment in {a.id:a for a in assignments}.values():
+        for row in db.scalars(select(AssignmentBrief).where(AssignmentBrief.assignment_id==assignment.id)):
+            records.append({'id':row.id,'file_path':row.file_path,'file_type':row.structure['file_type'],
+                'hash':row.structure.get('content_hash'),'structure':row.structure})
+        for row in db.scalars(select(CourseMaterial).where(CourseMaterial.offering_id==assignment.offering_id,
+                CourseMaterial.tags.in_([f'forma:assignment-template:{assignment.id}:required',f'forma:assignment-template:{assignment.id}:optional']))):
+            records.append({'id':row.id,'file_path':row.file_path,'file_type':row.file_type,'hash':row.content_hash,'structure':row.structure})
+    return sorted(records,key=lambda r:r['id'])
+
+
+def common_payload(db, assignments, additional=''):
+    assignments=sorted({a.id:a for a in assignments}.values(),key=lambda a:a.id)
+    records=baseline_records(db,assignments)
+    text='\n'.join([*(part for a in assignments for part in [a.description or '',*(q.get('statement','') for q in a.questions)]),
+        *(r['structure'].get('extracted_text','') for r in records),additional])
+    baselines=[];total=0
+    for row in records[:6]:
+        try: raw=read_blob(row['file_path'])
+        except (FileNotFoundError,OSError) as error: raise HTTPException(409,'An assignment baseline is unavailable. Restore the task or template before comparing.') from error
+        if row['hash'] and hashlib.sha256(raw).hexdigest()!=row['hash']: raise HTTPException(409,'An assignment baseline changed. Reload before comparing.')
+        total+=len(raw)
+        if total>15*1024*1024: raise HTTPException(413,'Assignment baselines exceed the local comparison limit.')
+        baselines.append({'content':base64.b64encode(raw).decode(),'file_type':row['file_type']})
+    return {'context':text[:20000],'baselines':baselines,'baseline_limit':len(records)>6 or len(text)>20000}
+
+
 def fingerprint(db, assignment, rows, context, scope='assignment'):
     from integrity_models import DocumentIntegrityReport
     sources=[]
@@ -42,7 +75,8 @@ def fingerprint(db, assignment, rows, context, scope='assignment'):
             hashlib.sha256(json.dumps(source.structure,sort_keys=True).encode()).hexdigest() if source else None,
             hashlib.sha256(json.dumps([db.get(AcademicAssignment,row.assignment_id).description,db.get(AcademicAssignment,row.assignment_id).questions],sort_keys=True).encode()).hexdigest(),
             db.scalar(select(DocumentIntegrityReport.id).where(DocumentIntegrityReport.submission_id==row.id).order_by(DocumentIntegrityReport.created_at.desc(),DocumentIntegrityReport.id.desc()).limit(1))))
-    return hashlib.sha256(json.dumps({'version':VERSION,'scope':scope,'assignment':assignment.id,'instructions':assignment.description,'questions':assignment.questions,'context':context,
+    baselines=[(r['id'],r['hash'],hashlib.sha256(json.dumps(r['structure'],sort_keys=True).encode()).hexdigest()) for r in baseline_records(db,[db.get(AcademicAssignment,r.assignment_id) for r in rows])]
+    return hashlib.sha256(json.dumps({'version':VERSION,'scope':scope,'assignment':assignment.id,'instructions':assignment.description,'questions':assignment.questions,'context':context,'baselines':baselines,
         'sources':sources},sort_keys=True,ensure_ascii=False).encode()).hexdigest()
 
 
@@ -64,8 +98,10 @@ def result_json(db, assignment, row):
 
 def run_local(payload):
     worker=Path(__file__).parent/'services'/'similarity_vectors.py'
+    if not _comparison_slot.acquire(blocking=False):
+        raise HTTPException(429,'Local file comparison is busy. Retry after the current comparison finishes.')
     try:
-        result=subprocess.run([sys.executable,str(worker)],input=json.dumps(payload),capture_output=True,text=True,timeout=30)
+        result=subprocess.run([sys.executable,str(worker)],input=json.dumps(payload),capture_output=True,text=True,timeout=30,env={**os.environ,'OPENBLAS_NUM_THREADS':'1','OMP_NUM_THREADS':'1'})
         if result.returncode or len(result.stdout)>8*1024*1024:
             raise ValueError('Unsupported or oversized comparison.')
         value=json.loads(result.stdout)
@@ -74,6 +110,8 @@ def run_local(payload):
         return value
     except (subprocess.TimeoutExpired, ValueError, OSError) as error:
         raise HTTPException(422,'Local comparison failed or exceeded its limits. No result was recorded.') from error
+    finally:
+        _comparison_slot.release()
 
 
 def prepare_documents(db, rows, anonymize=False):
@@ -125,7 +163,9 @@ def compare_files(payload:FileOptions,request:Request,response:Response):
         if previous:return result_json(db,assignment,previous)
         rate_limit(request,'file-comparison',request_user(request).username,6)
         documents=prepare_documents(db,rows,anonymize=True)
-        result=run_local({'documents':documents,'context':'\n'.join([*teacher_context,payload.context])[:20000]})
+        common=common_payload(db,[db.get(AcademicAssignment,r.assignment_id) for r in rows],payload.context)
+        result=run_local({'documents':documents,**common})
+        result['baseline_limit']=common['baseline_limit']
         db.expire_all()
         for row in rows:
             current=db.get(AcademicAssignment,row.assignment_id)
@@ -157,8 +197,9 @@ def compare(aid:str,payload:Options,request:Request,response:Response):
         if previous: return result_json(db,assignment,previous)
         rate_limit(request,'assignment-comparison',request_user(request).username,6)
         documents=prepare_documents(db,rows)
-        context='\n'.join([assignment.description or '',*(q.get('statement','') for q in assignment.questions),payload.context])[:20000]
-        result=run_local({'documents':documents,'context':context})
+        common=common_payload(db,[assignment],payload.context)
+        result=run_local({'documents':documents,**common})
+        result['baseline_limit']=common['baseline_limit']
         # A new upload during computation cannot be silently treated as compared.
         db.expire_all()
         assignment=db.get(AcademicAssignment,aid)

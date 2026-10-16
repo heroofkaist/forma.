@@ -28,7 +28,8 @@ class CorrectRequest(BaseModel):
 
 
 def job_json(job):
-    return {'id':job.id,'status':job.status,'stage':job.stage,'attempts':job.attempts,'error':job.error,'error_class':job.error_class,'created_at':utc(job.created_at),'updated_at':utc(job.updated_at),'provider':job.context.get('ai',{}).get('name','gemini'),'partial':bool(job.usage.get('partial')),'model':job.model,'prompt_version':job.prompt_version,'usage':job.usage}
+    from services.assessment_errors import MESSAGES
+    return {'id':job.id,'status':job.status,'stage':job.stage,'attempts':job.attempts,'error':job.error,'error_hint':MESSAGES.get(job.error_class),'error_class':job.error_class,'created_at':utc(job.created_at),'updated_at':utc(job.updated_at),'provider':job.context.get('ai',{}).get('name','gemini'),'partial':bool(job.usage.get('partial')),'model':job.model,'prompt_version':job.prompt_version,'usage':job.usage}
 
 
 def analysis_questions(assignment, job):

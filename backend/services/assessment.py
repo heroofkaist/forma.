@@ -217,7 +217,8 @@ def evaluate(snapshot, config, progress=None, observe=None, job_id=None, checkpo
         from services.processing_diagnostics import set_stage
         set_stage('assessment_validate')
         from services.feedback_text import clean_feedback
-        proposed, notes = reconcile_score_evidence(clean_feedback(json.loads(data['message']['content'])))
+        from services.structured_output import model_object
+        proposed, notes = reconcile_score_evidence(clean_feedback(model_object(data['message']['content'])))
         batch_result = validate_assessment(proposed, local_rubric, {'sections': sections}, task.get('answer_groups',[]))
         if context['source_limitations']['assignment_context_incomplete'] and any(c['proposed_score'] is not None for c in batch_result['criteria']):
             raise AssessmentValidationError('assessment_task_incomplete')

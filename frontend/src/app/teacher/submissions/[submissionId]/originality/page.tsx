@@ -1,5 +1,6 @@
 "use client";
 
+import {ArchiveFileComparison} from "../../../../../components/assignment/archive-file-comparison";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -65,9 +66,10 @@ export default function OriginalityReportPage() {
   }
   return <AppShell>
     <div className="breadcrumbs-inline"><Link href="/teacher/originality">Очередь оригинальности</Link><span>/</span><span>{report?.assignment ?? "Отчёт"}</span></div>
-    <section className="academic-heading originality-heading"><div><div className="eyebrow">{report?.course ?? "КУРС"} · {report?.assignment ?? "ЗАДАНИЕ"} · {report?.academic_year}</div><h1>Отчёт о совпадениях</h1><p>{report?.document_title ?? report?.student_id ?? "Работа"} · анализ {report?.created_at ? new Date(report.created_at).toLocaleString("ru-RU") : "—"}</p></div><div className="originality-summary"><strong>{report ? similarityPercent(report) : "—"}</strong><span>{complete ? <>наибольшая доля совпадения<br />с одним источником</> : "Результат недоступен"}</span></div></section>
+    <section className="academic-heading originality-heading"><div><div className="eyebrow">{report?.course ?? "КУРС"} · {report?.assignment ?? "ЗАДАНИЕ"} · {report?.academic_year}</div><h1>Отчёт о совпадениях</h1><p>{report?.document_title ?? report?.student_id ?? "Работа"} · анализ {report?.created_at ? new Date(report.created_at).toLocaleString("ru-RU") : "—"}</p></div><div className="originality-summary"><strong>{report ? similarityPercent(report) : "—"}</strong><span>Только текст<br />{complete ? <>наибольшая доля совпадения<br />с одним источником</> : "Текстовый отчёт недоступен"}</span></div></section>
     {error && <div className="notice error-notice" role="alert">{error}</div>}
-    <Link href={`/teacher/submissions/${submissionId}/review`}>К проверке работы →</Link><p className="muted">Архив включает текущий и прошлые потоки, а также связанные курсы преподавателей одного учреждения. Сравнение автоматически обновляется при появлении новых работ.</p>
+    <Link href={`/teacher/submissions/${submissionId}/review`}>К проверке работы →</Link><p className="muted">Архив включает текущий и прошлые потоки, а также связанные курсы преподавателей одного учреждения. Сохранённый результат можно продолжить; после появления новых работ архив нужно проверить заново.</p>
+    <ArchiveFileComparison submissionId={submissionId}/><h2 className="legacy-text-report-title">Дополнительный отчёт по извлечённому тексту</h2>
     {loading && <p role="status">Загружаем отчёт…</p>}
     {!loading && report && !complete && <div className="academic-info" role="status"><p>{similarityStates[report.analysis_status] ?? similarityStates.incomplete}</p><button className="button" disabled={rechecking} onClick={()=>void recheck()}>{rechecking?'Сравниваем…':'Обновить сравнение с архивом'}</button><Link className="button" href="/teacher/archive">Сравнить файлы в архиве →</Link></div>}
     {complete && <>

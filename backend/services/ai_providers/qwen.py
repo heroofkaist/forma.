@@ -89,13 +89,13 @@ def interpret_pages(request, chat, progress=None, observe=None, started=None):
             # An observer is used ONLY by the explicit synthetic benchmark.
             # Normal requests never record/log raw model output or prompts.
             if observe: observe(data)
-            if not data.get('done') or data.get('done_reason') == 'length':
-                raise ValueError('Local model output was truncated; reduce batch size or review manually.')
+            if not data.get('done') or data.get('done_reason') not in ('stop', None):
+                from services.assessment_errors import AssessmentValidationError
+                raise AssessmentValidationError('document_output_incomplete')
             set_stage(request.config.name + '_decode')
             raw = data.get('message', {}).get('content', '')
-            if not isinstance(raw, str) or not raw.strip():
-                raise ValueError('Local model returned no structured content.')
-            observations = PageObservations.model_validate(json.loads(raw))
+            from services.structured_output import model_object
+            observations = PageObservations.model_validate(model_object(raw))
             decoded = {'document_type': request.document_type, 'sections': [], 'question_associations': [],
                        'warnings': observations.warnings, 'requires_human_review': True}
             for index, observation in enumerate(observations.sections):

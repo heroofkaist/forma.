@@ -18,6 +18,7 @@ import institutions
 import document_processing
 import course_archive
 import teaching_workflow
+import archive_comparison
 from main import app
 from migrations import apply_migrations
 from persistence import Base, now_utc
@@ -30,7 +31,7 @@ def platform(tmp_path, monkeypatch):
         connection.execute("PRAGMA foreign_keys=ON")
     Base.metadata.create_all(engine)
     factory = sessionmaker(engine, expire_on_commit=False)
-    for module in (persistence, accounts, ai_budget, courses, permissions, academic_api, assignment_api, email_delivery, institutions, document_processing, course_archive, teaching_workflow):
+    for module in (persistence, accounts, ai_budget, courses, permissions, academic_api, assignment_api, email_delivery, institutions, document_processing, course_archive, teaching_workflow, archive_comparison):
         monkeypatch.setattr(module, "SessionLocal", factory)
     monkeypatch.setattr(persistence, "engine", engine)
     monkeypatch.setenv("FORMA_AUTH_REQUIRED", "true")

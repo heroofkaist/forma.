@@ -62,6 +62,8 @@ def mock_cloud(monkeypatch, factory, calls, mode='success', key_limit=4, endpoin
         else:
             raw = response_for({'messages': [{}, {'content': context}]}).json()['message']['content']
         if mode == 'invalid_json': raw = 'private invalid model content'
+        if mode == 'fenced_json': raw = '```json\n' + raw + '\n```'
+        if mode == 'prose_json': raw = 'Here is the requested JSON:\n' + raw
         if mode == 'invalid_page':
             result = json.loads(raw); result['sections'][0]['page_number'] = 999; raw = json.dumps(result)
         return httpx.Response(200, json={'id': 'gen-' + request.headers['x-request-id'], 'model': MODEL, 'provider': 'Synthetic',
@@ -82,6 +84,7 @@ def test_cloud_vertical_slice_shared_contract_private_payload_and_review(cloud, 
     assert status['usage']['billing'][0]['cost_usd'] == '0.0012'
     payload = json.loads(next(r for r in calls if r.method == 'POST').content)
     assert payload['model'] == MODEL and payload['stream'] is False
+    assert payload['plugins'] == [{'id': 'response-healing'}]
     routing = payload['provider']
     assert routing['only'] == ['synthetic/bf16'] and routing['allow_fallbacks'] is False
     assert routing['zdr'] and routing['data_collection'] == 'deny' and routing['require_parameters']
@@ -98,6 +101,42 @@ def test_cloud_vertical_slice_shared_contract_private_payload_and_review(cloud, 
         row = db.scalar(select(AIRequestCharge))
         assert row.model == MODEL and row.actual_nusd == 1_200_000 and row.state == 'settled'
         assert len(row.job_id) == 36
+
+
+@pytest.mark.parametrize('mode',['fenced_json','prose_json'])
+def test_complete_wrapped_json_is_decoded_without_any_paid_resend(cloud,platform,monkeypatch,mode):
+    client,factory,teacher,student,sid,*_=setup_submission(platform,monkeypatch)
+    calls=[];mock_cloud(monkeypatch,factory,calls,mode=mode)
+    path='/api/document-analysis/'+sid
+    assert client.post(path,headers=teacher,json={}).status_code==202
+    assert processing.process_one()
+    assert client.get(path+'/status',headers=teacher).json()['jobs'][0]['status']=='needs_review'
+    assert len(client.get(path,headers=teacher).json()['items'])==1
+    assert sum(r.method=='POST' for r in calls)==1
+    with factory() as db:
+        charges=db.scalars(select(AIRequestCharge)).all()
+        assert len(charges)==1 and charges[0].state=='settled'
+
+
+def test_reading_json_failure_reaches_the_teacher_assessment_hint_without_looping(cloud,platform,monkeypatch):
+    from persistence import AcademicAssignment
+    from services.assessment_pipeline import activate_waiting
+    import assessment_api
+    client,factory,teacher,student,sid,_,assignment,*_=setup_submission(platform,monkeypatch)
+    monkeypatch.setattr(assessment_api,'SessionLocal',factory)
+    monkeypatch.setenv('FORMA_ASSESSMENT_PROVIDER','openrouter')
+    with factory() as db:
+        row=db.get(AcademicAssignment,assignment['id']);row.description='Calculate force and explain the method.'
+        row.questions=[{**q,'criteria':[{**c,'description':'Explain the calculation and its units.'} for c in q['criteria']]} for q in row.questions];db.commit()
+    calls=[];mock_cloud(monkeypatch,factory,calls,mode='invalid_json')
+    path='/api/assessment/'+sid
+    assert client.post(path,headers=teacher,json={'prepare':True}).status_code==202
+    assert processing.process_one()
+    with factory() as db:activate_waiting(db);db.commit()
+    failed=client.get(path,headers=teacher).json()['jobs'][0]
+    assert failed['status']=='failed' and 'нечитаемом формате' in failed['error_hint']
+    assert sum(r.method=='POST' for r in calls)==1
+    assert processing.process_one() is False
 
 
 @pytest.mark.parametrize('mode,expected', [('invalid_json', 'failed'), ('invalid_page', 'failed'),

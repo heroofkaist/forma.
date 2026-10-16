@@ -11,6 +11,10 @@ export function countLabel(value: number, one: string, few: string, many: string
   const form = new Intl.PluralRules('ru-RU').select(value);
   return `${scoreLabel(value, Number.MAX_SAFE_INTEGER)} ${form === 'one' ? one : form === 'few' ? few : many}`;
 }
+export function similarityLabel(value: unknown) {
+  return typeof value==='number'&&Number.isFinite(value)&&value>=0&&value<=1
+    ? value>0&&value<.005?'<1%':`${Math.round(value*100)}%` : '—';
+}
 export function aiText(value: unknown, fallback = ''): string {
   if (typeof value !== 'string') return fallback;
   const text = value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim();

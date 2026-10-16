@@ -35,6 +35,10 @@ export function submissionAvailability(assignment: { available_at?: string | nul
 }
 export function requestError(status: number, detail?: unknown) {
   const known: Record<string, string> = {
+    'Local file comparison is busy. Retry after the current comparison finishes.': 'Сейчас выполняется другое сравнение файлов. Уже проверенные файлы сохранены; продолжите чуть позже.',
+    'Course archive changed. Reload before continuing the file scan.': 'В архиве появились новые работы или изменились материалы задания. Обновите состояние и запустите актуальное сравнение.',
+    'An assignment baseline is unavailable. Restore the task or template before comparing.': 'Файл условия или шаблон недоступен. Восстановите материал задания, чтобы исключить его из сравнения.',
+    'Assignment baselines exceed the local comparison limit.': 'Материалы задания превышают 15 МБ. Сократите их размер перед сравнением.',
     'Teaching guide changed. Reload before saving.': 'Правила уже изменены в другой вкладке. Скопируйте свои правки и перезагрузите настройки.',
     'Only confirmed current reviews can be reference examples.': 'Один из примеров не соответствует действующим критериям. Уберите его из списка и сохраните правила.',
     'Requirements, teaching guide or source changed. Reassess the whole work.': 'После этой оценки изменились условия, правила ИИ или распознавание. Запустите оценивание всей работы — прежние баллы нельзя использовать с новыми требованиями.',

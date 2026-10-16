@@ -39,6 +39,11 @@ def activate_waiting(db):
         if parent and parent.status in {'queued', 'extracting', 'interpreting', 'awaiting_budget'}:
             continue
         try:
+            if parent and parent.status == 'failed' and parent.error_class.startswith('document_output_'):
+                job.status = job.stage = 'failed'
+                job.error_class = parent.error_class
+                job.error = parent.error
+                continue
             if not parent or parent.status == 'failed':
                 raise ValueError('Распознавание не завершено. Откройте помощь ИИ и проверьте состояние документа.')
             submission = db.get(AcademicSubmission, job.submission_id)

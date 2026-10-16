@@ -13,7 +13,7 @@ from collections import Counter
 from PIL import Image, ImageOps, ImageStat
 import pymupdf
 
-VERSION = 'whole-file-v2'
+VERSION = 'whole-file-v3-geometric-winnowing'
 MAX_WORKS = 40
 MAX_PAGES = 200
 MAX_BYTES = 60 * 1024 * 1024
@@ -71,21 +71,12 @@ def code_features(pages, kind):
 
 
 def image_feature(image):
-    image = ImageOps.grayscale(image)
-    if image.width * image.height > 20_000_000:
-        return None
-    image.thumbnail((128,128))
-    if ImageStat.Stat(image).stddev[0] < 10:
-        return None  # Uniform and empty pages carry no visual comparison evidence.
-    small = image.resize((32,32), Image.Resampling.LANCZOS)
-    ink = bytes(255-v for v in small.getdata())
-    if sum(v > 8 for v in ink) < 8:
-        return None
-    norm = math.sqrt(sum(v*v for v in ink))
-    return {'ink': ink, 'norm': norm, 'digest': hashlib.sha256(ink).hexdigest()}
+    if __package__: from .visual_matching import feature
+    else: from visual_matching import feature
+    return feature(image)
 
 
-def visuals(content, kind, used):
+def visuals(content, kind, used, context=""):
     result = []
     if kind == 'pdf':
         with pymupdf.open(stream=content, filetype='pdf') as doc:
@@ -96,8 +87,18 @@ def visuals(content, kind, used):
                 edge = max(page.rect.width,page.rect.height)
                 if edge <= 0:
                     continue
-                pix = page.get_pixmap(matrix=pymupdf.Matrix(128/edge,128/edge), colorspace=pymupdf.csGRAY, alpha=False)
-                f = image_feature(Image.frombytes('L',(pix.width,pix.height),pix.samples))
+                pix = page.get_pixmap(matrix=pymupdf.Matrix(850/edge,850/edge), colorspace=pymupdf.csGRAY, alpha=False)
+                image = Image.frombytes('L',(pix.width,pix.height),pix.samples)
+                # Mask exact teacher-supplied task lines, leaving the original
+                # intact. Geometric baseline matching handles shared drawings.
+                from PIL import ImageDraw
+                draw = ImageDraw.Draw(image)
+                for line in context.splitlines()[:100]:
+                    if len(line.strip()) < 18: continue
+                    for box in page.search_for(line.strip()[:500]):
+                        box = box * page.rotation_matrix
+                        draw.rectangle((box.x0*850/edge,box.y0*850/edge,box.x1*850/edge,box.y1*850/edge), fill=255)
+                f = image_feature(image)
                 if f:
                     result.append({'page':index+1, 'unit':'page', **f})
     elif kind in {'docx','pptx'}:
@@ -110,10 +111,10 @@ def visuals(content, kind, used):
             used[0] += len(images)
             for entry in images:
                 if entry.file_size > 5*1024*1024:
-                    continue
+                    raise ValueError('An embedded image exceeds the supported size.')
                 with Image.open(io.BytesIO(archive.read(entry))) as image:
                     if image.width*image.height>20_000_000:
-                        continue
+                        raise ValueError('An embedded image exceeds the supported dimensions.')
                     f=image_feature(image)
                     if f:
                         result.append({'asset':entry.filename,'unit':'embedded_image',**f})
@@ -136,20 +137,9 @@ def cosine(a,b):
 
 
 def visual_signal(a,b):
-    if not a or not b:
-        return {'status':'insufficient', 'score':None, 'evidence':[]}
-    best_a=[0.0]*len(a); best_b=[0.0]*len(b); evidence=[]
-    for i,x in enumerate(a):
-        for j,y in enumerate(b):
-            score = sum(v*w for v,w in zip(x['ink'],y['ink']))/(x['norm']*y['norm'])
-            if score >= .985:
-                best_a[i]=max(best_a[i],score); best_b[j]=max(best_b[j],score)
-                evidence.append({'current':{k:v for k,v in x.items() if k in ('page','asset','unit')},'candidate':{k:v for k,v in y.items() if k in ('page','asset','unit')},'score':round(score,6),'identical_thumbnail':x['digest']==y['digest']})
-    # A single matching cover page must not turn a whole document into 100%.
-    score=min(sum(best_a)/len(a),sum(best_b)/len(b))
-    return {'status':'completed','score':round(min(1,score),6),'evidence':sorted(evidence,key=lambda e:e['score'],reverse=True)[:10],
-            'matched_units_current':sum(v>0 for v in best_a),'matched_units_candidate':sum(v>0 for v in best_b),
-            'units_current':len(a),'units_candidate':len(b)}
+    if __package__: from .visual_matching import signal
+    else: from visual_matching import signal
+    return signal(a,b)
 
 
 
@@ -158,19 +148,30 @@ def analyze(payload):
     if not 2 <= len(docs) <= MAX_WORKS:
         raise ValueError('Compare 2–40 works.')
     context=payload.get('context','')[:20000]
-    profiles=[]; used=[0]; total=0
+    if __package__:
+        from . import document_fingerprints as fingerprints
+        from .visual_matching import remove_baseline
+    else:
+        import document_fingerprints as fingerprints
+        from visual_matching import remove_baseline
+    profiles=[]; used=[0]; total=0; baselines=[]
+    for baseline in payload.get('baselines',[])[:6]:
+        raw=base64.b64decode(baseline['content'],validate=True); total+=len(raw)
+        if total>MAX_BYTES: raise ValueError('Baseline file limit exceeded.')
+        baselines.extend(visuals(raw,baseline['file_type'],used))
     for doc in docs:
         raw=base64.b64decode(doc['content'],validate=True); total+=len(raw)
         if len(raw)>30*1024*1024 or total>MAX_BYTES:
             raise ValueError('File limit exceeded.')
         text=doc.get('text',''); pages=doc.get('pages',[]); kind=doc['file_type']
         profiles.append({'text':text_features(text,context),'formula':formula_features(text), 'code':code_features(pages,kind),
-                         'visual':visuals(raw,kind,used),'truncated':len(text)>MAX_CHARS, 'digest':hashlib.sha256(raw).hexdigest(),
+                         'visual':[remove_baseline(v,baselines) for v in visuals(raw,kind,used,context)],'fingerprints':fingerprints.profile(text,context,pages),'truncated':len(text)>MAX_CHARS, 'digest':hashlib.sha256(raw).hexdigest(),
                          'semantic':Counter(f['concept'].casefold() for f in doc.get('semantic_features',[])) if len(doc.get('semantic_features',[]))>=3 else Counter()})
     vectors={name:tfidf([p[name] for p in profiles]) for name in ('text','formula','code','semantic')}
     pairs=[]
     for i in range(len(docs)):
         for j in range(i+1,len(docs)):
+            if payload.get('target_id') and payload['target_id'] not in {docs[i]['id'],docs[j]['id']}: continue
             if docs[i]['student_id']==docs[j]['student_id']:
                 continue
             metrics={}
@@ -178,12 +179,14 @@ def analyze(payload):
                 a,b=vectors[name][i],vectors[name][j]
                 metrics[name]={'status':'completed' if a and b else 'insufficient','score':round(cosine(a,b),6) if a and b else None,
                     'evidence':sorted(set(a)&set(b),key=lambda k:a[k]*b[k],reverse=True)[:10]}
+            metrics['passages']=fingerprints.compare(profiles[i]['fingerprints'],profiles[j]['fingerprints'])
             metrics['visual']=visual_signal(profiles[i]['visual'],profiles[j]['visual'])
             identical=profiles[i]['digest']==profiles[j]['digest']
-            meaningful_identity=identical and bool(docs[i].get('text','').strip() or profiles[i]['visual'])
-            eligible=[metrics[k]['score'] for k in ('text','code','visual') if metrics[k]['score'] is not None]
+            meaningful_identity=identical and bool(profiles[i]['fingerprints']['eligible']>=4 or metrics['code']['score'] is not None or any(not v.get('all_baseline') for v in profiles[i]['visual']))
+            eligible=[metrics[k]['score'] for k in ('passages','code','visual') if metrics[k]['score'] is not None]
             metrics['document']={'status':'completed' if eligible or meaningful_identity else 'insufficient', 'score':1.0 if meaningful_identity else max(eligible) if eligible else None,
-                'evidence':['Файлы полностью совпадают по SHA-256.'] if identical else [], 'identical_file':identical}
+                'evidence':['Файлы полностью совпадают по SHA-256.'] if identical else [], 'identical_file':identical,'common_material_excluded':bool(context.strip() or baselines),
+                'partial':profiles[i]['truncated'] or profiles[j]['truncated'] or metrics['passages'].get('bounded',False)}
             if metrics['semantic']['status']=='completed':
                 common=metrics['semantic']['evidence']
                 metrics['semantic']['source_evidence']=[{'concept':concept,
@@ -191,8 +194,8 @@ def analyze(payload):
                     'candidate':next((f for f in docs[j].get('semantic_features',[]) if f['concept'].casefold()==concept),None)} for concept in common[:5]]
             pairs.append({'submission_id':docs[i]['id'],'candidate_id':docs[j]['id'],'metrics':metrics})
     return {'version':VERSION,'pairs':pairs,'documents':[{'id':d['id'],'student_id':d['student_id'],'file_name':d['file_name'],'file_type':d['file_type'],'truncated':p['truncated'],'units_total':len(d.get('pages',[])),'visual_units':len(p['visual']),'text_chars':len(d.get('text',''))} for d,p in zip(docs,profiles)],
-            'context':context,'scope':'latest_attempt_per_student_in_assignment','limits':{'works':MAX_WORKS,'pages_or_images':MAX_PAGES,'text_chars_per_work':MAX_CHARS},
-            'limitations':['TF-IDF is lexical, not semantic embeddings or proof of copying.','Formula strings are compared without proving algebraic equivalence.','Visual score aggregates matching nonblank pages/images across both files; shared templates can match and crops/rotation can be missed.','Code features abstract identifiers and literals; algorithms are not executed.', 'Semantic profiles are advisory Qwen-extracted concepts, not neural embeddings or proof of shared authorship.']}
+            'context':context,'scope':'authorized_files_different_authors','limits':{'works':MAX_WORKS,'pages_or_images':MAX_PAGES,'text_chars_per_work':MAX_CHARS},
+            'limitations':['Long matching passages use word winnowing with original offsets. TF-IDF is supplemental and never the document index. All signals require teacher review.','Formula strings are compared without proving algebraic equivalence.','ORB feature matches require RANSAC geometric agreement; visual index is not the percentage of copied content. Rewritten handwriting and heavily changed images may be missed. Known task material is excluded where found.','Code features abstract identifiers and literals; algorithms are not executed.', 'Semantic profiles are advisory Qwen-extracted concepts, not neural embeddings or proof of shared authorship.']}
 
 
 if __name__ == '__main__':

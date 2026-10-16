@@ -141,6 +141,7 @@ class OpenRouterProvider:
                 provider_remaining = verify_key(client)
                 charge = ai_budget.reserve(job_id, 'openrouter', MODEL, required, timeout=math.ceil(timeout), provider_remaining=provider_remaining)
                 payload = {'model': MODEL, 'stream': False, 'max_tokens': options['output_tokens'], 'temperature': 0,
+                    'plugins': [{'id': 'response-healing'}],
                     'provider': {'only': [options['endpoint']], 'order': [options['endpoint']], 'allow_fallbacks': False,
                                  'require_parameters': True, 'data_collection': 'deny', 'zdr': True,
                                  'max_price': {'prompt': float(options['prompt_price_cap']), 'completion': float(options['completion_price_cap']), 'request': 0, 'image': 0}},
@@ -181,7 +182,7 @@ class OpenRouterProvider:
                 choices = data.get('choices', [])
                 if not choices: raise CloudConfigurationError('Provider returned no completion.')
                 choice = choices[0]
-                return {'done': True, 'done_reason': choice.get('finish_reason'),
+                return {'done': choice.get('finish_reason') == 'stop', 'done_reason': choice.get('finish_reason'),
                         'message': {'content': choice.get('message', {}).get('content')},
                         'prompt_eval_count': tokens.get('prompt_tokens'), 'eval_count': tokens.get('completion_tokens'),
                         '_billing': billing}
