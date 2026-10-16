@@ -7,6 +7,7 @@ import "./review-studio.css";
 import "./teaching-workflow.css";
 import "./document-integrity.css";
 import "./product-design.css";
+import "./motion-public.css";
 import { AuthProvider } from "../components/auth-provider";
 
 export const metadata: Metadata = {

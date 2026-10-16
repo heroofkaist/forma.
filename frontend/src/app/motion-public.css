@@ -1,0 +1,324 @@
+/* Public edition inspired by the user's two local MotionSites video references.
+   All tokens and selectors are scoped: teacher/student workspaces keep their current design. */
+.motion-site,.motion-login {
+  --ms-ivory: #f6f1e8;
+  --ms-dim: #c9c3cf;
+  --ms-black: #040408;
+  --ms-red: #d51c14;
+  --ms-violet: #bba3ff;
+  --ms-line: #ffffff2b;
+  --ms-serif: "Cormorant Garamond", Georgia, serif;
+  --ms-sans: "IBM Plex Sans", Arial, sans-serif;
+  color: var(--ms-ivory);
+  background: var(--ms-black);
+  font: 400 15px/1.5 var(--ms-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow: clip;
+}
+.motion-site :is(h1,h2,h3,p),.motion-login :is(h1,h2,p) { margin: 0; }
+.motion-site :is(a,button,input,summary):focus-visible,.motion-login :is(a,button,input):focus-visible { outline: 2px solid var(--ms-ivory); outline-offset: 5px; }
+.motion-site ::selection,.motion-login ::selection { background: #ae8bf7; color: #0c0715; }
+.ms-skip { position: fixed; z-index: 100; left: 24px; top: -100px; background: var(--ms-ivory); color: var(--ms-black); padding: 14px 20px; border-radius: 30px; }
+.ms-skip:focus { top: 16px; }
+.ms-brand { display: inline-flex; align-items: center; gap: 10px; color: var(--ms-ivory); font: 600 34px/1 var(--ms-sans); letter-spacing: -1.8px; flex: none; }
+.ms-brand .forma-mark { width: 31px; height: 31px; color: inherit; }
+.ms-header { position: absolute; top: 0; left: 0; width: 100%; z-index: 10; min-height: 100px; display: flex; align-items: center; justify-content: space-between; gap: 30px; padding: 22px 4.5%; }
+.ms-header nav { display: flex; align-items: center; gap: 35px; font-size: 12px; }
+.ms-header nav a { min-height: 44px; display: flex; align-items: center; }
+.ms-header nav a:hover { opacity: .72; }
+.ms-header-entry { display: inline-flex; align-items: center; justify-content: center; gap: 32px; min-height: 44px; border: 1px solid #f6f1e88c; border-radius: 50%; padding: 10px 24px; font: 500 12px var(--ms-sans); }
+.ms-header-entry:hover { color: #211a12; background: var(--ms-ivory); }
+.ms-label { font: 500 10px/1.8 var(--ms-sans); letter-spacing: .08em; }
+.ms-light-button { display: inline-flex; justify-content: center; align-items: center; gap: 30px; min-height: 48px; padding: 12px 22px; border: 1px solid var(--ms-ivory); border-radius: 40px; background: var(--ms-ivory); color: #151119; font: 500 13px/1.5 var(--ms-sans); transition: background-color 180ms,transform 180ms,color 180ms; }
+.ms-light-button:hover:not(:disabled) { background: #d8c7ff; border-color: #d8c7ff; transform: translateY(-2px); }
+.ms-light-button:disabled { opacity: .55; cursor: wait; }
+.ms-motion-control { min-height: 36px; display: inline-flex; gap: 8px; align-items: center; border: 0; border-radius: 20px; background: #00000020; color: inherit; padding: 8px 10px; font: 400 10px var(--ms-sans); }
+.ms-motion-control:hover { background: #ffffff16; }
+.ms-motion-control svg { flex: none; }
+/* A full-bleed painting, real HTML type, and decorative scan annotations. */
+.ms-hero { position: relative; min-height: 830px; height: 100svh; max-height: 1250px; display: flex; flex-direction: column; justify-content: flex-end; background: #312619; isolation: isolate; }
+.ms-art,.ms-hero-shade { position: absolute; inset: 0; z-index: -2; pointer-events: none; }
+.ms-art { overflow: hidden; }
+.ms-art picture,.ms-art img { display: block; width: 100%; height: 100%; }
+.ms-art img { object-fit: cover; object-position: center 42%; animation: ms-painting-drift 35s ease-in-out infinite alternate; transform-origin: center 40%; }
+.ms-hero-shade { z-index: -1; background: linear-gradient(180deg,#130d09cc 0%,#0c080800 35%,#0c080812 40%,#0b090754 65%,#110c0ba6 100%),linear-gradient(90deg,#17110b30 0%,#17110b00 44%,#17110b12 100%); }
+.ms-hero-top { position: absolute; top: 136px; left: 4.5%; right: 4.5%; display: flex; justify-content: space-between; align-items: flex-start; font-size: 11px; line-height: 1.6; color: #f5f0e5; }
+.ms-hero-top > span { text-align: right; }
+.ms-hero-bottom { display: grid; grid-template-columns: .72fr 1.7fr; align-items: end; gap: 7%; padding: 0 4.5% 44px; position: relative; z-index: 2; }
+.ms-hero-intro { max-width: 290px; padding-bottom: 18px; }
+.ms-hero-intro > .ms-label { font-size: 9px; display: block; margin-bottom: 16px; }
+.ms-hero-intro p { font-size: 13px; line-height: 1.85; color: #f4ecdf; text-shadow: 0 1px 16px #070402; }
+.ms-hero-intro .ms-light-button { margin-top: 24px; }
+.ms-hero h1 { font: 500 clamp(66px,7.3vw,115px)/.91 var(--ms-serif); letter-spacing: -3.3px; text-align: right; text-wrap: balance; text-shadow: 0 3px 40px #08060640; }
+.ms-hero h1 em { font-weight: 400; }
+.ms-hero-foot { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 24px; margin: 0 4.5%; padding: 20px 0; border-top: 1px solid #ffffff36; font-size: 10px; }
+.ms-hero-foot > a { display: inline-flex; gap: 14px; align-items: center; min-height: 36px; }
+.ms-art-observations { position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: .67; }
+.ms-art-observations > svg { position: absolute; inset: 0; width: 100%; height: 100%; stroke: #fff6db5c; stroke-width: .5; fill: #fff2d2; }
+.ms-art-observations > svg path { fill: none; }
+.ms-tracking-box { position: absolute; display: block; color: #fff5d8; border: 1px solid #f8efcf70; background: #f5d99903; animation: ms-observe 12s ease-in-out infinite; }
+.ms-tracking-box::before,.ms-tracking-box::after { content: ""; position: absolute; width: 7px; height: 7px; border: 1px solid #fff7e6; }
+.ms-tracking-box::before { top: -1px; left: -1px; border-right: 0; border-bottom: 0; }
+.ms-tracking-box::after { bottom: -1px; right: -1px; border-left: 0; border-top: 0; }
+.ms-tracking-box i { position: absolute; top: -21px; left: 0; font: 400 8px/1.5 var(--ms-sans); letter-spacing: .08em; white-space: nowrap; }
+.ms-tracking-box b { position: absolute; right: 6px; bottom: 5px; font: 400 9px var(--ms-sans); }
+.ms-track-book { left: 39%; top: 17%; width: 22%; height: 17%; }
+.ms-track-sphere { left: 15%; top: 32%; width: 20%; height: 25%; animation-delay: -4s; }
+.ms-track-diagram { left: 71%; top: 26%; width: 23%; height: 15%; animation-delay: -8s; }
+@keyframes ms-painting-drift { from { transform: scale(1.025) translate3d(-.3%,0,0); } to { transform: scale(1.075) translate3d(.3%,-.5%,0); } }
+@keyframes ms-observe { 0%,100% { opacity: .35; transform: translateY(0); } 40%,70% { opacity: .9; transform: translateY(-9px); } }
+.motion-site[data-paused=true] :is(.ms-art img,.ms-tracking-box) { animation-play-state: paused; }
+/* The reference's abrupt red chapter is kept as an intentional change of pace. */
+.ms-manifesto { position: relative; background: var(--ms-red); padding: 34px 4.5% 85px; }
+.ms-section-index { display: flex; justify-content: space-between; align-items: center; gap: 30px; border-top: 1px solid currentColor; padding-top: 18px; font: 400 9px/1.6 var(--ms-sans); letter-spacing: .09em; opacity: .8; position: relative; z-index: 2; }
+.ms-manifesto .ms-section-index { border-color: #fff0df57; opacity: 1; }
+.ms-manifesto-content { max-width: 1100px; margin: 68px auto 0; text-align: center; }
+.ms-manifesto-content > .forma-mark { width: 55px; height: 55px; color: var(--ms-ivory); margin-bottom: 26px; }
+.ms-manifesto h2 { font: 500 clamp(44px,5.4vw,80px)/.99 var(--ms-serif); letter-spacing: -1.5px; }
+.ms-manifesto h2 em { font-weight: 400; }
+.ms-manifesto-copy { display: grid; grid-template-columns: .8fr 1.2fr; gap: 70px; max-width: 710px; margin: 45px auto 0; text-align: left; }
+.ms-manifesto-copy > span { font-size: 15px; line-height: 1.65; }
+.ms-manifesto-copy p { font-size: 13px; line-height: 1.85; color: #fff0e9; }
+.ms-signature { display: block; font: italic 400 57px/1 var(--ms-serif); letter-spacing: -2px; margin-top: 37px; transform: rotate(-7deg); }
+/* Black/violet globe scene is rendered locally, without a graphics framework. */
+.ms-intelligence { position: relative; min-height: 960px; height: 100svh; max-height: 1150px; isolation: isolate; padding: 34px 4.5% 0; display: flex; flex-direction: column; background: #040408; }
+.ms-globe { position: absolute; inset: 0; z-index: -2; pointer-events: none; overflow: hidden; background: #040408; }
+.ms-globe canvas { display: block; width: 100%; height: 100%; position: absolute; inset: 0; }
+.ms-globe-fallback { position: absolute; width: 96%; aspect-ratio: 1; border-radius: 50%; top: 30%; left: 2%; background: radial-gradient(circle at 50% 0,#2c1950,#090610 55%,#030306 75%); border: 1px solid #a281e867; box-shadow: 0 -5px 50px #9863e93d; }
+.ms-intelligence::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(#04040850 0%,#04040800 50%,#04040888 100%); }
+.ms-intelligence .ms-section-index { color: #ccc4dc; border-color: #b4a7c936; }
+.ms-intelligence-heading { position: relative; z-index: 2; text-align: center; margin: 76px auto 0; max-width: 740px; }
+.ms-orbit-label { display: inline-flex; align-items: center; gap: 10px; font: 400 9px/1.7 var(--ms-sans); letter-spacing: .16em; color: #e1d6f5; }
+.ms-orbit-label > span { display: block; width: 5px; height: 5px; border-radius: 50%; background: #b396f4; box-shadow: 0 0 14px #b396f4; }
+.ms-intelligence h2 { font: 400 clamp(48px,5.8vw,82px)/.99 var(--ms-sans); letter-spacing: -3px; margin: 25px 0; }
+.ms-intelligence h2 em { font: italic 400 1.16em/.9 var(--ms-serif); letter-spacing: -1.5px; }
+.ms-intelligence-heading > p { max-width: 47ch; margin: auto; font-size: 14px; line-height: 1.8; color: #d0c8dc; }
+.ms-intelligence .ms-light-button { margin-top: 28px; }
+.ms-globe-caption { display: flex; justify-content: space-between; gap: 20px; padding: 22px 0; margin-top: auto; font: 400 8px/1.5 var(--ms-sans); letter-spacing: .1em; color: #d1c6e3; border-top: 1px solid #cfc1e526; }
+/* A light editorial chapter explains the actual product, without dashboard card grids. */
+.ms-process { padding: 34px 4.5% 88px; background: #f1eee6; color: #292923; }
+.ms-process .ms-section-index { border-color: #34372b42; }
+.ms-process-heading { display: flex; justify-content: space-between; align-items: end; gap: 50px; margin: 65px 0 50px; }
+.ms-process h2 { font: 500 clamp(39px,4.6vw,66px)/1.01 var(--ms-serif); letter-spacing: -1.1px; }
+.ms-process h2 em { font-weight: 400; }
+.ms-process-heading > p { font-size: 13px; line-height: 1.85; max-width: 29ch; color: #69695d; }
+.ms-process-grid { display: grid; grid-template-columns: 1fr 1.05fr; gap: 12%; align-items: center; }
+.ms-process-list { list-style: none; padding: 0; margin: 0; }
+.ms-process-list li { display: flex; gap: 28px; padding: 25px 0; border-top: 1px solid #29292330; }
+.ms-process-list li > span { font-size: 10px; padding-top: 5px; color: #6b6b60; }
+.ms-process h3 { font: 500 22px/1.4 var(--ms-sans); letter-spacing: -.4px; margin: 0 0 12px; }
+.ms-process-list p { color: #626356; font-size: 13px; line-height: 1.85; max-width: 37ch; }
+.ms-review-specimen { background: #e4e0d5; transform: rotate(2deg); padding: 22px; border: 1px solid #d5d0c1; box-shadow: 10px 16px 35px #332c1a0e; }
+.ms-review-specimen > header { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 0 0 18px; font-size: 9px; color: #55584d; }
+.ms-review-specimen > header > span:first-child { display: flex; gap: 7px; align-items: center; }
+.ms-specimen-paper { background: #fffdf6; padding: 35px 30px; box-shadow: 2px 5px 10px #2b281b09; }
+.ms-specimen-paper > .ms-label { color: #717164; font-size: 8px; }
+.ms-specimen-paper > p { font: 500 30px/1.1 var(--ms-serif); margin: 23px 0; }
+.ms-specimen-paper > div { font: 500 45px/1.5 var(--ms-serif); letter-spacing: -1px; color: #30382a; }
+.ms-specimen-annotation { display: inline-block; border-bottom: 1px solid #a74628; padding-top: 14px; font-size: 10px; color: #8a432f; }
+.ms-specimen-score { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 20px 0; margin-top: 10px; border-bottom: 1px solid #bdb8a9; }
+.ms-specimen-score > div { display: grid; gap: 5px; font-size: 12px; }
+.ms-specimen-score small { color: #68695b; font-size: 10px; font-weight: 400; }
+.ms-specimen-score > strong { font: 500 26px var(--ms-sans); }
+.ms-review-specimen footer { display: flex; align-items: center; gap: 9px; font-size: 10px; padding-top: 18px; color: #595e50; }
+.ms-questions { display: grid; grid-template-columns: 1fr 1.6fr; gap: 10%; padding: 76px 4.5%; background: #f1eee6; color: #292923; border-top: 1px solid #29292324; }
+.ms-questions h2 { font: 500 58px/.99 var(--ms-serif); letter-spacing: -1px; margin-top: 15px; }
+.ms-questions h2 em { font-weight: 400; }
+.ms-questions details { border-top: 1px solid #29292333; padding: 13px 0; }
+.ms-questions summary { font-size: 14px; gap: 30px; min-height: 46px; }
+.ms-questions summary::after { content: "Читать"; color: #626356; background: transparent; border: 0; font: 400 10px var(--ms-sans); padding: 6px 0 6px 14px; }
+.ms-questions details[open] summary::after { content: "Скрыть"; color: #292923; background: transparent; }
+.ms-questions details p { max-width: 60ch; font-size: 13px; line-height: 1.85; color: #626356; padding: 12px 25px 18px 0; }
+.ms-last-call { background: var(--ms-red); text-align: center; padding: 70px 4.5% 80px; }
+.ms-last-call > a { display: flex; align-items: center; justify-content: center; gap: 50px; font: 500 clamp(46px,7vw,100px)/1.1 var(--ms-serif); letter-spacing: -1.5px; margin: 25px 0 20px; }
+.ms-last-call > a:hover { opacity: .8; }
+.ms-last-call > a svg { width: 55px; height: 55px; stroke-width: 1; }
+.ms-last-call p { color: var(--ms-ivory); font-size: 12px; }
+.ms-footer { display: flex; justify-content: space-between; align-items: center; gap: 30px; padding: 30px 4.5%; background: #100d0c; }
+.ms-footer .ms-brand { font-size: 30px; }
+.ms-footer > span { color: #c3b9af; font-size: 11px; }
+.ms-footer > a:last-child { display: inline-flex; align-items: center; gap: 12px; min-height: 44px; font-size: 11px; }
+/* Login gets its own immersive composition, while retaining the real auth flow. */
+.motion-login { position: relative; min-height: 100svh; isolation: isolate; display: flex; flex-direction: column; }
+.motion-login::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(90deg,#04040800 0%,#04040805 35%,#040408c7 64%,#040408eb 100%); }
+.ms-login-header { padding: 30px 4.5%; min-height: 96px; display: flex; justify-content: space-between; align-items: center; gap: 30px; }
+.ms-login-back { display: flex; align-items: center; gap: 10px; font-size: 12px; color: #c8c0d5; min-height: 44px; }
+.ms-login-back:hover { color: var(--ms-ivory); }
+.ms-login-layout { flex: 1; display: grid; grid-template-columns: 1fr 440px; align-items: center; gap: 9%; max-width: 1500px; width: 100%; padding: 40px 7% 60px; margin: 0 auto; }
+.ms-login-story { max-width: 650px; padding-bottom: 50px; }
+.ms-login-story h2 { font: 400 clamp(42px,4.1vw,66px)/1.04 var(--ms-sans); letter-spacing: -2px; margin: 24px 0; }
+.ms-login-story h2 em { font: italic 400 1.16em/.95 var(--ms-serif); letter-spacing: -1px; }
+.ms-login-story > p { font-size: 14px; line-height: 1.85; color: #d4cadf; max-width: 40ch; }
+.ms-login-coordinate { display: block; font-size: 8px; letter-spacing: .09em; color: #b5a9cb; margin-top: 100px; }
+.ms-login-panel { min-width: 0; border: 1px solid #ffffff21; border-radius: 22px; padding: 38px 34px 28px; background: #111018c9; box-shadow: 0 30px 100px #00000030; backdrop-filter: blur(22px); }
+.ms-login-panel:focus { outline: none; }
+.ms-login-panel > .ms-label { font-size: 9px; color: #bdb1cd; letter-spacing: .13em; }
+.ms-login-panel h1 { font: 500 52px/1.1 var(--ms-serif); letter-spacing: -1px; margin: 16px 0 12px; }
+.ms-login-panel > p { font-size: 13px; line-height: 1.7; color: #c5bcd0; }
+.ms-login-form { display: grid; gap: 24px; margin-top: 32px; }
+.ms-field { display: grid; gap: 9px; }
+.ms-field label { font-size: 12px; font-weight: 400; color: #f1eaf6; }
+.ms-field-heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+.ms-field-heading > a { font-size: 11px; color: #bfb1db; min-height: 24px; text-underline-offset: 3px; }
+.ms-field-heading > a:hover { color: #ece2ff; text-decoration: underline; }
+.ms-field input { display: block; width: 100%; min-width: 0; height: 50px; border: 1px solid #756987; border-radius: 9px; padding: 12px 14px; color: #f7f0ff; background: #ffffff06; font: 400 16px/1.5 var(--ms-sans); box-shadow: none; }
+.ms-field input::placeholder { color: #9b90ac; opacity: 1; font-size: 13px; }
+.ms-field input:focus { border-color: #b89af0; background: #ffffff0a; }
+.ms-field input:-webkit-autofill { -webkit-text-fill-color: #f7f0ff; box-shadow: 0 0 0 1000px #201c2a inset; caret-color: white; }
+.ms-password { position: relative; }
+.ms-password input { padding-right: 52px; }
+.ms-password button { position: absolute; inset: 3px 4px 3px auto; width: 42px; min-height: 42px; border: 0; border-radius: 7px; display: grid; place-items: center; color: #c0b4d3; background: transparent; }
+.ms-password button:hover { color: white; background: #ffffff08; }
+.ms-login-submit { width: 100%; min-height: 48px; justify-content: space-between; border-radius: 8px; font-size: 13px; }
+.ms-login-register { display: flex; justify-content: center; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: #b4a8c6; }
+.ms-login-register > a { color: #eee5fa; display: inline-flex; align-items: center; gap: 5px; min-height: 32px; text-underline-offset: 4px; }
+.ms-login-register > a:hover { text-decoration: underline; }
+.ms-login-panel .ms-login-note { font-size: 10px; line-height: 1.8; text-align: center; padding-top: 22px; border-top: 1px solid #ffffff17; margin-top: 26px; color: #aa9fb9; }
+.ms-login-error { padding: 12px 14px; border: 1px solid #ff9f9f5c; border-radius: 8px; background: #a2343c26; color: #ffcccc; font: 400 12px/1.7 var(--ms-sans); }
+.ms-login-demo { margin-top: 28px; font-size: 13px; color: #c5bcd0; }
+.ms-login-demo > a { margin-top: 22px; }
+.ms-login-footer { display: flex; justify-content: space-between; align-items: center; gap: 25px; padding: 16px 4.5% 25px; font: 400 10px var(--ms-sans); color: #c0b4cf; }
+/* Keep content real and usable with long Russian labels and small screens. */
+@media(min-width:1700px) { .ms-hero-bottom { padding-bottom: 55px; } .ms-hero-intro p { font-size: 15px; } }
+@media(max-width:1100px) {
+  .ms-hero { min-height: 800px; }
+  .ms-hero-bottom { grid-template-columns: .85fr 1.5fr; gap: 4%; padding-bottom: 35px; }
+  .ms-hero h1 { font-size: 80px; letter-spacing: -2px; }
+  .ms-hero-intro p { font-size: 12px; }
+  .ms-hero-intro > .ms-label { font-size: 8px; }
+  .ms-process-grid { gap: 8%; }
+  .ms-login-layout { padding-inline: 5%; grid-template-columns: minmax(0,1fr) 400px; gap: 6%; }
+  .ms-login-story h2 { font-size: 45px; letter-spacing: -1.4px; }
+  .ms-login-story > p { font-size: 12px; }
+  .ms-login-panel { padding: 34px 28px 26px; }
+}
+@media(max-width:760px) {
+  .ms-header { min-height: 84px; padding: 18px 24px; }
+  .ms-brand { font-size: 30px; }
+  .ms-brand .forma-mark { width: 28px; height: 28px; }
+  .ms-header nav { gap: 22px; font-size: 11px; }
+  .ms-header-entry { gap: 12px; padding: 9px 18px; }
+  .ms-hero { min-height: 850px; height: 100svh; max-height: 1100px; }
+  .ms-hero-top { top: 110px; left: 24px; right: 24px; font-size: 10px; }
+  .ms-art img { object-position: 48% center; }
+  .ms-hero-bottom { grid-template-columns: minmax(0,1fr); gap: 25px; padding: 0 24px 30px; }
+  .ms-hero h1 { grid-row: 1; font-size: clamp(59px,10.5vw,83px); text-align: right; line-height: .92; }
+  .ms-hero-intro { max-width: 350px; padding: 0; }
+  .ms-hero-intro > .ms-label { display: none; }
+  .ms-hero-intro p { font-size: 12px; }
+  .ms-hero-intro .ms-light-button { margin-top: 16px; min-height: 44px; font-size: 12px; }
+  .ms-hero-foot { margin-inline: 24px; font-size: 9px; padding: 14px 0; }
+  .ms-art-observations { opacity: .45; }
+  .ms-track-book { left: 44%; top: 22%; width: 37%; height: 13%; }
+  .ms-track-sphere { left: 4%; top: 28%; width: 29%; height: 20%; }
+  .ms-track-diagram { display: none; }
+  .ms-art-observations > svg { display: none; }
+  .ms-manifesto,.ms-intelligence,.ms-process { padding-inline: 24px; }
+  .ms-section-index { font-size: 8px; gap: 22px; }
+  .ms-section-index > span:last-child { max-width: 42%; text-align: right; }
+  .ms-manifesto { padding-top: 28px; padding-bottom: 65px; }
+  .ms-manifesto-content { margin-top: 50px; }
+  .ms-manifesto h2 { font-size: 58px; }
+  .ms-manifesto-copy { grid-template-columns: 1fr; gap: 20px; max-width: 400px; margin-top: 35px; }
+  .ms-manifesto-copy > span { font-size: 14px; }
+  .ms-manifesto-copy p { font-size: 13px; }
+  .ms-signature { font-size: 51px; margin-top: 30px; }
+  .ms-intelligence { min-height: 800px; max-height: 1000px; }
+  .ms-intelligence-heading { margin-top: 75px; }
+  .ms-intelligence h2 { font-size: 58px; letter-spacing: -2.5px; }
+  .ms-intelligence-heading > p { font-size: 13px; max-width: 38ch; }
+  .ms-globe-caption { font-size: 7px; gap: 30px; }
+  .ms-process { padding-bottom: 60px; }
+  .ms-process-heading { flex-direction: column; align-items: flex-start; margin: 45px 0 30px; gap: 22px; }
+  .ms-process-heading h2 { font-size: 49px; }
+  .ms-process-heading > p { max-width: 38ch; }
+  .ms-process-grid { grid-template-columns: minmax(0,1fr); gap: 40px; }
+  .ms-review-specimen { width: min(100% - 14px,490px); margin: auto; }
+  .ms-process h3 { font-size: 20px; }
+  .ms-questions { padding: 45px 24px; gap: 38px; grid-template-columns: minmax(0,1fr); }
+  .ms-questions h2 { font-size: 48px; }
+  .ms-questions h2 > br { display: none; }
+  .ms-questions summary { font-size: 13px; }
+  .ms-questions details p { font-size: 12px; }
+  .ms-last-call { padding: 50px 24px; }
+  .ms-last-call > a { font-size: 60px; gap: 24px; }
+  .ms-last-call > a svg { width: 35px; height: 35px; flex: none; }
+  .ms-footer { padding: 24px; flex-wrap: wrap; }
+  .ms-footer > span { order: 1; width: 100%; font-size: 10px; }
+  .ms-footer > a:last-child { margin-left: auto; }
+  .ms-login-header { min-height: 84px; padding: 18px 24px; }
+  .ms-login-layout { grid-template-columns: minmax(0,1fr); padding: 35px 24px 40px; gap: 32px; max-width: 510px; }
+  .ms-login-story { text-align: center; padding: 0; }
+  .ms-login-story h2 { font-size: 44px; margin: 18px 0 12px; }
+  .ms-login-story > p { display: none; }
+  .ms-login-story .ms-orbit-label { font-size: 8px; letter-spacing: .1em; }
+  .ms-login-coordinate { display: none; }
+  .ms-login-panel { padding: 30px 26px 24px; background: #0e0c17df; backdrop-filter: blur(18px); }
+  .ms-login-panel h1 { font-size: 47px; }
+  .motion-login::after { background: linear-gradient(#04040810,#04040826 50%,#04040899); }
+  .ms-login-footer { padding: 12px 24px 22px; gap: 15px; font-size: 9px; }
+}
+@media(max-width:480px) {
+  .ms-header { padding: 16px 20px; min-height: 78px; gap: 15px; }
+  .ms-header nav { display: none; }
+  .ms-header-entry { margin-left: auto; min-height: 42px; font-size: 11px; gap: 18px; }
+  .ms-hero { height: 100svh; min-height: 820px; max-height: 980px; }
+  .ms-hero-top { top: 96px; left: 20px; right: 20px; font-size: 9px; }
+  .ms-hero-top > span { max-width: 150px; }
+  .ms-art img { object-position: 45% 40%; }
+  .ms-hero-shade { background: linear-gradient(#130d09b3,#130d0900 38%,#130d0959 54%,#130d09cf 100%); }
+  .ms-hero-bottom { padding: 0 20px 24px; gap: 24px; }
+  .ms-hero h1 { font-size: clamp(51px,13.8vw,67px); letter-spacing: -1.6px; }
+  .ms-hero-intro p { max-width: 35ch; font-size: 12px; line-height: 1.7; }
+  .ms-hero-foot { margin-inline: 20px; gap: 10px; }
+  .ms-motion-control { font-size: 9px; gap: 6px; padding-inline: 6px; }
+  .ms-tracking-box i { font-size: 7px; top: -18px; }
+  .ms-track-book { left: 42%; top: 21%; width: 42%; height: 12%; }
+  .ms-track-sphere { left: 6%; top: 29%; width: 31%; height: 16%; }
+  .ms-manifesto,.ms-intelligence,.ms-process { padding-inline: 20px; }
+  .ms-section-index { font-size: 7px; letter-spacing: .07em; gap: 20px; }
+  .ms-manifesto-content { margin-top: 40px; }
+  .ms-manifesto-content > .forma-mark { width: 45px; height: 45px; }
+  .ms-manifesto h2 { font-size: clamp(38px,10.4vw,49px); line-height: 1.02; letter-spacing: -.8px; }
+  .ms-manifesto-copy { gap: 18px; margin-top: 28px; }
+  .ms-manifesto-copy p { font-size: 12px; line-height: 1.9; }
+  .ms-intelligence { min-height: 770px; height: 95svh; }
+  .ms-intelligence-heading { margin-top: 60px; }
+  .ms-intelligence h2 { font-size: clamp(42px,11.8vw,54px); letter-spacing: -1.7px; line-height: 1.04; }
+  .ms-intelligence h2 em { font-size: 1.15em; }
+  .ms-intelligence-heading > p { font-size: 12px; max-width: 31ch; }
+  .ms-intelligence .ms-light-button { font-size: 12px; min-height: 44px; gap: 22px; margin-top: 22px; }
+  .ms-globe-caption > span { max-width: 50%; }
+  .ms-globe-caption > span:last-child { text-align: right; }
+  .ms-process-heading h2 { font-size: 41px; }
+  .ms-process-list li { gap: 20px; padding: 22px 0; }
+  .ms-process-list p { font-size: 12px; }
+  .ms-review-specimen { padding: 18px; width: calc(100% - 8px); transform: rotate(1deg); }
+  .ms-specimen-paper { padding: 26px 20px; }
+  .ms-specimen-paper > p { font-size: 27px; }
+  .ms-specimen-paper > div { font-size: 40px; }
+  .ms-specimen-score > div { font-size: 11px; }
+  .ms-questions { padding-inline: 20px; }
+  .ms-questions summary { gap: 15px; font-size: 12px; }
+  .ms-last-call { padding-inline: 20px; }
+  .ms-last-call .ms-label { font-size: 8px; }
+  .ms-last-call > a { font-size: 43px; gap: 18px; }
+  .ms-last-call > a svg { width: 27px; height: 27px; }
+  .ms-login-header { padding: 18px 20px; min-height: 78px; }
+  .ms-login-back { font-size: 11px; }
+  .ms-login-layout { padding: 20px 20px 30px; gap: 26px; }
+  .ms-login-story h2 { font-size: 36px; letter-spacing: -1px; }
+  .ms-login-panel { padding: 26px 22px 22px; border-radius: 16px; }
+  .ms-login-panel h1 { font-size: 44px; margin-top: 12px; }
+  .ms-login-panel > p { font-size: 12px; }
+  .ms-login-form { gap: 22px; margin-top: 26px; }
+  .ms-login-footer { flex-wrap: wrap; padding-inline: 20px; gap: 10px; }
+  .ms-login-footer > span { font-size: 8px; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .motion-site *, .motion-login * { animation: none !important; transition: none !important; scroll-behavior: auto; }
+}
+@media(forced-colors:active) {
+  .ms-art,.ms-globe,.ms-hero-shade { display: none; }
+  .ms-light-button,.ms-login-panel,.ms-field input { border: 1px solid ButtonText; }
+}

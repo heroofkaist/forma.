@@ -1,5 +1,7 @@
 # Forma: reading room redesign
 
+The homepage and login now follow the [MotionSites public reference direction](MOTION_PUBLIC_REDESIGN.md). This document continues to describe the teacher/student workspace system and established account pages.
+
 The primary task is to find a student's work, assess it against the assignment criteria, and publish an understandable result. The redesign uses a paper background, dark readable text, a restrained forest accent, and a shared component vocabulary across teacher, student, account, archive, and public pages.
 
 ## Evidence and scope

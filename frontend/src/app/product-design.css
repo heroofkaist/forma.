@@ -235,39 +235,7 @@ input[type=checkbox],input[type=radio] { accent-color: var(--accent); width: 18p
 .rw-studio .rw-save-state span { font-size: 11px; }
 .rw-studio .rw-draft-button { background: var(--surface); }
 .rw-studio .rw-status.is-reviewed { background: var(--success-bg); color: var(--success); }
-/* Public site: editorial introduction followed by a working product example. */
-.forma-public { color: var(--ink); background: #f9faf6; }
-.public-header,.public-hero,.public-workflow,.public-capabilities,.public-faq,.public-footer { max-width: 1360px; margin: 0 auto; padding-inline: clamp(24px,5vw,76px); }
-.public-header { min-height: 92px; display: flex; align-items: center; gap: 32px; }
-.public-header nav { margin-left: auto; display: flex; gap: 30px; font-size: 13px; }
-.public-header nav a { min-height: 44px; display: flex; align-items: center; }
-.public-header nav a:hover { color: var(--accent); }
-.public-header > .button { margin-left: 10px; }
-.public-hero { display: grid; grid-template-columns: 1.45fr 1fr; gap: 40px; align-items: center; padding-top: 72px; padding-bottom: 78px; }
-.public-kicker { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--accent); }
-.public-kicker > span { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
-.public-hero h1 { font: 500 clamp(40px,4.7vw,67px)/1.12 var(--sans); letter-spacing: -2.6px; margin: 24px 0; }
-.public-hero h1 em { font-family: var(--serif); font-weight: 500; font-size: 1.25em; color: var(--accent); }
-.public-hero-copy > p { font-size: 17px; line-height: 1.8; color: var(--secondary); }
-.public-hero-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 22px; margin: 28px 0 24px; }
-.public-hero-actions > .button { min-height: 50px; font-size: 14px; gap: 30px; padding-inline: 20px; }
-.public-assurance { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); }
-.public-assurance svg { color: var(--accent); flex: none; }
-.public-hero-aside { min-width: 0; position: relative; align-self: stretch; display: flex; align-items: center; justify-content: center; }
-.public-aside-index { position: absolute; top: 0; right: 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
-.public-aside-index strong { font-weight: 500; color: var(--ink); }
-.public-document-stack { position: relative; width: 260px; height: 320px; margin-top: 30px; transform: rotate(6deg); }
-.public-document-stack > div { position: absolute; inset: 0; border: 1px solid #d1dccc; border-radius: 6px; background: #e8efdf; box-shadow: 0 10px 30px #233c2b0c; }
-.public-document-stack > div:nth-child(1) { transform: rotate(-16deg); background: #e7ecdf; }
-.public-document-stack > div:nth-child(2) { transform: rotate(-8deg); background: #f6f3e8; }
-.public-document-stack > div:last-child { display: flex; flex-direction: column; justify-content: space-between; padding: 30px; color: var(--accent); background: #ffffff; }
-.public-document-stack .forma-mark { width: 36px; height: 36px; }
-.public-document-stack span { font: 500 34px/1.15 var(--serif); }
-.public-document-stack i { font: 10px var(--mono); color: var(--muted); }
-.public-workflow { padding-top: 54px; padding-bottom: 72px; border-top: 1px solid var(--border); }
-.public-section-heading { display: flex; gap: 50px; justify-content: space-between; align-items: flex-end; margin-bottom: 32px; }
-.public-section-heading h2 { font: 500 clamp(27px,3vw,39px)/1.2 var(--sans); letter-spacing: -1.2px; margin-top: 12px; }
-.public-section-heading > p { max-width: 36ch; font-size: 14px; line-height: 1.8; color: var(--secondary); }
+/* Product example retained for existing account pages. Public routes use motion-public.css. */
 .product-tour { border: 1px solid #cfdacf; border-radius: 14px; background: var(--surface); box-shadow: 0 12px 50px #20382908; overflow: hidden; }
 .tour-top { display: flex; align-items: center; gap: 18px; min-height: 40px; padding: 10px 20px; font-size: 10px; color: var(--muted); background: #f1f4ec; border-bottom: 1px solid var(--border); }
 .tour-window-dots { display: flex; gap: 5px; }
@@ -308,26 +276,6 @@ input[type=checkbox],input[type=radio] { accent-color: var(--accent); width: 18p
 .tour-steps button[aria-pressed=true] { background: var(--accent-wash); color: var(--accent); }
 .tour-steps button[aria-pressed=true] > span { background: var(--accent); border-color: var(--accent); color: white; }
 .tour-description { padding: 0 40px 24px; color: var(--secondary); font-size: 13px; min-height: 65px; }
-.public-capabilities { padding-block: 40px 76px; }
-.public-capability-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 44px; }
-.public-capability-grid article { padding-top: 22px; border-top: 1px solid var(--border); }
-.public-capability-grid svg { color: var(--accent); stroke-width: 1.5; }
-.public-capability-grid h3 { font-size: 19px; font-weight: 500; letter-spacing: -.3px; margin: 20px 0 12px; }
-.public-capability-grid p { font-size: 14px; color: var(--secondary); line-height: 1.8; }
-.public-capability-grid article > span { display: block; font-size: 11px; color: var(--muted); margin-top: 22px; }
-.public-statement { background: #eaf0e1; padding: 64px 24px; text-align: center; border-block: 1px solid #d9e1cf; }
-.public-statement h2 { font: 500 clamp(30px,3.4vw,46px)/1.2 var(--sans); letter-spacing: -1px; margin: 16px 0; }
-.public-statement h2 em { font-family: var(--serif); font-size: 1.15em; color: var(--accent); font-weight: 500; }
-.public-statement p { font-size: 14px; line-height: 1.8; color: var(--secondary); max-width: 65ch; margin: 0 auto 24px; }
-.public-statement .button { background: transparent; border-color: #a9bca3; gap: 20px; }
-.public-faq { display: grid; grid-template-columns: 1fr 2fr; gap: 80px; padding-block: 70px; }
-.public-faq h2 { font-size: 28px; font-weight: 500; letter-spacing: -.7px; }
-.public-faq details { border-bottom: 1px solid var(--border); padding: 12px 0; }
-.public-faq summary { font-size: 14px; font-weight: 500; gap: 20px; }
-.public-faq details p { font-size: 13px; line-height: 1.8; color: var(--secondary); padding: 16px 0; max-width: 65ch; }
-.public-footer { display: flex; align-items: center; gap: 30px; padding-block: 28px; border-top: 1px solid var(--border); }
-.public-footer > span { font-size: 12px; color: var(--muted); }
-.public-footer > a:last-child { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--accent); min-height: 44px; }
 /* Account entry shares the same real product example and typography. */
 .auth-page { grid-template-columns: 1.05fr 1fr; background: var(--surface); }
 .auth-study { background: #edf2e6; color: var(--ink); padding: 40px 7%; justify-content: center; gap: 30px; }
@@ -408,17 +356,6 @@ input[type=checkbox],input[type=radio] { accent-color: var(--accent); width: 18p
   .teacher-next-step { gap: 16px; flex-wrap: wrap; padding: 20px; }
   .teacher-next-step > div { flex-basis: calc(100% - 70px); }
   .teacher-next-step > .button { margin-left: 66px; }
-  .public-header { min-height: 80px; }
-  .public-hero { padding-top: 42px; padding-bottom: 52px; gap: 24px; }
-  .public-hero h1 { font-size: 46px; letter-spacing: -1.8px; }
-  .public-document-stack { width: 190px; height: 250px; }
-  .public-document-stack > div:last-child { padding: 22px; }
-  .public-document-stack span { font-size: 29px; }
-  .public-document-stack i { font-size: 7px; }
-  .public-aside-index { display: none; }
-  .public-section-heading { gap: 30px; }
-  .public-capability-grid { gap: 26px; }
-  .public-faq { gap: 32px; }
   .auth-page { grid-template-columns: 1fr; }
   .auth-study { display: none; }
   .auth-card { padding: 46px 28px; max-width: 470px; }
@@ -489,22 +426,6 @@ input[type=checkbox],input[type=radio] { accent-color: var(--accent); width: 18p
   .rw-studio .rw-action-bar-guided { padding-bottom: max(14px,env(safe-area-inset-bottom)); }
   .rw-studio .rw-review-actions .rw-button { font-size: 12px; }
   .rw-studio .rw-text-button { font-size: 11px; }
-  .public-header { gap: 12px; min-height: 76px; padding-inline: 20px; }
-  .public-header .forma-brand { font-size: 29px; }
-  .public-header nav { display: none; }
-  .public-header > .button { margin-left: auto; font-size: 12px; padding-inline: 13px; }
-  .public-hero { grid-template-columns: minmax(0,1fr); padding: 30px 22px 42px; }
-  .public-hero h1 { font-size: clamp(34px,10.3vw,48px); letter-spacing: -1.5px; margin: 20px 0; }
-  .public-hero-copy > p { font-size: 15px; }
-  .public-hero-actions { gap: 14px; align-items: flex-start; flex-direction: column; margin: 24px 0 18px; }
-  .public-hero-actions > .button { min-height: 48px; }
-  .public-assurance { align-items: flex-start; line-height: 1.7; font-size: 11px; }
-  .public-assurance svg { margin-top: 2px; }
-  .public-hero-aside { display: none; }
-  .public-workflow,.public-capabilities { padding: 36px 20px; }
-  .public-section-heading { align-items: stretch; flex-direction: column; gap: 16px; margin-bottom: 24px; }
-  .public-section-heading h2 { font-size: 29px; letter-spacing: -.8px; }
-  .public-section-heading > p { max-width: none; font-size: 13px; }
   .tour-top { padding: 10px 12px; gap: 10px; font-size: 9px; }
   .tour-private { display: none; }
   .tour-context { padding: 18px 16px; gap: 10px; }
@@ -522,20 +443,6 @@ input[type=checkbox],input[type=radio] { accent-color: var(--accent); width: 18p
   .tour-steps button { flex: 0 0 192px; font-size: 11px; padding: 8px; }
   .tour-steps button > svg { display: none; }
   .tour-description { font-size: 12px; padding: 0 20px 20px; min-height: 98px; }
-  .public-capability-grid { grid-template-columns: minmax(0,1fr); gap: 30px; }
-  .public-capability-grid h3 { margin-top: 14px; font-size: 20px; }
-  .public-capability-grid article > span { margin-top: 14px; }
-  .public-statement { padding: 40px 22px; text-align: left; }
-  .public-statement h2 { font-size: 31px; }
-  .public-statement p { font-size: 13px; }
-  .public-faq { grid-template-columns: minmax(0,1fr); gap: 20px; padding: 36px 22px; }
-  .public-faq h2 { font-size: 26px; }
-  .public-faq summary { font-size: 13px; }
-  .public-faq summary::after { font-size: 10px; }
-  .public-footer { flex-wrap: wrap; padding: 24px 22px; gap: 18px; }
-  .public-footer .forma-brand { font-size: 26px; }
-  .public-footer > span { width: 100%; order: 1; font-size: 11px; }
-  .public-footer > a:last-child { font-size: 12px; }
   .auth-card { padding: 36px 24px; }
   .auth-card h1 { font-size: 29px; }
   .auth-brand { margin-bottom: 36px; }
