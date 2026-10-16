@@ -29,3 +29,19 @@ test('register renders separate file similarity and AI detector for each submitt
  const data={students:[{student_id:'one',student_name:'Ada',active:true}],items:[{id:'a',student_id:'one',file_name:'First.pdf',file_type:'pdf',submitted_at:'2026-10-16',review_status:'unreviewed',processing_status:'not_scheduled',integrity:{status:'not_analyzed'},similarity:{analysis_status:'missing',match_ratio:null}}]};
  const html=render(React.createElement(AssignmentRegister,{data,comparison:result}));assert.match(html,/<th>СХОДСТВО<\/th><th>AI DETECTOR<\/th>/);assert.match(html,/75%/);assert.match(html,/Не запускался/);assert.match(html,/\/teacher\/compare\/a\/b/);assert.match(html,/AI detector может ошибаться/);
 });
+test('side-by-side view opens PDF pages and readable Office sections without claiming rendered Office layouts',()=>{
+ for(const file_type of ['pdf','docx']){
+  const source={student_name:'Ada',file_name:`Source.${file_type}`,file_type,structure:{pages:[{number:1,text:'A source passage <script>untrusted</script>'}]}};
+  const {default:Compare}=load('src/app/teacher/compare/[leftId]/[rightId]/page.tsx',{
+   react:{...React,useEffect(){},useState:initial=>[initial===null?source:initial,()=>{}]},
+   'next/link':link,'next/navigation':{useParams:()=>({leftId:'a',rightId:'b'})},
+   '../../../../../components/app-shell':{AppShell:({children})=>React.createElement('main',null,children)},
+   '../../../../../components/review/document-viewer':{DocumentViewer:({submissionId})=>React.createElement('div',null,`PDF original ${submissionId}`)},
+   '../../../../../lib/platform':{},'../../../../../lib/api':{}
+  });
+  const html=render(React.createElement(Compare));
+  assert.match(html,/Source\./);assert.match(html,/\/teacher\/submissions\/a\/review/);assert.match(html,/\/teacher\/submissions\/b\/review/);
+  if(file_type==='pdf'){assert.match(html,/PDF original a/);assert.match(html,/PDF original b/);}
+  else{assert.match(html,/A source passage &lt;script&gt;untrusted&lt;\/script&gt;/);assert.match(html,/Скачать оригинал/);assert.match(html,/Извлечённое содержимое/);assert.doesNotMatch(html,/PDF original|<script>/);}
+ }
+});
