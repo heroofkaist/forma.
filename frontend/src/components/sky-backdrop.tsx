@@ -1,0 +1,3 @@
+export function SkyBackdrop() {
+  return <div className="cf-sky" aria-hidden="true"><div className="cf-sky-light"/><div className="cf-cloud cf-cloud-one"/><div className="cf-cloud cf-cloud-two"/><svg viewBox="0 0 1440 600" preserveAspectRatio="none"><path d="m0 355 107-62 47 30 99-128 40 31 86-81 78 89 63-33 103 90 76-40 99 69 130-83 87 54 109-30 124 62 92-18v295H0V355Z" fill="#8bc4ee" opacity=".34"/><path d="m0 403 160-92 137 119 155-117 113 69 120-45 138 109 139-71 130 30 91-110 120 62 137-24v267H0V403Z" fill="#d6ebfb" opacity=".66"/><path d="m0 492 178-64 120 59 145-47 172 67 113-46 166 68 151-61 174 39 221-62v155H0V492Z" fill="#eef7ff"/></svg><div className="cf-sky-fade"/></div>;
+}

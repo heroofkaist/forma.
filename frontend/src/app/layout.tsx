@@ -11,7 +11,7 @@ import "./motion-public.css";
 import { AuthProvider } from "../components/auth-provider";
 
 export const metadata: Metadata = {
-  title: { default: "Forma — курсы, работы и проверка с ИИ", template: "%s · Forma" },
+  title: { default: "Forma | Курсы и проверка работ", template: "%s · Forma" },
   description: "Учебные курсы, работы студентов и проверка по критериям. ИИ предлагает баллы, преподаватель принимает решение.",
 };
 
